@@ -41,7 +41,10 @@ ruff format src/ tests/
 | `classin-toolkit parse-schedule <csv>` | 학기 초 스케줄 업로드 | 코어 엔진 |
 | `classin-toolkit replay-webhook <json>` | 과거 페이로드 재처리, 디버깅 | MVP1 ingest |
 | `classin-toolkit sweep-missing-homework` | 배치 — 미제출자 알림 | MVP1 sweep |
-| `classin-toolkit weekly-reports` | 매주 금요일 | MVP2 |
+| `classin-toolkit render-daily [--date YYYY-MM-DD]` | 일일 현황 HTML 생성 | 출력 레이어 |
+| `classin-toolkit generate-weekly-drafts` | 주간 리포트 드래프트(HTML) | MVP2 |
+| `classin-toolkit approve-weekly --week YYYY-MM-DD` | 드래프트 승인 → Notion 아카이브 | MVP2 |
+| `classin-toolkit write-memo --classin-id X --text "..." [--tag ...]` | 원장 메모 기록 | 편집 채널 |
 | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | 학생·교사 ClassIn 앱 링크 | SSO |
 | `classin-toolkit agent` | 원장·교사 질문 대화 | 수동 오더 에이전트 |
 

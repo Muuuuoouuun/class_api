@@ -23,9 +23,12 @@
 
 - [x] 주간 집계 쿼리 (`storage/notion_repo.py::weekly_student_stats`)
 - [x] 학생별 개인화 리포트 (`intelligence/weekly_report.py`)
-- [x] Notion 페이지 저장 + 학부모 문구 컬럼
+- [x] HTML 드래프트 + Notion 아카이브 승인 분리 (`pipelines/weekly.py`)
+- [x] 일일 현황 HTML (`pipelines/daily.py` + `storage/html_renderer.py`)
+- [x] 메모 DB + `write-memo` CLI
 - [ ] 5명 페르소나 샘플 데이터 세팅
 - [ ] 리포트 차별화 검증 (수동 읽어보기)
+- [ ] 공개 URL `output.daily.public_url_base` 실 Cloudflare Tunnel 호스트 투입
 
 ## Week 4 — 데모·영업
 

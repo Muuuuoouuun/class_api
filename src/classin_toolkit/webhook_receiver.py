@@ -14,7 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from .classin.signing import verify_webhook_safekey
 from .classin.webhook_schemas import (
@@ -54,6 +55,22 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @app.get("/health")
     async def health() -> dict:
         return {"ok": True, "school": cfg.academy.name}
+
+    @app.get("/reports/{kind}/{filename}")
+    async def serve_report(kind: str, filename: str) -> FileResponse:
+        if kind not in ("daily", "weekly"):
+            raise HTTPException(status_code=404)
+        if "/" in filename or ".." in filename:
+            raise HTTPException(status_code=400)
+        base = (
+            Path(cfg.output.daily.path)
+            if kind == "daily"
+            else Path(cfg.output.weekly.path)
+        )
+        path = base / filename
+        if not path.exists() or not path.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(path, media_type="text/html; charset=utf-8")
 
     @app.post("/classin/webhook")
     async def classin_webhook(request: Request) -> dict:

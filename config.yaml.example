@@ -15,6 +15,19 @@ notion:
     students: "REPLACE_ME_STUDENTS_DB_ID"
     lessons: "REPLACE_ME_LESSONS_DB_ID"
     reports: "REPLACE_ME_REPORTS_DB_ID"
+    memos: "REPLACE_ME_MEMOS_DB_ID"        # 원장 메모·대응기록 전용
+
+output:
+  daily:
+    mode: "html"             # html | notion | both
+    path: "./reports_out/daily"
+    public_url_base: ""      # Cloudflare Tunnel 공개 URL (예: https://webhook.demo.com/reports)
+  weekly:
+    mode: "html+notion"      # html | notion | html+notion
+    require_approval: true   # Notion 아카이브 전 승인 필수
+    path: "./reports_out/weekly"
+  memo:
+    mode: "notion"           # notion | off
 
 anthropic:
   api_key: "sk-ant-REPLACE_ME"

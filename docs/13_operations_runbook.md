@@ -43,7 +43,9 @@
 
 ### 1.4 스케줄러 작업 (Windows 작업 스케줄러)
 - `classin-toolkit sweep-missing-homework --window-hours 4` — 매 시 정각
-- `classin-toolkit weekly-reports` — 매주 금요일 17:00
+- `classin-toolkit render-daily` — 매일 22:00 (일일 HTML 현황)
+- `classin-toolkit generate-weekly-drafts` — 매주 금 17:00 (드래프트 생성)
+- `classin-toolkit approve-weekly --week YYYY-MM-DD` — 원장 리뷰 후 수동 실행 (컨설턴트 가이드 따라)
 
 ## 2. 학원 고지 사항 (계약 시 필수 전달)
 

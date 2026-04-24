@@ -51,14 +51,29 @@ PROP_REPORT_STUDENT = "학생"
 PROP_REPORT_PERIOD = "리포트 기간"
 PROP_REPORT_SUMMARY = "학부모 발송 문구"
 PROP_REPORT_SENT = "발송 여부"
+PROP_REPORT_APPROVED = "승인됨"
+PROP_REPORT_HTML_URL = "HTML 링크"
+
+PROP_MEMO_STUDENT = "학생"
+PROP_MEMO_DATE = "일자"
+PROP_MEMO_TAG = "태그"
+PROP_MEMO_TEXT = "내용"
 
 
 class NotionRepo:
-    def __init__(self, token: str, students_db: str, lessons_db: str, reports_db: str):
+    def __init__(
+        self,
+        token: str,
+        students_db: str,
+        lessons_db: str,
+        reports_db: str,
+        memos_db: str | None = None,
+    ):
         self._nc = Client(auth=token)
         self.students_db = students_db
         self.lessons_db = lessons_db
         self.reports_db = reports_db
+        self.memos_db = memos_db
 
     @classmethod
     def from_config(cls, cfg: AppConfig) -> "NotionRepo":
@@ -67,6 +82,7 @@ class NotionRepo:
             students_db=cfg.notion.databases.students,
             lessons_db=cfg.notion.databases.lessons,
             reports_db=cfg.notion.databases.reports,
+            memos_db=cfg.notion.databases.memos,
         )
 
     # ============== Student ==============
@@ -320,7 +336,7 @@ class NotionRepo:
 
     # ============== Report ==============
 
-    def save_weekly_report(
+    def archive_approved_weekly_report(
         self,
         *,
         student: StudentRecord,
@@ -328,22 +344,56 @@ class NotionRepo:
         period_end: datetime,
         summary_md: str,
         parent_message: str,
+        html_url: str | None = None,
     ) -> str:
+        props = {
+            PROP_REPORT_STUDENT: {"relation": [{"id": student.page_id}]},
+            PROP_REPORT_PERIOD: {
+                "date": {
+                    "start": period_start.date().isoformat(),
+                    "end": period_end.date().isoformat(),
+                }
+            },
+            PROP_REPORT_SUMMARY: _rich(parent_message[:1900]),
+            PROP_REPORT_SENT: {"checkbox": False},
+            PROP_REPORT_APPROVED: {"checkbox": True},
+        }
+        if html_url:
+            props[PROP_REPORT_HTML_URL] = {"url": html_url}
         page = self._nc.pages.create(
             parent={"database_id": self.reports_db},
-            properties={
-                PROP_REPORT_STUDENT: {"relation": [{"id": student.page_id}]},
-                PROP_REPORT_PERIOD: {
-                    "date": {
-                        "start": period_start.date().isoformat(),
-                        "end": period_end.date().isoformat(),
-                    }
-                },
-                PROP_REPORT_SUMMARY: _rich(parent_message[:1900]),
-                PROP_REPORT_SENT: {"checkbox": False},
-            },
+            properties=props,
             children=_md_to_blocks(summary_md),
         )
+        return page["id"]
+
+    # ============== Memo (원장 편집 채널) ==============
+
+    def write_memo(
+        self,
+        *,
+        student_classin_id: str,
+        text: str,
+        tag: str | None = None,
+        date: datetime | None = None,
+    ) -> str | None:
+        if not self.memos_db:
+            log.warning("memos_db not configured — skip write_memo")
+            return None
+        student = self.find_student_by_classin_id(student_classin_id)
+        if not student:
+            log.warning("memo skipped — no student for %s", student_classin_id)
+            return None
+        props: dict = {
+            PROP_MEMO_STUDENT: {"relation": [{"id": student.page_id}]},
+            PROP_MEMO_TEXT: {"title": [{"text": {"content": text[:1900]}}]},
+            PROP_MEMO_DATE: {
+                "date": {"start": (date or datetime.now(timezone.utc)).date().isoformat()}
+            },
+        }
+        if tag:
+            props[PROP_MEMO_TAG] = {"select": {"name": tag}}
+        page = self._nc.pages.create(parent={"database_id": self.memos_db}, properties=props)
         return page["id"]
 
 

@@ -25,11 +25,34 @@ class NotionDatabases(BaseModel):
     students: str
     lessons: str
     reports: str
+    memos: str | None = None
 
 
 class NotionConfig(BaseModel):
     token: str
     databases: NotionDatabases
+
+
+class DailyOutputConfig(BaseModel):
+    mode: Literal["html", "notion", "both"] = "html"
+    path: str = "./reports_out/daily"
+    public_url_base: str = ""
+
+
+class WeeklyOutputConfig(BaseModel):
+    mode: Literal["html", "notion", "html+notion"] = "html+notion"
+    require_approval: bool = True
+    path: str = "./reports_out/weekly"
+
+
+class MemoOutputConfig(BaseModel):
+    mode: Literal["notion", "off"] = "notion"
+
+
+class OutputConfig(BaseModel):
+    daily: DailyOutputConfig = Field(default_factory=DailyOutputConfig)
+    weekly: WeeklyOutputConfig = Field(default_factory=WeeklyOutputConfig)
+    memo: MemoOutputConfig = Field(default_factory=MemoOutputConfig)
 
 
 class AnthropicConfig(BaseModel):
@@ -70,6 +93,7 @@ class AppConfig(BaseModel):
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
     webhook: WebhookConfig = Field(default_factory=WebhookConfig)
     reports: ReportsConfig = Field(default_factory=ReportsConfig)
+    output: OutputConfig = Field(default_factory=OutputConfig)
 
 
 DEFAULT_CONFIG_PATH = Path("config.yaml")

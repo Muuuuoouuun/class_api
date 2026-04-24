@@ -10,8 +10,9 @@ from rich.console import Console
 
 from ..config import load_config
 from ..pipelines.core_engine import run_core_engine
+from ..pipelines.daily import render_daily
 from ..pipelines.missing_homework import sweep_missing_homework
-from ..pipelines.weekly import run_weekly_reports
+from ..pipelines.weekly import approve_all, generate_drafts, run_weekly_reports
 
 app = typer.Typer(add_completion=False, help="ClassIn Toolkit CLI")
 console = Console()
@@ -92,9 +93,76 @@ def sweep_missing(
 def weekly_reports(
     config: Path = typer.Option(Path("config.yaml"), "--config"),
 ) -> None:
+    """[DEPRECATED alias] generate-weekly-drafts 와 동일."""
     cfg = load_config(config)
     n = run_weekly_reports(cfg)
-    console.print(f"[green]generated {n} reports[/green]")
+    console.print(f"[green]generated {n} drafts[/green]")
+
+
+@app.command("generate-weekly-drafts")
+def weekly_drafts(
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """이번 주 학생별 리포트 드래프트(HTML) 생성. 승인 필수 모드면 아카이브 안 됨."""
+    cfg = load_config(config)
+    n = generate_drafts(cfg)
+    console.print(
+        f"[green]{n} drafts written to {cfg.output.weekly.path}[/green]\n"
+        "리뷰 후 [bold]classin-toolkit approve-weekly --week YYYY-MM-DD[/bold] 로 아카이브"
+    )
+
+
+@app.command("approve-weekly")
+def approve_weekly(
+    week: str = typer.Option(..., help="주 시작일(월요일) YYYY-MM-DD"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """드래프트 HTML 리뷰 후 Notion 아카이브."""
+    from datetime import datetime, timezone
+
+    cfg = load_config(config)
+    period_start = datetime.fromisoformat(week).replace(tzinfo=timezone.utc)
+    n = approve_all(cfg, period_start=period_start)
+    console.print(f"[green]approved {n} reports[/green]")
+
+
+@app.command("render-daily")
+def render_daily_cmd(
+    date_str: str | None = typer.Option(None, "--date", help="YYYY-MM-DD (기본: 오늘)"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """일일 현황 HTML 생성."""
+    from datetime import date as date_cls, datetime
+
+    cfg = load_config(config)
+    target = date_cls.fromisoformat(date_str) if date_str else datetime.now().date()
+    result = render_daily(cfg, target=target)
+    if not result:
+        console.print("[yellow]daily mode=notion → HTML 생성 건너뜀[/yellow]")
+        return
+    console.print(f"[green]{result.path}[/green]")
+    if result.public_url:
+        console.print(f"[cyan]{result.public_url}[/cyan]")
+
+
+@app.command("write-memo")
+def write_memo_cmd(
+    classin_id: str = typer.Option(..., "--classin-id"),
+    text: str = typer.Option(..., "--text"),
+    tag: str | None = typer.Option(None, "--tag"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """원장 메모·대응기록을 Notion 메모 DB 에 기록."""
+    from ..storage.notion_repo import NotionRepo
+
+    cfg = load_config(config)
+    if cfg.output.memo.mode == "off":
+        console.print("[yellow]memo mode=off[/yellow]")
+        return
+    page_id = NotionRepo.from_config(cfg).write_memo(
+        student_classin_id=classin_id, text=text, tag=tag
+    )
+    console.print(f"[green]memo saved[/green] {page_id or '(skipped)'}")
 
 
 @app.command("sso-link")

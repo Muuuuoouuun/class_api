@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="kpi">
+  <div><small>수업 수</small><strong>{{ lessons | length }}</strong></div>
+  <div><small>출석률</small><strong>{{ (attendance_rate * 100) | round(0) | int }}%</strong></div>
+  <div><small>미제출</small><strong>{{ missing_homework | length }}</strong></div>
+</div>
+
+<h2>오늘 수업</h2>
+{% if lessons %}
+<table>
+  <tr><th>시간</th><th>반</th><th>수업</th><th>출석</th><th>지각</th><th>결석</th></tr>
+  {% for l in lessons %}
+  <tr>
+    <td>{{ l.time or '-' }}</td>
+    <td>{{ l.course_name or '-' }}</td>
+    <td>{{ l.lesson_title or l.lesson_id }}</td>
+    <td>{{ l.present_count or 0 }}</td>
+    <td>{{ l.late_count or 0 }}</td>
+    <td>{{ l.absent_count or 0 }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">오늘 집계된 수업이 없습니다.</p>
+{% endif %}
+
+<h2>숙제 미제출</h2>
+{% if missing_homework %}
+<ul>
+  {% for m in missing_homework %}
+  <li>
+    <strong>{{ m.student_name or m.student_classin_id }}</strong>
+    {% if m.class_name %}<span class="muted"> · {{ m.class_name }}</span>{% endif %}
+    {% if m.lesson_title %} — {{ m.lesson_title }}{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p><span class="badge badge-ok">모두 제출 완료</span></p>
+{% endif %}
+
+{% endblock %}

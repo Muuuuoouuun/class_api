@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="kpi">
+  <div><small>수업 수</small><strong>{{ lessons | length }}</strong></div>
+  <div><small>출석률</small><strong>{{ (attendance_rate * 100) | round(0) | int }}%</strong></div>
+  <div><small>숙제 제출률</small><strong>{{ (hw_rate * 100) | round(0) | int }}%</strong></div>
+</div>
+
+<h2>이번 주 요약</h2>
+<div>{{ summary_html | safe }}</div>
+
+<h2>수업 기록</h2>
+{% if lessons %}
+<table>
+  <tr><th>일자</th><th>출석</th><th>실참여(분)</th><th>손들기</th><th>트로피</th><th>숙제</th></tr>
+  {% for l in lessons %}
+  <tr>
+    <td>{{ l.date or '-' }}</td>
+    <td>{{ l.attendance or '-' }}</td>
+    <td>{{ ((l.attendance_seconds or 0) / 60) | round(0) | int }}</td>
+    <td>{{ l.hand_raise or 0 }}</td>
+    <td>{{ l.trophy or 0 }}</td>
+    <td>
+      {% if l.homework_submitted %}<span class="badge badge-ok">제출</span>
+      {% elif l.homework_submitted == false %}<span class="badge badge-bad">미제출</span>
+      {% else %}<span class="muted">-</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">이번 주 수업 기록이 없습니다.</p>
+{% endif %}
+
+<h2>학부모 발송 문구 (초안)</h2>
+<div style="background:#fffbe6;padding:12px;border-radius:6px">
+  {{ parent_message }}
+</div>
+
+{% endblock %}

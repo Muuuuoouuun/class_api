@@ -15,7 +15,8 @@
 │              core_engine.py        스케줄 → 수업·숙제 자동 생성
 │              ingest.py             Webhook Cmd 4종 → Notion 적재
 │              missing_homework.py   미제출자 sweep (배치)
-│              weekly.py             주간 리포트 생성
+│              daily.py              일일 현황 HTML 렌더
+│              weekly.py             주간 드래프트 + 승인 아카이브
 ├─ Layer 3 : 지능화 ─────────────── intelligence/
 │              claude_client.py      Anthropic SDK 래퍼 + prompt caching
 │              schedule_parser.py    자유형 스케줄 → 구조화 JSON       (자동 파이프라인용)
@@ -23,8 +24,11 @@
 │              weekly_report.py      학생별 주간 리포트 생성           (자동 파이프라인용)
 │              agent.py              Claude tool-use 채팅 (수동 오더) — 도구 4종
 │              prompts/*.md          프롬프트 파일(외부화)
-├─ Layer 2 : 저장소 ─────────────── storage/notion_repo.py
-│              (단일 진실원. ClassIn UID ↔ Notion page_id 매핑)
+├─ Layer 2 : 저장소·출력 ─────────── storage/
+│              notion_repo.py        원본 진실원 (학생 Master·수업 기록·리포트 아카이브·메모)
+│              html_renderer.py      일일/주간 HTML 파생 리포트 (Jinja2)
+│              output_port.py        Protocol (DailyOutput/WeeklyOutput/MemoOutput)
+│              templates/            base·daily·weekly HTML
 └─ Layer 1 : API 래퍼 ───────────── classin/
                client.py             단일 action POST + v2 서명
                signing.py            v2 MD5 정렬 알고리즘 + SafeKey 검증
@@ -68,7 +72,30 @@ Scheduler (cron / 수동 CLI)
          └─> Notion 학생별 집계 → Claude 리포트 → Notion 페이지 저장
 ```
 
-### D. 수동 오더 에이전트 (상시 대기)
+### D. 출력 레이어 (HTML + Notion 하이브리드)
+```
+일일 현황 :  pipelines/daily → HTML 파일 (reports_out/daily/<date>.html)
+             ↑ 매일 바뀌는 데이터는 Notion API 호출 낭비 → 정적 HTML
+
+주간 리포트 : pipelines/weekly.generate_drafts → HTML 드래프트
+                           └─ drafts.json (index, approved:false)
+              (원장·컨설턴트 리뷰)
+             pipelines/weekly.approve_all → Notion archive_approved_weekly_report
+                           └─ 승인됨=true, HTML 링크 컬럼 포함
+
+메모       :  CLI write-memo → Notion 메모 DB (원장 편집 채널)
+```
+
+모드 전환 (`config.yaml`):
+- `output.daily.mode`: `html` (기본) / `notion` / `both`
+- `output.weekly.mode`: `html+notion` (기본) / `html` / `notion`
+- `output.weekly.require_approval`: `true` (기본) → Notion 푸시 전 승인 단계 통과 필요
+- `output.memo.mode`: `notion` / `off`
+
+공개 URL: `output.daily.public_url_base` 에 Cloudflare Tunnel 호스트 입력 →
+HTML 링크가 카톡 문구에 자연스럽게 포함됨 (모바일에서 즉시 열림).
+
+### E. 수동 오더 에이전트 (상시 대기)
 ```
 원장 터미널  ──>  classin-toolkit agent
                      └─ intelligence/agent.chat_loop
@@ -112,7 +139,8 @@ Layer N은 Layer N-k만 import. **역방향 import 금지**.
    │                               └─> ClassIn Datasub 등록
    ├─ cron (Windows 작업 스케줄러)                     ← 자동: 배치
    │     ├─ 매 시각 +30분 : classin-toolkit sweep-missing-homework
-   │     └─ 매주 금 17시  : classin-toolkit weekly-reports
+   │     ├─ 매일 22시    : classin-toolkit render-daily
+   │     └─ 매주 금 17시  : classin-toolkit generate-weekly-drafts
    ├─ 원장 대화형 셸                                   ← 수동: 질문 응답
    │     └─ classin-toolkit agent
    └─ 파일 기반 상태
