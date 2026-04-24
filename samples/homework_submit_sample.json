@@ -1,0 +1,25 @@
+{
+  "SID": 1000082,
+  "Cmd": "HomeworkSubmit",
+  "ClassID": 2362301,
+  "CourseID": 132323,
+  "ActionTime": 1777610000,
+  "TimeStamp": 1777610005,
+  "SafeKey": "placeholder_md5_safekey",
+  "Data": {
+    "UnitId": 55511,
+    "ActivityId": 99001,
+    "ActivityName": "워크북 p.42-48",
+    "StudentInfo": { "Uid": 10001, "Name": "박성실", "Account": "010-0000-0001" },
+    "TeacherInfo": { "Uid": 20001, "Name": "김선생", "Account": "teacher@demo.kr" },
+    "SubmissionTime": 1777609800,
+    "IsSubmitLate": 0,
+    "IsRevision": 0,
+    "Content": "제출합니다. 4번 문제 풀이 과정 포함.",
+    "Files": [
+      { "Src": "https://example.com/hw/10001.pdf", "FileName": "10001.pdf", "FileExtension": "pdf" }
+    ],
+    "StudentTotal": 5,
+    "SubmitTotal": 2
+  }
+}

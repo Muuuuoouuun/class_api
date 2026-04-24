@@ -1,0 +1,40 @@
+academy:
+  name: "○○수학학원"
+  timezone: "Asia/Seoul"
+
+classin:
+  base_url: "https://api.eeo.cn"
+  school_id: "REPLACE_ME"        # SID — eeo.cn 대시보드에서 확보
+  secret_key: "REPLACE_ME"       # v2 서명 시크릿 (signing key)
+  webhook_secret: "REPLACE_ME"   # Datasub SafeKey 검증용 공유비밀
+  default_password: "Classin!2026"
+
+notion:
+  token: "secret_REPLACE_ME"
+  databases:
+    students: "REPLACE_ME_STUDENTS_DB_ID"
+    lessons: "REPLACE_ME_LESSONS_DB_ID"
+    reports: "REPLACE_ME_REPORTS_DB_ID"
+
+anthropic:
+  api_key: "sk-ant-REPLACE_ME"
+  model: "claude-sonnet-4-6"
+  report_model: "claude-opus-4-7"
+
+notify:
+  mode: "dry_run"
+  provider: "aligo"
+  aligo:
+    api_key: "REPLACE_ME"
+    user_id: "REPLACE_ME"
+    sender: "01012345678"
+
+webhook:
+  host: "0.0.0.0"
+  port: 8787
+  dump_dir: "./samples/incoming"
+
+reports:
+  output_dir: "./reports_out"
+  weekly_cron_day: "fri"
+  weekly_cron_hour: 17

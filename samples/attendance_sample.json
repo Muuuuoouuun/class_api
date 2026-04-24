@@ -1,0 +1,24 @@
+{
+  "SID": 1000082,
+  "Cmd": "Attendance",
+  "ClassID": 2362301,
+  "CourseID": 132323,
+  "ClassStartTime": 1777575600,
+  "ClassEndTime": 1777582800,
+  "ClassName": "수1 - 지수함수 1",
+  "CourseName": "고2 수학 A반",
+  "ActivityID": 0,
+  "AttendanceStudentNum": 4,
+  "ClassStudentNum": 5,
+  "AttendanceFlag": 1,
+  "ActionTime": 1777582810,
+  "TimeStamp": 1777582815,
+  "SafeKey": "placeholder_md5_safekey",
+  "Data": [
+    { "Uid": 10001, "Name": "박성실", "Identity": 1, "AttendanceTime": 7200, "FirstInTime": 1777575480, "LastOutTime": 1777582920, "FirstInDevice": 1, "LastOutReason": 0 },
+    { "Uid": 10002, "Name": "김지각", "Identity": 1, "AttendanceTime": 6300, "FirstInTime": 1777576500, "LastOutTime": 1777582800, "FirstInDevice": 2, "LastOutReason": 0 },
+    { "Uid": 10003, "Name": "이하락", "Identity": 1, "AttendanceTime": 4200, "FirstInTime": 1777575540, "LastOutTime": 1777582800, "FirstInDevice": 1, "LastOutReason": 0 },
+    { "Uid": 10004, "Name": "정활발", "Identity": 1, "AttendanceTime": 7260, "FirstInTime": 1777575420, "LastOutTime": 1777582980, "FirstInDevice": 1, "LastOutReason": 0 },
+    { "Uid": 10005, "Name": "최결석", "Identity": 1, "AttendanceTime": 0, "FirstInTime": null, "LastOutTime": null, "FirstInDevice": null, "LastOutReason": null }
+  ]
+}

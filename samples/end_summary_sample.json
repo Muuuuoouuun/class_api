@@ -1,0 +1,30 @@
+{
+  "SID": 1000082,
+  "Cmd": "End",
+  "ClassID": 2362301,
+  "CourseID": 132323,
+  "CloseTime": 1777582800,
+  "RealCloseTime": 1777582900,
+  "StartTime": 1777575600,
+  "ActionTime": 1777582910,
+  "TimeStamp": 1777582915,
+  "SafeKey": "placeholder_md5_safekey",
+  "Data": {
+    "handsupEnd": {
+      "totalByUid": { "10001": 6, "10002": 1, "10003": 0, "10004": 9, "10005": 0 }
+    },
+    "awardEnd": {
+      "totalByUid": { "10001": 2, "10002": 0, "10003": 0, "10004": 4, "10005": 0 }
+    },
+    "inoutEnd": [
+      { "Uid": 10001, "CameraTime": 7110 },
+      { "Uid": 10002, "CameraTime": 2400 },
+      { "Uid": 10003, "CameraTime": 1200 },
+      { "Uid": 10004, "CameraTime": 7200 },
+      { "Uid": 10005, "CameraTime": 0 }
+    ],
+    "answerEnd": {
+      "pollResponsesByUid": { "10001": 4, "10002": 2, "10003": 1, "10004": 5, "10005": 0 }
+    }
+  }
+}
