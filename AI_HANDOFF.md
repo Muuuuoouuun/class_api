@@ -80,6 +80,7 @@ classin-toolkit generate-weekly-drafts
 classin-toolkit approve-weekly --week YYYY-MM-DD
 classin-toolkit write-memo --classin-id 10001 --text "상담 기록" --tag 상담
 classin-toolkit agent
+classin-toolkit ui
 ```
 
 검증:

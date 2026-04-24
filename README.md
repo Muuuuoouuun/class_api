@@ -37,6 +37,7 @@ classin-toolkit weekly-reports
 
 # 수동 오더 라인
 classin-toolkit agent    # 원장 대화형 AI 어시스턴트
+classin-toolkit ui       # 로컬 브라우저 운영 UI
 ```
 
 ## 커맨드 레퍼런스
@@ -50,6 +51,7 @@ classin-toolkit agent    # 원장 대화형 AI 어시스턴트
 | 자동 (MVP2) | `classin-toolkit weekly-reports` | 학생별 주간 리포트 Notion 페이지 |
 | 자동 (SSO)  | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | ClassIn 앱 호출 링크 |
 | 수동 (Agent) | `classin-toolkit agent` | 원장/교사 자연어 질문 → Claude tool-use |
+| 수동 (UI) | `classin-toolkit ui` | 로컬 브라우저에서 리포트·sweep·메모·AI 질문 실행 |
 
 ## MVP 상태
 

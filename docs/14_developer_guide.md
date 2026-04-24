@@ -47,6 +47,7 @@ ruff format src/ tests/
 | `classin-toolkit write-memo --classin-id X --text "..." [--tag ...]` | 원장 메모 기록 | 편집 채널 |
 | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | 학생·교사 ClassIn 앱 링크 | SSO |
 | `classin-toolkit agent` | 원장·교사 질문 대화 | 수동 오더 에이전트 |
+| `classin-toolkit ui [--port 8790]` | 로컬 브라우저 운영 화면 | 수동 오더 UI |
 
 모든 명령은 `--config <path>` 옵션으로 다른 config.yaml 지정 가능.
 
@@ -68,6 +69,16 @@ assistant > ...
 ```
 
 도구 추가는 [agent.py](../src/classin_toolkit/intelligence/agent.py) 의 `TOOLS` 리스트 + `_execute_tool` 분기에 한 곳에서만 한다.
+
+## 3.1 로컬 UI 사용
+
+```bash
+classin-toolkit ui
+# 브라우저: http://127.0.0.1:8790
+```
+
+UI는 기존 파이프라인을 감싸는 얇은 FastAPI 화면이다. 상태 확인, 일일 HTML 생성,
+주간 드래프트 생성/승인, 미제출 sweep, 메모 작성, 단발 AI 질문을 실행한다.
 
 ## 4. 자주 있는 확장 시나리오
 
