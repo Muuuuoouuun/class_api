@@ -305,15 +305,38 @@ class NotionRepo:
                     "rich_text": {"equals": lesson_id},
                 }
             )
-        res = self._nc.databases.query(
+        pages = self._query_all(
             database_id=self.lessons_db, filter={"and": and_filters}
         )
-        return [_row_summary(p) for p in res.get("results", [])]
+        return self._attach_student_metadata(
+            [_row_summary(p) for p in pages]
+        )
+
+    def lesson_records(self, *, since: datetime, until: datetime) -> list[dict]:
+        pages = self._query_all(
+            database_id=self.lessons_db,
+            filter={
+                "and": [
+                    {
+                        "property": PROP_LESSON_DATE,
+                        "date": {"on_or_after": since.isoformat()},
+                    },
+                    {
+                        "property": PROP_LESSON_DATE,
+                        "date": {"before": until.isoformat()},
+                    },
+                ]
+            },
+            sorts=[{"property": PROP_LESSON_DATE, "direction": "ascending"}],
+        )
+        return self._attach_student_metadata(
+            [_row_summary(p) for p in pages]
+        )
 
     def weekly_student_stats(
         self, *, student_page_id: str, since: datetime, until: datetime
     ) -> list[dict]:
-        res = self._nc.databases.query(
+        pages = self._query_all(
             database_id=self.lessons_db,
             filter={
                 "and": [
@@ -332,7 +355,35 @@ class NotionRepo:
                 ]
             },
         )
-        return [_row_summary(p) for p in res.get("results", [])]
+        return [_row_summary(p) for p in pages]
+
+    def _attach_student_metadata(self, rows: list[dict]) -> list[dict]:
+        if not rows:
+            return rows
+        by_page_id = {student.page_id: student for student in self.list_active_students()}
+        for row in rows:
+            student = by_page_id.get(row.get("student_page_id"))
+            if not student:
+                continue
+            row["student_classin_id"] = student.classin_id
+            row["student_name"] = student.name
+            row["student_class_name"] = student.class_name
+            row["parent_phone"] = student.parent_phone
+        return rows
+
+    def _query_all(self, **kwargs: Any) -> list[dict]:
+        results: list[dict] = []
+        cursor: str | None = None
+        while True:
+            query = dict(kwargs)
+            query["page_size"] = 100
+            if cursor:
+                query["start_cursor"] = cursor
+            res = self._nc.databases.query(**query)
+            results.extend(res.get("results", []))
+            if not res.get("has_more"):
+                return results
+            cursor = res.get("next_cursor")
 
     # ============== Report ==============
 
@@ -463,8 +514,11 @@ def _row_summary(page: dict) -> dict:
     return {
         "page_id": page["id"],
         "student_page_id": student_page_id,
-        "student_classin_id": _plain(p.get(PROP_STUDENT_CLASSIN_ID)) or None,
+        "student_classin_id": None,
+        "student_name": None,
+        "student_class_name": None,
         "lesson_classin_id": _plain(p.get(PROP_LESSON_CLASSIN_LESSON_ID)),
+        "course_classin_id": _plain(p.get(PROP_LESSON_CLASSIN_COURSE_ID)),
         "date": (p.get(PROP_LESSON_DATE) or {}).get("date", {}).get("start"),
         "attendance": _select(p.get(PROP_LESSON_ATTEND)),
         "attendance_seconds": (p.get(PROP_LESSON_ATTEND_SECONDS) or {}).get("number") or 0,

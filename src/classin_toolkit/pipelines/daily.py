@@ -40,28 +40,42 @@ def _build_snapshot(cfg: AppConfig, target: date) -> DailySnapshot:
     start = datetime.combine(target, datetime.min.time(), tzinfo=timezone.utc)
     end = start + timedelta(days=1)
 
-    # 수업 기록 DB 를 읽어서 수업 단위로 aggregate
-    rows = repo.find_missing_homework(
-        since=start - timedelta(hours=1), lesson_id=None
-    ) + []
-    # 더 일반적인 조회가 필요하면 repo 에 lesson_aggregate 메서드 추가 대상.
+    rows = repo.lesson_records(since=start, until=end)
 
     lessons_by_id: dict[str, dict] = {}
-    students_lookup = repo.resolve_students(
-        [r["student_classin_id"] for r in rows if r.get("student_classin_id")]
-    )
     missing_homework = []
     for r in rows:
         cid = r.get("student_classin_id") or ""
-        student = students_lookup.get(cid)
-        missing_homework.append(
+        lesson_id = r.get("lesson_classin_id") or "unknown"
+        lesson = lessons_by_id.setdefault(
+            lesson_id,
             {
-                "student_classin_id": cid,
-                "student_name": student.name if student else "",
-                "class_name": student.class_name if student else None,
-                "lesson_title": r.get("lesson_classin_id"),
-            }
+                "lesson_id": lesson_id,
+                "lesson_title": lesson_id,
+                "course_name": r.get("course_classin_id") or "-",
+                "time": _lesson_time(r.get("date")),
+                "present_count": 0,
+                "late_count": 0,
+                "absent_count": 0,
+            },
         )
+        attendance = r.get("attendance")
+        if attendance == "출석":
+            lesson["present_count"] += 1
+        elif attendance == "지각":
+            lesson["late_count"] += 1
+        elif attendance == "결석":
+            lesson["absent_count"] += 1
+
+        if r.get("homework_submitted") is False:
+            missing_homework.append(
+                {
+                    "student_classin_id": cid,
+                    "student_name": r.get("student_name") or "",
+                    "class_name": r.get("student_class_name"),
+                    "lesson_title": lesson_id,
+                }
+            )
 
     return DailySnapshot(
         date=target.isoformat(),
@@ -78,3 +92,12 @@ def _attendance_rate(rows: list[dict]) -> float:
         return 0.0
     present = sum(1 for r in rows if r.get("attendance") in ("출석", "지각"))
     return present / len(rows)
+
+
+def _lesson_time(value: str | None) -> str:
+    if not value:
+        return "-"
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime("%H:%M")
+    except ValueError:
+        return "-"

@@ -44,15 +44,19 @@ async def ingest_attendance(event: AttendanceEvent, cfg: AppConfig) -> None:
 
 async def ingest_end_summary(event: EndEvent, cfg: AppConfig) -> None:
     repo = NotionRepo.from_config(cfg)
-    # End 이벤트는 수업 전체 집계가 중심 — 학생별 카메라 on 분은 best-effort.
     camera = event.camera_minutes_by_uid()
-    for uid, minutes in camera.items():
+    hand_raise = event.hand_raise_by_uid()
+    trophies = event.trophy_by_uid()
+    polls = event.poll_by_uid()
+    for uid in set(camera) | set(hand_raise) | set(trophies) | set(polls):
         repo.patch_lesson_record(
             lesson_id=event.class_id or "",
             student_classin_id=uid,
-            camera_minutes=minutes,
+            camera_minutes=camera.get(uid),
+            hand_raise=hand_raise.get(uid),
+            trophy=trophies.get(uid),
+            poll=polls.get(uid),
         )
-    # 수업 단위 집계(손들기·트로피 합계)는 "수업 Master" DB 로 분리 가능 — MVP 스콥 밖.
     log.info(
         "end summary ingested lesson=%s hand_total=%d trophy_total=%d",
         event.class_id,

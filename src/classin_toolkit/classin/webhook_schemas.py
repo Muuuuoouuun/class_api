@@ -98,18 +98,46 @@ class EndEvent(_BaseEvent):
     Data: dict[str, Any] = Field(default_factory=dict)
 
     def hand_raise_total(self) -> int:
-        hs = self.Data.get("handsupEnd") or {}
-        total = 0
-        for v in _iter_numbers(hs):
-            total += v
-        return total
+        by_uid = self.hand_raise_by_uid()
+        if by_uid:
+            return sum(by_uid.values())
+        return sum(int(v) for v in _iter_numbers(self.Data.get("handsupEnd") or {}))
+
+    def hand_raise_by_uid(self) -> dict[str, int]:
+        return _numbers_by_uid(
+            self.Data.get("handsupEnd"),
+            map_keys=("totalByUid", "handsupByUid", "handRaiseByUid"),
+            value_keys=("HandsUp", "handsup", "Count", "count", "Total", "total"),
+        )
 
     def trophy_total(self) -> int:
-        aw = self.Data.get("awardEnd") or {}
-        total = 0
-        for v in _iter_numbers(aw):
-            total += v
-        return total
+        by_uid = self.trophy_by_uid()
+        if by_uid:
+            return sum(by_uid.values())
+        return sum(int(v) for v in _iter_numbers(self.Data.get("awardEnd") or {}))
+
+    def trophy_by_uid(self) -> dict[str, int]:
+        return _numbers_by_uid(
+            self.Data.get("awardEnd"),
+            map_keys=("totalByUid", "awardByUid", "trophyByUid"),
+            value_keys=(
+                "Award",
+                "award",
+                "Trophy",
+                "trophy",
+                "Count",
+                "count",
+                "Total",
+                "total",
+            ),
+        )
+
+    def poll_by_uid(self) -> dict[str, int]:
+        return _numbers_by_uid(
+            self.Data.get("answerEnd"),
+            map_keys=("pollResponsesByUid", "answerByUid", "totalByUid"),
+            value_keys=("Poll", "poll", "Answer", "answer", "Count", "count", "Total", "total"),
+        )
 
     def camera_minutes_by_uid(self) -> dict[str, float]:
         """inoutEnd 에서 uid -> 카메라 on 시간(분) 추출. 정확 필드 확인 전 best-effort."""
@@ -236,3 +264,49 @@ def _iter_numbers(obj: Any):
     elif isinstance(obj, dict):
         for x in obj.values():
             yield from _iter_numbers(x)
+
+
+def _numbers_by_uid(
+    obj: Any,
+    *,
+    map_keys: tuple[str, ...],
+    value_keys: tuple[str, ...],
+) -> dict[str, int]:
+    """Best-effort uid별 집계 추출.
+
+    실제 End 세부 payload는 샘플 확보 전까지 흔들릴 수 있어, 확인된
+    `totalByUid` 형태와 리스트 레코드 형태를 모두 받아준다.
+    """
+    out: dict[str, int] = {}
+    if isinstance(obj, dict):
+        for key in map_keys:
+            mapped = obj.get(key)
+            if isinstance(mapped, dict):
+                _merge_numeric_mapping(out, mapped)
+        if not out:
+            _merge_numeric_mapping(out, obj)
+    elif isinstance(obj, list):
+        for rec in obj:
+            if not isinstance(rec, dict):
+                continue
+            uid = (
+                rec.get("Uid")
+                or rec.get("uid")
+                or rec.get("StudentUid")
+                or rec.get("studentUid")
+            )
+            if not uid:
+                continue
+            for key in value_keys:
+                val = rec.get(key)
+                if isinstance(val, (int, float)):
+                    out[str(uid)] = out.get(str(uid), 0) + int(val)
+                    break
+    return out
+
+
+def _merge_numeric_mapping(out: dict[str, int], mapped: dict) -> None:
+    for uid, val in mapped.items():
+        if not str(uid).isdigit() or not isinstance(val, (int, float)):
+            continue
+        out[str(uid)] = out.get(str(uid), 0) + int(val)

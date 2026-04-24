@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from classin_toolkit.config import AppConfig
+from classin_toolkit.pipelines import daily as daily_pipeline
 from classin_toolkit.storage.html_renderer import (
     HtmlDailyRenderer,
     HtmlWeeklyRenderer,
@@ -44,6 +45,58 @@ def test_daily_html_written(tmp_path) -> None:
     assert "일일 현황 2026-04-24" in body
     assert "김지각" in body
     assert "80%" in body  # attendance rate rendered
+
+
+def test_daily_snapshot_aggregates_lesson_records(tmp_path, monkeypatch) -> None:
+    cfg = _cfg(tmp_path)
+
+    class FakeRepo:
+        def lesson_records(self, *, since, until):
+            return [
+                {
+                    "student_classin_id": "10001",
+                    "student_name": "박성실",
+                    "student_class_name": "고2-A",
+                    "lesson_classin_id": "2362301",
+                    "course_classin_id": "132323",
+                    "date": "2026-04-24T10:00:00+00:00",
+                    "attendance": "출석",
+                    "homework_submitted": True,
+                },
+                {
+                    "student_classin_id": "10002",
+                    "student_name": "김지각",
+                    "student_class_name": "고2-A",
+                    "lesson_classin_id": "2362301",
+                    "course_classin_id": "132323",
+                    "date": "2026-04-24T10:00:00+00:00",
+                    "attendance": "지각",
+                    "homework_submitted": False,
+                },
+                {
+                    "student_classin_id": "10005",
+                    "student_name": "최결석",
+                    "student_class_name": "고2-A",
+                    "lesson_classin_id": "2362301",
+                    "course_classin_id": "132323",
+                    "date": "2026-04-24T10:00:00+00:00",
+                    "attendance": "결석",
+                    "homework_submitted": False,
+                },
+            ]
+
+    monkeypatch.setattr(daily_pipeline.NotionRepo, "from_config", lambda _cfg: FakeRepo())
+
+    snap = daily_pipeline._build_snapshot(
+        cfg, datetime(2026, 4, 24, tzinfo=timezone.utc).date()
+    )
+
+    assert len(snap.lessons) == 1
+    assert snap.lessons[0]["present_count"] == 1
+    assert snap.lessons[0]["late_count"] == 1
+    assert snap.lessons[0]["absent_count"] == 1
+    assert snap.attendance_rate == 2 / 3
+    assert [m["student_name"] for m in snap.missing_homework] == ["김지각", "최결석"]
 
 
 def test_weekly_draft_html(tmp_path) -> None:

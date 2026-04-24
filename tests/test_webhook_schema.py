@@ -39,8 +39,11 @@ def test_parse_end_summary_aggregations() -> None:
     assert isinstance(event, EndEvent)
     # handsupEnd totals across all uids: 6+1+0+9+0 = 16
     assert event.hand_raise_total() == 16
+    assert event.hand_raise_by_uid()["10004"] == 9
     # awardEnd totals: 2+0+0+4+0 = 6
     assert event.trophy_total() == 6
+    assert event.trophy_by_uid()["10001"] == 2
+    assert event.poll_by_uid()["10003"] == 1
     cam = event.camera_minutes_by_uid()
     assert cam["10001"] == 7110 / 60
     assert cam["10005"] == 0.0
