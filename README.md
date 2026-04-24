@@ -2,6 +2,7 @@
 
 ClassIn 서드파티 자동화 컨설팅 Toolkit.
 로컬 설치 + Claude 지능화로 학원 운영 자동화를 수행한다.
+ClassIn API로 학원 운영 자동화를 관리하는 앱/도구 모음이다.
 
 **문서는 [`docs/00_index.md`](docs/00_index.md)에서 시작.** 이 README 는 빠른 시작·커맨드 레퍼런스만.
 
