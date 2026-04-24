@@ -10,7 +10,7 @@
 
 현재 제품 형태는 다음과 같다.
 
-- 자동 라인: ClassIn Webhook 수신, 스케줄 파싱, 미제출 sweep, 주간 리포트 생성
+- 자동 라인: ClassIn Webhook 수신, 스케줄 파싱, 미제출 sweep, 시험 결과 병합, 주간 리포트 생성
 - 수동 라인: `classin-toolkit agent` 터미널 기반 원장/교사용 AI 어시스턴트
 - 운영 화면: Notion DB와 HTML 리포트 파일을 우선 사용
 - 향후 전환: 로컬 CLI/Notion 운영에서 웹 UI 또는 SaaS로 확장 가능하도록 Layer 분리
@@ -64,7 +64,7 @@ Copy-Item config.yaml.example config.yaml
 `config.yaml`에는 실제 운영 키가 필요하다.
 
 - ClassIn SID, signing secret, webhook SafeKey
-- Notion integration token, DB ID 4종
+- Notion integration token, DB ID 5종 (학생/수업/리포트/메모/시험)
 - Anthropic API key
 - 알림 공급자 키, live 전환 전에는 `notify.mode: dry_run`
 
@@ -75,6 +75,8 @@ classin-webhook
 classin-toolkit parse-schedule samples/schedule_sample.csv
 classin-toolkit replay-webhook samples/attendance_sample.json
 classin-toolkit sweep-missing-homework
+classin-toolkit import-exam-results <csv|json> --exam-name ... --exam-date ...
+classin-toolkit sweep-missing-exam --exam-name ... --exam-date ...
 classin-toolkit render-daily
 classin-toolkit generate-weekly-drafts
 classin-toolkit approve-weekly --week YYYY-MM-DD
@@ -161,7 +163,7 @@ dry_run 동작은 유지하고, provider-specific 코드는 notify 계층에 격
 
 ## 9. 현재 우선순위
 
-1. 파일럿 학원 1곳 기준으로 Notion DB 4종을 실제 생성하고 `config.yaml`을 채운다.
+1. 파일럿 학원 1곳 기준으로 Notion DB 5종을 실제 생성하고 `config.yaml`을 채운다.
 2. Webhook SafeKey 검증 알고리즘을 ClassIn 담당자에게 확인한다.
 3. 로컬 UI 또는 Notion 운영 화면을 정리해 원장/컨설턴트가 반복 작업을 쉽게 실행하게 한다.
 4. 1~2주 실데이터로 리포트 품질과 미제출 알림 문구를 검증한다.

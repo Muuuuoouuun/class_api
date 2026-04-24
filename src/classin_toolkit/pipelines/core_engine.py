@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from ..classin.ced import CEDClient
 from ..classin.client import ClassInClient
-from ..classin.schemas import Course, Homework, Lesson
+from ..classin.schemas import Course, Lesson
 from ..config import AppConfig
 from ..intelligence.schedule_parser import parse_schedule
 from ..storage.notion_repo import NotionRepo
@@ -54,7 +54,7 @@ def run_core_engine(cfg: AppConfig, *, schedule_text: str, dry_run: bool = False
 
             for pl in pc.lessons:
                 try:
-                    lesson = ced.add_course_class(
+                    ced.add_course_class(
                         Lesson(
                             course_id=course.classin_id or "",
                             title=pl.title,
@@ -75,5 +75,5 @@ def run_core_engine(cfg: AppConfig, *, schedule_text: str, dry_run: bool = False
                     )
 
     # TODO: Course/Lesson ID 를 Notion "수업 Master DB" 에 저장. 현재 Notion 스키마는
-    #       학생/수업기록/리포트 3개이므로 Course Master DB 추가 시 이 블록에 upsert 로직 삽입.
+    #       학생/수업기록/리포트/메모/시험 5개이므로 Course Master DB 추가 시 이 블록에 upsert 로직 삽입.
     return result

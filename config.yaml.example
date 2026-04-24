@@ -16,6 +16,7 @@ notion:
     lessons: "REPLACE_ME_LESSONS_DB_ID"
     reports: "REPLACE_ME_REPORTS_DB_ID"
     memos: "REPLACE_ME_MEMOS_DB_ID"        # 원장 메모·대응기록 전용
+    exams: "REPLACE_ME_EXAMS_DB_ID"        # 시험 결과·미응시 관리 전용
 
 output:
   daily:

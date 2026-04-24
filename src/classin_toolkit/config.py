@@ -26,6 +26,7 @@ class NotionDatabases(BaseModel):
     lessons: str
     reports: str
     memos: str | None = None
+    exams: str | None = None
 
 
 class NotionConfig(BaseModel):

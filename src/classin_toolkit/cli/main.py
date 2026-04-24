@@ -12,6 +12,7 @@ from rich.table import Table
 from ..config import load_config
 from ..pipelines.core_engine import run_core_engine
 from ..pipelines.daily import render_daily
+from ..pipelines.exams import import_exam_results, sweep_missing_exam
 from ..pipelines.missing_homework import sweep_missing_homework
 from ..pipelines.weekly import approve_all, generate_drafts, run_weekly_reports
 from ..readiness import ReadinessItem, check_readiness
@@ -88,6 +89,56 @@ def sweep_missing(
 ) -> None:
     cfg = load_config(config)
     n = sweep_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id)
+    console.print(f"[green]dispatched {n} messages[/green]")
+
+
+@app.command("import-exam-results")
+def import_exam_results_cmd(
+    path: Path = typer.Argument(..., exists=True, readable=True),
+    exam_name: str | None = typer.Option(None, "--exam-name"),
+    exam_date: str | None = typer.Option(None, "--exam-date", help="YYYY-MM-DD"),
+    class_name: str | None = typer.Option(None, "--class-name"),
+    source: str | None = typer.Option("academy-db", "--source"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """시험 결과 CSV/JSON 을 학생 Master 와 병합해 Notion 시험 DB 에 적재."""
+    cfg = load_config(config)
+    result = import_exam_results(
+        cfg,
+        path=path,
+        exam_name=exam_name,
+        exam_date=exam_date,
+        class_name=class_name,
+        source=source,
+    )
+    console.print(
+        "[green]merged {merged} / {total} rows[/green] "
+        "(unresolved={unresolved}, skipped={skipped})".format(
+            merged=result.merged_rows,
+            total=result.total_rows,
+            unresolved=result.unresolved_rows,
+            skipped=result.skipped_rows,
+        )
+    )
+    for error in result.errors[:20]:
+        console.print(f"[yellow]- {error}[/yellow]")
+
+
+@app.command("sweep-missing-exam")
+def sweep_missing_exam_cmd(
+    exam_name: str = typer.Option(..., "--exam-name"),
+    exam_date: str = typer.Option(..., "--exam-date", help="YYYY-MM-DD"),
+    class_name: str | None = typer.Option(None, "--class-name"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """특정 시험의 미응시 학생을 찾아 알림 문구를 일괄 발송한다."""
+    cfg = load_config(config)
+    n = sweep_missing_exam(
+        cfg,
+        exam_name=exam_name,
+        exam_date=exam_date,
+        class_name=class_name,
+    )
     console.print(f"[green]dispatched {n} messages[/green]")
 
 
