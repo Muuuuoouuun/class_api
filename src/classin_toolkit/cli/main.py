@@ -7,12 +7,14 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from ..config import load_config
 from ..pipelines.core_engine import run_core_engine
 from ..pipelines.daily import render_daily
 from ..pipelines.missing_homework import sweep_missing_homework
 from ..pipelines.weekly import approve_all, generate_drafts, run_weekly_reports
+from ..readiness import ReadinessItem, check_readiness
 
 app = typer.Typer(add_completion=False, help="ClassIn Toolkit CLI")
 console = Console()
@@ -202,6 +204,53 @@ def agent_cmd(
     chat_loop(cfg)
 
 
+@app.command("check-ready")
+def check_ready_cmd(
+    mode: str = typer.Option(
+        "local-demo",
+        "--mode",
+        help="local-demo | classin-live | kakao-live",
+    ),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """테스트 버전 준비 상태와 config.yaml 누락값 점검."""
+    try:
+        cfg = load_config(config)
+        report = check_readiness(cfg, mode=mode, project_root=Path.cwd())
+    except FileNotFoundError as e:
+        console.print(f"[red]config not found[/red] {e}")
+        raise typer.Exit(1) from e
+    except ValueError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(2) from e
+
+    table = Table(title=f"ClassIn Toolkit readiness: {report.mode}")
+    table.add_column("상태", no_wrap=True)
+    table.add_column("단계", no_wrap=True)
+    table.add_column("항목")
+    table.add_column("내용")
+    table.add_column("다음 조치")
+
+    for item in report.items:
+        table.add_row(
+            _status_label(item),
+            item.stage,
+            item.label,
+            item.detail,
+            item.fix or "-",
+        )
+    console.print(table)
+
+    if report.ready:
+        console.print("[green]ready[/green] 이 모드에서 막는 항목은 없습니다.")
+        if report.warnings:
+            console.print(f"[yellow]warnings[/yellow] {len(report.warnings)}개는 확인하세요.")
+        return
+
+    console.print(f"[red]not ready[/red] 해결 필요한 항목 {len(report.blockers)}개")
+    raise typer.Exit(1)
+
+
 @app.command("ui")
 def ui_cmd(
     config: Path = typer.Option(Path("config.yaml"), "--config"),
@@ -215,6 +264,16 @@ def ui_cmd(
 
     console.print(f"[green]ClassIn Toolkit UI[/green] http://{host}:{port}")
     uvicorn.run(create_app(config_path=config), host=host, port=port, reload=False)
+
+
+def _status_label(item: ReadinessItem) -> str:
+    labels = {
+        "ok": "[green]OK[/green]",
+        "warn": "[yellow]WARN[/yellow]",
+        "missing": "[red]MISSING[/red]",
+        "blocked": "[magenta]BLOCKED[/magenta]",
+    }
+    return labels[item.status]
 
 
 if __name__ == "__main__":

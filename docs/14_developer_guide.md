@@ -46,6 +46,7 @@ ruff format src/ tests/
 | `classin-toolkit approve-weekly --week YYYY-MM-DD` | 드래프트 승인 → Notion 아카이브 | MVP2 |
 | `classin-toolkit write-memo --classin-id X --text "..." [--tag ...]` | 원장 메모 기록 | 편집 채널 |
 | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | 학생·교사 ClassIn 앱 링크 | SSO |
+| `classin-toolkit check-ready --mode local-demo` | config/API/DB 준비 상태 점검 | 운영 점검 |
 | `classin-toolkit agent` | 원장·교사 질문 대화 | 수동 오더 에이전트 |
 | `classin-toolkit ui [--port 8790]` | 로컬 브라우저 운영 화면 | 수동 오더 UI |
 

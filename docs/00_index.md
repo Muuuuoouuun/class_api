@@ -27,6 +27,7 @@
 | 14 | [developer_guide](14_developer_guide.md) | 로컬 개발 셋업·CLI·테스트·신규 Cmd 추가 절차 |
 | 15 | [demo_scenario](15_demo_scenario.md) | 가상 학원 + 5 페르소나 + 3~5분 데모 플롯 |
 | 16 | [roadmap](16_roadmap.md) | Week 단위 실행 체크리스트 (진행 상태 추적) |
+| 17 | [test_readiness](17_test_readiness.md) | 테스트 버전 준비물·API 키·config 누락 점검 |
 
 ## 읽는 순서 (역할별)
 
