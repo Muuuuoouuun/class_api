@@ -25,8 +25,7 @@ def sweep_missing_homework(
     cfg: AppConfig, *, window_hours: int = 24, lesson_id: str | None = None
 ) -> int:
     repo = NotionRepo.from_config(cfg)
-    since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
-    rows = repo.find_missing_homework(since=since, lesson_id=lesson_id)
+    rows = query_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id, repo=repo)
     if not rows:
         log.info("no missing homework in window")
         return 0
@@ -43,3 +42,15 @@ def sweep_missing_homework(
     asyncio.run(dispatch_kakao(cfg, messages))
     log.info("dispatched %d missing-homework messages", len(messages))
     return len(messages)
+
+
+def query_missing_homework(
+    cfg: AppConfig,
+    *,
+    window_hours: int = 24,
+    lesson_id: str | None = None,
+    repo: NotionRepo | None = None,
+) -> list[dict]:
+    repo = repo or NotionRepo.from_config(cfg)
+    since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+    return repo.find_missing_homework(since=since, lesson_id=lesson_id)
