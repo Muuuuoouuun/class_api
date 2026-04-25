@@ -72,6 +72,25 @@ def test_local_demo_flags_placeholder_values(tmp_path: Path) -> None:
     assert any(item.label.startswith("샘플 페이로드") for item in report.blockers)
 
 
+def test_local_demo_treats_local_demo_classin_keys_as_warning(tmp_path: Path) -> None:
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    for name in _SAMPLE_PAYLOADS:
+        (samples / name).write_text("{}", encoding="utf-8")
+
+    report = check_readiness(
+        _cfg(classin={"school_id": "LOCAL_DEMO", "secret_key": "LOCAL_DEMO"}),
+        mode="local-demo",
+        project_root=tmp_path,
+    )
+
+    assert report.ready
+    assert any(
+        item.label == "ClassIn API 키" and item.status == "warn"
+        for item in report.items
+    )
+
+
 def test_classin_live_requires_webhook_secret(tmp_path: Path) -> None:
     samples = tmp_path / "samples"
     samples.mkdir()

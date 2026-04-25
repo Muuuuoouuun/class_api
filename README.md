@@ -36,6 +36,8 @@ classin-toolkit replay-webhook samples/attendance_sample.json
 classin-toolkit sweep-missing-homework
 classin-toolkit weekly-reports
 classin-toolkit check-ready --mode local-demo
+classin-toolkit setup-notion --parent-page-id <notion-page-id> --dry-run
+classin-toolkit seed-demo-data --dry-run
 
 # 수동 오더 라인
 classin-toolkit agent    # 원장 대화형 AI 어시스턴트
@@ -53,6 +55,8 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 | 자동 (MVP2) | `classin-toolkit weekly-reports` | 학생별 주간 리포트 Notion 페이지 |
 | 자동 (SSO)  | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | ClassIn 앱 호출 링크 |
 | 점검 | `classin-toolkit check-ready --mode local-demo` | 테스트 단계별 API 키·DB ID 누락 확인 |
+| 세팅 | `classin-toolkit setup-notion --parent-page-id ... --write` | Notion DB 4개 자동 생성 |
+| 데모 | `classin-toolkit seed-demo-data --write` | 5명 페르소나 학생·수업 기록 Notion 생성 |
 | 수동 (Agent) | `classin-toolkit agent` | 원장/교사 자연어 질문 → Claude tool-use |
 | 수동 (UI) | `classin-toolkit ui` | 로컬 브라우저에서 리포트·sweep·메모·AI 질문 실행 |
 

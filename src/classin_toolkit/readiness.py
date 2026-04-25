@@ -14,7 +14,14 @@ from .config import AppConfig
 ReadinessMode = Literal["local-demo", "classin-live", "kakao-live"]
 ReadinessStatus = Literal["ok", "warn", "missing", "blocked"]
 
-_PLACEHOLDER_MARKERS = ("REPLACE_ME", "CHANGE_ME", "TODO", "YOUR_", "INSERT_")
+_PLACEHOLDER_MARKERS = (
+    "REPLACE_ME",
+    "CHANGE_ME",
+    "TODO",
+    "YOUR_",
+    "INSERT_",
+    "LOCAL_DEMO",
+)
 _SAMPLE_PAYLOADS = (
     "attendance_sample.json",
     "end_summary_sample.json",

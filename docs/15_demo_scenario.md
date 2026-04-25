@@ -14,12 +14,26 @@
 
 ## 3~5분 데모 영상 플롯
 
-1. 스케줄 CSV 를 원장이 드롭 → `classin-toolkit parse-schedule` 실행
-2. ClassIn 대시보드에 수업·숙제가 일괄 생성됨
-3. 수업 종료 직후 `replay-webhook` 으로 After-Class 페이로드 재생
-4. Notion 수업 기록 DB 에 5명 데이터 자동 적재 (화면 분할)
-5. `notify_dry_run/*.md` 에 학생마다 다른 카톡 문구 생성된 것 보여주기
-6. 매주 금요일 `weekly-reports` → Notion 리포트 페이지 5개 (각기 다른 내용)
+0. `classin-toolkit check-ready --mode local-demo` 로 설정 누락 확인
+1. `classin-toolkit seed-demo-data --write` 로 5명 페르소나 학생·수업 기록 생성
+2. 스케줄 CSV 를 원장이 드롭 → `classin-toolkit parse-schedule` 실행
+3. ClassIn 대시보드에 수업·숙제가 일괄 생성됨
+4. 수업 종료 직후 `replay-webhook` 으로 After-Class 페이로드 재생
+5. Notion 수업 기록 DB 에 5명 데이터 자동 적재 (화면 분할)
+6. `notify_dry_run/*.md` 에 학생마다 다른 카톡 문구 생성된 것 보여주기
+7. 매주 금요일 `weekly-reports` → Notion 리포트 페이지 5개 (각기 다른 내용)
+
+## 데모 데이터 생성
+
+기본은 dry-run 이라 Notion 에 쓰지 않는다.
+
+```bash
+classin-toolkit seed-demo-data --dry-run
+classin-toolkit seed-demo-data --write --base-date 2026-04-24 --weeks 3
+```
+
+`--base-date` 는 최신 리포트 주간 기준일이다. 입력한 날짜가 속한 주의 월요일을 최신 주차로 삼고,
+그 이전 주차까지 생성해 지난 주 대비 변화가 나오게 한다.
 
 ## 원장 반응 목표
 

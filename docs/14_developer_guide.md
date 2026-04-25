@@ -47,6 +47,8 @@ ruff format src/ tests/
 | `classin-toolkit write-memo --classin-id X --text "..." [--tag ...]` | 원장 메모 기록 | 편집 채널 |
 | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | 학생·교사 ClassIn 앱 링크 | SSO |
 | `classin-toolkit check-ready --mode local-demo` | config/API/DB 준비 상태 점검 | 운영 점검 |
+| `classin-toolkit setup-notion --parent-page-id X --write` | Notion DB 4개 자동 생성 | 초기 세팅 |
+| `classin-toolkit seed-demo-data --write` | 5명 페르소나 데모 데이터 생성 | 데모 준비 |
 | `classin-toolkit agent` | 원장·교사 질문 대화 | 수동 오더 에이전트 |
 | `classin-toolkit ui [--port 8790]` | 로컬 브라우저 운영 화면 | 수동 오더 UI |
 
