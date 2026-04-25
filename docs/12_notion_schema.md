@@ -1,6 +1,15 @@
 # Notion DB 세팅 가이드
 
 학원별 1회 세팅. **4개 DB** 를 만들고 통합 토큰 Invite → `config.yaml` 에 ID 기입.
+수동 생성 대신 CLI 자동 생성을 권장한다.
+
+```bash
+classin-toolkit setup-notion --parent-page-id <NOTION_PAGE_ID> --dry-run
+classin-toolkit setup-notion --parent-page-id <NOTION_PAGE_ID> --write --config config.yaml
+```
+
+원장님 입장에서는 Notion에 빈 페이지 하나를 만들고, 그 페이지를 Integration에 공유한 뒤,
+페이지 ID만 전달하면 된다. `--write` 실행 후 출력되는 `notion.databases.*` 값을 `config.yaml`에 붙여넣는다.
 
 **역할 분담** (출력 레이어 재설계, 2026-04-24):
 - 학생 Master / 수업 기록 = **원본 데이터 저장소** (자동 적재)
@@ -24,6 +33,7 @@
 
 | 속성 이름 | 타입 | 비고 |
 |---|---|---|
+| 기록 | Title | Notion DB 필수 title 속성 |
 | 학생 | Relation → 학생 Master | |
 | 수업일시 | Date (시간포함) | |
 | 출석 여부 | Select | 출석 / 지각 / 결석 |
@@ -46,6 +56,7 @@
 
 | 속성 이름 | 타입 | 비고 |
 |---|---|---|
+| 리포트명 | Title | Notion DB 필수 title 속성 |
 | 학생 | Relation → 학생 Master | |
 | 리포트 기간 | Date (기간) | |
 | 학부모 발송 문구 | Text | 카톡 발송용 |

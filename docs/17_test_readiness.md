@@ -34,6 +34,18 @@ classin-toolkit check-ready --mode kakao-live --config config.yaml
 
 ClassIn SID/secret 은 `local-demo` 에서는 없어도 된다. 샘플 JSON 을 `replay-webhook` 으로 재생하기 때문이다.
 
+## Notion DB 자동 생성
+
+원장님에게는 "테스트용 빈 Notion 페이지 하나"만 만들게 하고, 그 페이지를 Integration에 공유하게 한다.
+그 다음 아래 명령으로 DB 4개를 만든다.
+
+```bash
+classin-toolkit setup-notion --parent-page-id <NOTION_PAGE_ID> --dry-run
+classin-toolkit setup-notion --parent-page-id <NOTION_PAGE_ID> --write --config config.yaml
+```
+
+명령이 출력하는 `notion.databases.*` 값을 `config.yaml`에 붙여넣고 다시 `check-ready`를 실행한다.
+
 ## classin-live 추가 준비물
 
 - ClassIn `SID`

@@ -9,12 +9,14 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from ..config import load_config
+from ..config import AppConfig, load_config
 from ..pipelines.core_engine import run_core_engine
 from ..pipelines.daily import render_daily
+from ..pipelines.demo_seed import seed_demo_data
 from ..pipelines.missing_homework import sweep_missing_homework
 from ..pipelines.weekly import approve_all, generate_drafts, run_weekly_reports
 from ..readiness import ReadinessItem, check_readiness
+from ..storage.notion_setup import create_notion_schema, dry_run_schema
 
 app = typer.Typer(add_completion=False, help="ClassIn Toolkit CLI")
 console = Console()
@@ -251,6 +253,69 @@ def check_ready_cmd(
     raise typer.Exit(1)
 
 
+@app.command("seed-demo-data")
+def seed_demo_data_cmd(
+    base_date: str | None = typer.Option(
+        None,
+        "--base-date",
+        help="최신 리포트 주간 기준일 YYYY-MM-DD. 기본값: 오늘",
+    ),
+    weeks: int = typer.Option(3, "--weeks", min=1, max=8),
+    write: bool = typer.Option(False, "--write/--dry-run"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """5명 페르소나 데모 데이터를 Notion에 생성한다. 기본은 dry-run."""
+    from datetime import date as date_cls, datetime
+
+    cfg = load_config(config)
+    target = date_cls.fromisoformat(base_date) if base_date else datetime.now().date()
+    result = seed_demo_data(cfg, base_date=target, weeks=weeks, dry_run=not write)
+    mode = "dry-run" if result.dry_run else "write"
+    console.print(
+        f"[green]{mode}[/green] students={result.students} "
+        f"lesson_rows={result.lesson_rows}"
+    )
+    if result.dry_run:
+        console.print("실제 Notion 기록은 [bold]--write[/bold] 를 붙이면 실행됩니다.")
+
+
+@app.command("setup-notion")
+def setup_notion_cmd(
+    parent_page_id: str = typer.Option(
+        ...,
+        "--parent-page-id",
+        help="DB 4개를 만들 Notion 부모 페이지 ID",
+    ),
+    prefix: str = typer.Option("ClassIn Toolkit", "--prefix"),
+    token: str | None = typer.Option(
+        None,
+        "--token",
+        help="Notion Integration token. 생략하면 config.yaml 값을 사용",
+    ),
+    write: bool = typer.Option(False, "--write/--dry-run"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """Notion 테스트 DB 4개를 자동 생성하고 config.yaml용 ID를 출력한다."""
+    if not write:
+        table = Table(title="Notion schema dry-run")
+        table.add_column("DB")
+        table.add_column("속성")
+        for title, props in dry_run_schema(prefix):
+            table.add_row(title, ", ".join(props))
+        console.print(table)
+        console.print("실제 생성은 [bold]--write[/bold] 를 붙이면 실행됩니다.")
+        return
+
+    notion_token = token or _load_config_for_optional_token(config).notion.token
+    result = create_notion_schema(
+        token=notion_token,
+        parent_page_id=parent_page_id,
+        prefix=prefix,
+    )
+    console.print("[green]Notion DB 생성 완료[/green]")
+    console.print(result.config_snippet())
+
+
 @app.command("ui")
 def ui_cmd(
     config: Path = typer.Option(Path("config.yaml"), "--config"),
@@ -274,6 +339,13 @@ def _status_label(item: ReadinessItem) -> str:
         "blocked": "[magenta]BLOCKED[/magenta]",
     }
     return labels[item.status]
+
+
+def _load_config_for_optional_token(path: Path) -> AppConfig:
+    try:
+        return load_config(path)
+    except FileNotFoundError as e:
+        raise typer.BadParameter("--token 을 직접 주거나 config.yaml 을 준비하세요.") from e
 
 
 if __name__ == "__main__":
