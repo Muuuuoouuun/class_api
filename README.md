@@ -42,6 +42,7 @@ classin-toolkit seed-demo-data --dry-run
 # 수동 오더 라인
 classin-toolkit agent    # 원장 대화형 AI 어시스턴트
 classin-toolkit ui       # 로컬 브라우저 운영 UI
+classin-toolkit ui --demo # config/Notion 없이 데모 상황판
 ```
 
 ## 커맨드 레퍼런스
@@ -59,6 +60,7 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 | 데모 | `classin-toolkit seed-demo-data --write` | 5명 페르소나 학생·수업 기록 Notion 생성 |
 | 수동 (Agent) | `classin-toolkit agent` | 원장/교사 자연어 질문 → Claude tool-use |
 | 수동 (UI) | `classin-toolkit ui` | 로컬 브라우저에서 리포트·sweep·메모·AI 질문 실행 |
+| 수동 (Demo UI) | `classin-toolkit ui --demo` | config.yaml 없이 5명 페르소나 상황판 시연 |
 
 ## MVP 상태
 

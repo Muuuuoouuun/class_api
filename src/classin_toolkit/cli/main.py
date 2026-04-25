@@ -321,14 +321,16 @@ def ui_cmd(
     config: Path = typer.Option(Path("config.yaml"), "--config"),
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8790, "--port"),
+    demo: bool = typer.Option(False, "--demo", help="config/Notion 없이 데모 상황판 실행"),
 ) -> None:
     """로컬 브라우저 운영 UI 실행."""
     import uvicorn
 
     from ..ui import create_app
 
-    console.print(f"[green]ClassIn Toolkit UI[/green] http://{host}:{port}")
-    uvicorn.run(create_app(config_path=config), host=host, port=port, reload=False)
+    suffix = " (demo)" if demo else ""
+    console.print(f"[green]ClassIn Toolkit UI{suffix}[/green] http://{host}:{port}")
+    uvicorn.run(create_app(config_path=config, demo=demo), host=host, port=port, reload=False)
 
 
 def _status_label(item: ReadinessItem) -> str:

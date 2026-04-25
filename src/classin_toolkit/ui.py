@@ -18,21 +18,30 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from .config import AppConfig, DEFAULT_CONFIG_PATH, load_config
 from .notify.dispatcher import load_notification_history, notification_history_path
 from .pipelines.daily import render_daily
+from .pipelines.demo_seed import (
+    build_demo_missing_homework_rows,
+    build_demo_notification_history,
+)
 from .pipelines.missing_homework import query_missing_homework, sweep_missing_homework
 from .pipelines.weekly import approve_all, generate_drafts
 from .storage.notion_repo import NotionRepo
+
+_DEMO_ACADEMY = "ClassIn Demo Academy"
 
 
 def create_app(
     config: AppConfig | None = None,
     *,
     config_path: str | Path = DEFAULT_CONFIG_PATH,
+    demo: bool = False,
 ) -> FastAPI:
     app = FastAPI(title="ClassIn Toolkit UI", version="0.1.0")
-    state = _ConfigState(config=config, config_path=Path(config_path))
+    state = _ConfigState(config=config, config_path=Path(config_path), demo=demo)
 
     @app.get("/health")
     async def health() -> dict:
+        if state.demo:
+            return {"ok": True, "academy": _DEMO_ACADEMY, "error": None, "mode": "demo"}
         cfg, error = state.load()
         return {
             "ok": error is None,
@@ -42,11 +51,15 @@ def create_app(
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> HTMLResponse:
+        if state.demo:
+            return HTMLResponse(_render_shell(_demo_status_payload(state.config_path)))
         cfg, error = state.load()
         return HTMLResponse(_render_shell(_status_payload(cfg, error, state.config_path)))
 
     @app.get("/api/status")
     async def api_status() -> dict:
+        if state.demo:
+            return _demo_status_payload(state.config_path)
         cfg, error = state.load()
         return _status_payload(cfg, error, state.config_path)
 
@@ -55,6 +68,8 @@ def create_app(
         window_hours: int = 24,
         lesson_id: str | None = None,
     ) -> dict:
+        if state.demo:
+            return _demo_missing_homework_payload()
         cfg = _require_config(state)
         rows = query_missing_homework(
             cfg,
@@ -66,12 +81,17 @@ def create_app(
 
     @app.get("/api/notifications")
     async def api_notifications(limit: int = 80) -> dict:
+        if state.demo:
+            rows = _demo_notification_history()[:limit]
+            return {"ok": True, "items": rows, "summary": _notification_summary(rows)}
         cfg = _require_config(state)
         rows = load_notification_history(cfg, limit=limit)
         return {"ok": True, "items": rows, "summary": _notification_summary(rows)}
 
     @app.post("/api/render-daily")
     async def api_render_daily(request: Request) -> JSONResponse:
+        if state.demo:
+            return _demo_ok("Demo mode: 일일 현황 생성은 외부 쓰기 없이 처리되었습니다.")
         cfg = _require_config(state)
         payload = await _json_payload(request)
         raw_date = (payload.get("date") or "").strip()
@@ -87,12 +107,16 @@ def create_app(
 
     @app.post("/api/generate-weekly-drafts")
     async def api_generate_weekly_drafts() -> JSONResponse:
+        if state.demo:
+            return _demo_ok("Demo mode: 주간 드래프트 5건이 준비된 것으로 표시됩니다.", count=5)
         cfg = _require_config(state)
         count = generate_drafts(cfg)
         return _ok(f"주간 드래프트 {count}건을 생성했습니다.", count=count)
 
     @app.post("/api/approve-weekly")
     async def api_approve_weekly(request: Request) -> JSONResponse:
+        if state.demo:
+            return _demo_ok("Demo mode: 주간 리포트 승인 흐름을 외부 쓰기 없이 확인했습니다.")
         cfg = _require_config(state)
         payload = await _json_payload(request)
         week = (payload.get("week") or "").strip()
@@ -104,6 +128,8 @@ def create_app(
 
     @app.post("/api/sweep-missing-homework")
     async def api_sweep_missing_homework(request: Request) -> JSONResponse:
+        if state.demo:
+            return _demo_ok("Demo mode: 미제출 sweep이 dry-run으로 처리되었습니다.", count=3)
         cfg = _require_config(state)
         payload = await _json_payload(request)
         window_hours = int(payload.get("window_hours") or 24)
@@ -113,6 +139,8 @@ def create_app(
 
     @app.post("/api/write-memo")
     async def api_write_memo(request: Request) -> JSONResponse:
+        if state.demo:
+            return _demo_ok("Demo mode: 메모 저장은 외부 쓰기 없이 처리되었습니다.")
         cfg = _require_config(state)
         payload = await _json_payload(request)
         classin_id = (payload.get("classin_id") or "").strip()
@@ -131,6 +159,14 @@ def create_app(
 
     @app.post("/api/agent")
     async def api_agent(request: Request) -> JSONResponse:
+        if state.demo:
+            payload = await _json_payload(request)
+            question = (payload.get("question") or "").strip()
+            answer = (
+                "데모 기준으로 김지각, 이하락, 최결석 학생이 숙제 확인 대상입니다. "
+                "연락처가 없는 학생은 먼저 학생 Master를 보완해야 합니다."
+            )
+            return _demo_ok("Demo mode: AI 응답을 샘플로 생성했습니다.", answer=answer, question=question)
         cfg = _require_config(state)
         payload = await _json_payload(request)
         question = (payload.get("question") or "").strip()
@@ -142,7 +178,14 @@ def create_app(
         return _ok("AI 응답을 생성했습니다.", answer=answer)
 
     @app.get("/reports/{kind}/{filename}")
-    async def serve_report(kind: str, filename: str) -> FileResponse:
+    async def serve_report(kind: str, filename: str):
+        if state.demo:
+            if kind not in ("daily", "weekly"):
+                raise HTTPException(status_code=404)
+            return HTMLResponse(
+                f"<html><body><h1>Demo {html.escape(kind)} report</h1>"
+                f"<p>{html.escape(filename)}</p></body></html>"
+            )
         cfg = _require_config(state)
         if kind not in ("daily", "weekly"):
             raise HTTPException(status_code=404)
@@ -158,9 +201,10 @@ def create_app(
 
 
 class _ConfigState:
-    def __init__(self, *, config: AppConfig | None, config_path: Path) -> None:
+    def __init__(self, *, config: AppConfig | None, config_path: Path, demo: bool) -> None:
         self._config = config
         self.config_path = config_path
+        self.demo = demo
 
     def load(self) -> tuple[AppConfig | None, str | None]:
         if self._config:
@@ -190,6 +234,10 @@ async def _json_payload(request: Request) -> dict[str, Any]:
 
 def _ok(message: str, **extra: Any) -> JSONResponse:
     return JSONResponse({"ok": True, "message": message, **extra})
+
+
+def _demo_ok(message: str, **extra: Any) -> JSONResponse:
+    return JSONResponse({"ok": True, "demo": True, "message": message, **extra})
 
 
 def _status_payload(
@@ -235,6 +283,43 @@ def _status_payload(
             "weekly_html": _count_files(weekly_dir, "*.html"),
             "weekly_indexes": _count_files(weekly_dir, "*_drafts.json"),
             "notification_history": _count_history_rows(notification_history_path(cfg)),
+        },
+    }
+
+
+def _demo_status_payload(config_path: Path) -> dict[str, Any]:
+    missing_rows = _demo_missing_rows()
+    history = _demo_notification_history()
+    return {
+        "ok": True,
+        "mode": "demo",
+        "config_path": str(config_path),
+        "error": None,
+        "academy": _DEMO_ACADEMY,
+        "webhook": {
+            "host": "127.0.0.1",
+            "port": 8790,
+            "dump_dir": "demo://incoming",
+        },
+        "output": {
+            "daily_mode": "html",
+            "daily_path": "demo://daily",
+            "weekly_mode": "html",
+            "weekly_path": "demo://weekly",
+            "memo_mode": "off",
+            "notify_mode": "dry_run",
+        },
+        "counts": {
+            "incoming_json": 6,
+            "daily_html": 1,
+            "weekly_html": 5,
+            "weekly_indexes": 1,
+            "notification_history": len(history),
+        },
+        "demo": {
+            "students": 5,
+            "missing_rows": len(missing_rows),
+            "external_writes": False,
         },
     }
 
@@ -336,6 +421,18 @@ def _notification_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
         "sent": sum(1 for row in rows if row.get("status") == "sent"),
         "failed": sum(1 for row in rows if row.get("status") == "failed"),
     }
+
+
+def _demo_missing_homework_payload() -> dict[str, Any]:
+    return _missing_homework_payload(_demo_missing_rows(), _demo_notification_history())
+
+
+def _demo_missing_rows() -> list[dict[str, Any]]:
+    return build_demo_missing_homework_rows(base_date=date_cls.today(), weeks=3)
+
+
+def _demo_notification_history() -> list[dict[str, Any]]:
+    return build_demo_notification_history(_demo_missing_rows())
 
 
 def _render_shell(status: dict[str, Any]) -> str:
@@ -770,11 +867,12 @@ def _render_shell(status: dict[str, Any]) -> str:
 
       const badge = document.querySelector("#configBadge");
       badge.className = status.ok ? "badge ok" : "badge error";
-      badge.textContent = status.ok ? "config loaded" : "config needed";
+      badge.textContent = status.mode === "demo" ? "demo mode" : (status.ok ? "config loaded" : "config needed");
 
       const output = status.output || {{}};
       const webhook = status.webhook || {{}};
       const rows = [
+        ["mode", status.mode || "live"],
         ["config", status.config_path || ""],
         ["notify", output.notify_mode || ""],
         ["daily", `${{output.daily_mode || ""}} · ${{output.daily_path || ""}}`],

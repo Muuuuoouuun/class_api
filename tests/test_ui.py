@@ -43,6 +43,29 @@ def test_ui_home_renders_with_config(tmp_path):
     assert "다음 액션" in res.text
 
 
+def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
+    def fail_query(*args, **kwargs):
+        raise AssertionError("live query should not be called in demo mode")
+
+    monkeypatch.setattr("classin_toolkit.ui.query_missing_homework", fail_query)
+    monkeypatch.setattr("classin_toolkit.ui.load_notification_history", fail_query)
+    client = TestClient(create_app(config_path=tmp_path / "missing.yaml", demo=True))
+
+    status = client.get("/api/status").json()
+    missing = client.get("/api/missing-homework").json()
+    notifications = client.get("/api/notifications").json()
+    sweep = client.post("/api/sweep-missing-homework", json={}).json()
+
+    assert status["ok"] is True
+    assert status["mode"] == "demo"
+    assert status["academy"] == "ClassIn Demo Academy"
+    assert missing["ok"] is True
+    assert missing["summary"]["total_missing"] > 0
+    assert missing["summary"]["needs_phone"] > 0
+    assert notifications["summary"]["total"] > 0
+    assert sweep["demo"] is True
+
+
 def test_ui_status_reports_local_counts(tmp_path):
     cfg = _cfg(tmp_path)
     daily = tmp_path / "daily"

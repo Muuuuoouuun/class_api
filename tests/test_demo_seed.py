@@ -2,7 +2,12 @@ from datetime import date
 
 from classin_toolkit.config import AppConfig
 from classin_toolkit.pipelines import demo_seed
-from classin_toolkit.pipelines.demo_seed import build_demo_dataset, seed_demo_data
+from classin_toolkit.pipelines.demo_seed import (
+    build_demo_dataset,
+    build_demo_missing_homework_rows,
+    build_demo_notification_history,
+    seed_demo_data,
+)
 
 
 def _cfg() -> AppConfig:
@@ -62,6 +67,18 @@ def test_seed_demo_data_dry_run_does_not_touch_repo() -> None:
     assert result.dry_run is True
     assert result.students == 5
     assert result.lesson_rows == 20
+
+
+def test_demo_rows_match_ui_payload_shape() -> None:
+    rows = build_demo_missing_homework_rows(base_date=date(2026, 4, 24), weeks=3)
+    history = build_demo_notification_history(rows)
+
+    assert rows
+    assert {"student_classin_id", "student_name", "parent_phone", "lesson_classin_id"}.issubset(
+        rows[0]
+    )
+    assert any(row["parent_phone"] == "" for row in rows)
+    assert {item["status"] for item in history} == {"dry_run", "failed"}
 
 
 def test_seed_demo_data_writes_students_and_lesson_rows(monkeypatch) -> None:

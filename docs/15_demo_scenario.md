@@ -28,9 +28,13 @@
 기본은 dry-run 이라 Notion 에 쓰지 않는다.
 
 ```bash
+classin-toolkit ui --demo
 classin-toolkit seed-demo-data --dry-run
 classin-toolkit seed-demo-data --write --base-date 2026-04-24 --weeks 3
 ```
+
+`ui --demo` 는 `config.yaml` 과 Notion 없이 5명 페르소나 상황판을 바로 띄우는 영업/설명용 모드다.
+실제 Notion DB에 페르소나 데이터를 쓰려면 `seed-demo-data --write` 를 별도로 실행한다.
 
 `--base-date` 는 최신 리포트 주간 기준일이다. 입력한 날짜가 속한 주의 월요일을 최신 주차로 삼고,
 그 이전 주차까지 생성해 지난 주 대비 변화가 나오게 한다.

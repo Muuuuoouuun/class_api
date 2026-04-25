@@ -51,6 +51,7 @@ ruff format src/ tests/
 | `classin-toolkit seed-demo-data --write` | 5명 페르소나 데모 데이터 생성 | 데모 준비 |
 | `classin-toolkit agent` | 원장·교사 질문 대화 | 수동 오더 에이전트 |
 | `classin-toolkit ui [--port 8790]` | 로컬 브라우저 운영 화면 | 수동 오더 UI |
+| `classin-toolkit ui --demo` | config/Notion 없는 5명 페르소나 상황판 | 데모 UI |
 
 모든 명령은 `--config <path>` 옵션으로 다른 config.yaml 지정 가능.
 
@@ -78,6 +79,9 @@ assistant > ...
 ```bash
 classin-toolkit ui
 # 브라우저: http://127.0.0.1:8790
+
+classin-toolkit ui --demo
+# config.yaml 없이 데모 데이터로 상황판 확인
 ```
 
 UI는 기존 파이프라인을 감싸는 얇은 FastAPI 화면이다. 상태 확인, 일일 HTML 생성,
