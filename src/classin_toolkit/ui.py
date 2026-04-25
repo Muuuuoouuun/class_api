@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from .config import AppConfig, DEFAULT_CONFIG_PATH, load_config
 from .notify.dispatcher import load_notification_history, notification_history_path
 from .pipelines.daily import render_daily
+from .pipelines.data_merge import build_report_contexts
 from .pipelines.demo_seed import (
     build_demo_missing_homework_rows,
     build_demo_notification_history,
@@ -77,7 +78,16 @@ def create_app(
             lesson_id=(lesson_id or "").strip() or None,
         )
         history = load_notification_history(cfg, limit=300)
-        return _missing_homework_payload(rows, history)
+        report_contexts = build_report_contexts(cfg, rows)
+        return _missing_homework_payload(
+            rows,
+            history,
+            report_contexts=report_contexts.contexts,
+            data_context={
+                "summary": report_contexts.summary,
+                "needs_review_items": report_contexts.needs_review_items[:20],
+            },
+        )
 
     @app.get("/api/notifications")
     async def api_notifications(limit: int = 80) -> dict:
@@ -336,9 +346,16 @@ def _count_history_rows(path: Path) -> int:
     return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
-def _missing_homework_payload(rows: list[dict], history: list[dict[str, Any]]) -> dict[str, Any]:
+def _missing_homework_payload(
+    rows: list[dict],
+    history: list[dict[str, Any]],
+    *,
+    report_contexts: dict[str, dict[str, Any]] | None = None,
+    data_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     latest_by_student = _latest_notification_by_student(history)
     missing_counts = _missing_count_by_student(rows)
+    report_contexts = report_contexts or {}
     items = []
     for row in rows:
         student_id = row.get("student_classin_id") or ""
@@ -364,6 +381,7 @@ def _missing_homework_payload(rows: list[dict], history: list[dict[str, Any]]) -
                 "missing_count": missing_counts.get(student_id, 1),
                 "is_repeat": missing_counts.get(student_id, 1) > 1,
                 "action_required": _missing_action(has_parent_phone, notification_status),
+                "report_context": report_contexts.get(student_id, _empty_report_context()),
             }
         )
 
@@ -381,7 +399,33 @@ def _missing_homework_payload(rows: list[dict], history: list[dict[str, Any]]) -
         "needs_retry": sum(1 for item in items if item["action_required"] == "needs_retry"),
         "repeat_students": len({item["student_classin_id"] for item in items if item["is_repeat"]}),
     }
-    return {"ok": True, "summary": summary, "items": items}
+    return {
+        "ok": True,
+        "summary": summary,
+        "items": items,
+        "data_context": data_context
+        or {"summary": {}, "needs_review_items": []},
+    }
+
+
+def _empty_report_context() -> dict[str, Any]:
+    return {
+        "has_context": False,
+        "weekly_report": {
+            "status": "",
+            "period_start": "",
+            "period_end": "",
+            "html_path": "",
+            "public_url": "",
+            "approved": False,
+        },
+        "offline_attendance": 0,
+        "offline_scores": 0,
+        "memos": 0,
+        "badges": [],
+        "summary": "",
+        "sources": [],
+    }
 
 
 def _missing_count_by_student(rows: list[dict]) -> dict[str, int]:
@@ -424,7 +468,37 @@ def _notification_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def _demo_missing_homework_payload() -> dict[str, Any]:
-    return _missing_homework_payload(_demo_missing_rows(), _demo_notification_history())
+    contexts = _demo_report_contexts()
+    return _missing_homework_payload(
+        _demo_missing_rows(),
+        _demo_notification_history(),
+        report_contexts=contexts,
+        data_context={
+            "summary": {
+                "students_with_context": sum(
+                    1 for context in contexts.values() if context["has_context"]
+                ),
+                "weekly_reports": sum(
+                    1 for context in contexts.values() if context["weekly_report"]["status"]
+                ),
+                "offline_attendance": sum(
+                    context["offline_attendance"] for context in contexts.values()
+                ),
+                "offline_scores": sum(context["offline_scores"] for context in contexts.values()),
+                "memos": sum(context["memos"] for context in contexts.values()),
+                "needs_review": 1,
+            },
+            "needs_review_items": [
+                {
+                    "kind": "offline_score",
+                    "student_name": "동명이인",
+                    "class_name": "고2-A",
+                    "source": "demo://local_data/inbox/scores/april.xlsx",
+                    "reason": "학생 자동 매칭 필요",
+                }
+            ],
+        },
+    )
 
 
 def _demo_missing_rows() -> list[dict[str, Any]]:
@@ -433,6 +507,84 @@ def _demo_missing_rows() -> list[dict[str, Any]]:
 
 def _demo_notification_history() -> list[dict[str, Any]]:
     return build_demo_notification_history(_demo_missing_rows())
+
+
+def _demo_report_contexts() -> dict[str, dict[str, Any]]:
+    contexts = {
+        "10002": _empty_report_context(),
+        "10003": _empty_report_context(),
+        "10005": _empty_report_context(),
+    }
+    contexts["10002"].update(
+        {
+            "has_context": True,
+            "weekly_report": {
+                "status": "draft_ready",
+                "period_start": "2026-04-20T00:00:00+09:00",
+                "period_end": "2026-04-26T23:59:00+09:00",
+                "html_path": "demo://weekly/김지각.html",
+                "public_url": "",
+                "approved": False,
+            },
+            "offline_attendance": 1,
+            "offline_scores": 1,
+            "memos": 1,
+            "badges": ["리포트 초안", "오프라인 시험 1건", "상담 메모 1건"],
+            "summary": "리포트 초안 · 오프라인 시험 1건 · 상담 메모 1건",
+            "sources": [
+                {"kind": "weekly_report", "source": "demo://weekly", "detail": "초안"},
+                {"kind": "offline_score", "source": "demo://scores", "detail": "단원평가 68점"},
+                {"kind": "memo", "source": "demo://memos", "detail": "등원 시간 상담"},
+            ],
+        }
+    )
+    contexts["10003"].update(
+        {
+            "has_context": True,
+            "weekly_report": {
+                "status": "draft_ready",
+                "period_start": "2026-04-20T00:00:00+09:00",
+                "period_end": "2026-04-26T23:59:00+09:00",
+                "html_path": "demo://weekly/이하락.html",
+                "public_url": "",
+                "approved": False,
+            },
+            "offline_attendance": 0,
+            "offline_scores": 1,
+            "memos": 2,
+            "badges": ["리포트 초안", "오프라인 시험 1건", "상담 메모 2건"],
+            "summary": "리포트 초안 · 오프라인 시험 1건 · 상담 메모 2건",
+            "sources": [
+                {"kind": "weekly_report", "source": "demo://weekly", "detail": "초안"},
+                {"kind": "offline_score", "source": "demo://scores", "detail": "내신 대비 62점"},
+                {"kind": "memo", "source": "demo://memos", "detail": "집중도 하락 상담"},
+            ],
+        }
+    )
+    contexts["10005"].update(
+        {
+            "has_context": True,
+            "weekly_report": {
+                "status": "approved",
+                "period_start": "2026-04-20T00:00:00+09:00",
+                "period_end": "2026-04-26T23:59:00+09:00",
+                "html_path": "demo://weekly/최결석.html",
+                "public_url": "",
+                "approved": True,
+            },
+            "offline_attendance": 1,
+            "offline_scores": 0,
+            "memos": 1,
+            "badges": ["리포트 승인됨", "오프라인 출결 1건", "상담 메모 1건"],
+            "summary": "리포트 승인됨 · 오프라인 출결 1건 · 상담 메모 1건",
+            "sources": [
+                {"kind": "weekly_report", "source": "demo://weekly", "detail": "승인됨"},
+                {"kind": "offline_attendance", "source": "demo://attendance", "detail": "보강 결석"},
+                {"kind": "memo", "source": "demo://memos", "detail": "보호자 연락처 확인 필요"},
+            ],
+        }
+    )
+    return contexts
 
 
 def _render_shell(status: dict[str, Any]) -> str:
@@ -449,17 +601,21 @@ def _render_shell(status: dict[str, Any]) -> str:
   <style>
     :root {{
       color-scheme: light;
-      --bg: #f6f7f9;
+      --bg: #f6f8fb;
       --panel: #ffffff;
-      --line: #d9dee7;
-      --text: #172033;
-      --muted: #657085;
-      --primary: #0f766e;
-      --primary-strong: #0b5f59;
-      --accent: #b45309;
-      --danger: #b42318;
-      --ok: #16784b;
-      --shadow: 0 1px 2px rgba(16, 24, 40, .07);
+      --panel-soft: #f8fafc;
+      --line: #d8dee8;
+      --line-strong: #b8c2d1;
+      --text: #182033;
+      --muted: #667085;
+      --primary: #2f6f64;
+      --primary-strong: #21574f;
+      --accent: #a85c19;
+      --danger: #a83a2f;
+      --ok: #21744f;
+      --blue: #1d5f8f;
+      --shadow: 0 8px 24px rgba(15, 23, 42, .06);
+      --shadow-soft: 0 4px 12px rgba(15, 23, 42, .08);
     }}
     * {{ box-sizing: border-box; }}
     body {{
@@ -467,33 +623,38 @@ def _render_shell(status: dict[str, Any]) -> str:
       min-width: 320px;
       background: var(--bg);
       color: var(--text);
-      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: "Pretendard Variable", Pretendard, "Noto Sans KR", "Segoe UI", system-ui, sans-serif;
       letter-spacing: 0;
     }}
     header {{
+      position: sticky;
+      top: 0;
+      z-index: 10;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 18px 24px;
+      padding: 16px max(24px, calc((100vw - 1640px) / 2 + 20px));
       border-bottom: 1px solid var(--line);
-      background: #ffffff;
+      background: rgba(255, 255, 255, .9);
+      backdrop-filter: blur(18px);
     }}
     h1 {{
       margin: 0;
-      font-size: 20px;
+      font-size: 24px;
       line-height: 1.2;
-      font-weight: 700;
+      font-weight: 800;
+      letter-spacing: 0;
     }}
     main {{
-      width: min(1180px, calc(100vw - 32px));
-      margin: 18px auto 32px;
+      width: min(1640px, calc(100vw - 40px));
+      margin: 18px auto 40px;
     }}
     .status-strip {{
       display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-columns: repeat(6, minmax(136px, 1fr));
       gap: 10px;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
     }}
     .metric, .panel {{
       background: var(--panel);
@@ -502,82 +663,130 @@ def _render_shell(status: dict[str, Any]) -> str:
       box-shadow: var(--shadow);
     }}
     .metric {{
+      position: relative;
+      overflow: hidden;
       padding: 12px 14px;
-      min-height: 74px;
+      min-height: 78px;
     }}
     .metric span {{
       display: block;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.4;
+      font-weight: 650;
     }}
     .metric strong {{
       display: block;
       margin-top: 6px;
-      font-size: 22px;
+      font-size: 30px;
       line-height: 1.1;
+      letter-spacing: 0;
     }}
     .metric.warn strong {{ color: var(--accent); }}
     .metric.alert strong {{ color: var(--danger); }}
     .grid {{
       display: grid;
-      grid-template-columns: 1.2fr .8fr;
-      gap: 14px;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+      gap: 18px;
       align-items: start;
     }}
+    aside {{
+      position: sticky;
+      top: 96px;
+      align-self: start;
+    }}
     .panel {{
-      padding: 16px;
+      padding: 18px;
     }}
     .panel + .panel {{
       margin-top: 14px;
     }}
+    .hero-panel {{
+      padding: 18px;
+    }}
+    .panel-head {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }}
+    .panel-head p {{
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }}
     h2 {{
-      margin: 0 0 12px;
-      font-size: 15px;
+      margin: 0;
+      font-size: 20px;
       line-height: 1.2;
+      letter-spacing: 0;
+    }}
+    .section-subtitle {{
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+      white-space: nowrap;
     }}
     .actions {{
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
     }}
+    .control-grid {{
+      display: grid;
+      grid-template-columns: minmax(120px, .55fr) minmax(220px, 1fr) auto auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 12px;
+    }}
     .toolbar {{
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      margin-top: 12px;
+      margin: 0 0 12px;
     }}
     .toolbar button {{
-      min-height: 30px;
+      min-height: 34px;
       border-color: var(--line);
-      background: #fff;
+      background: rgba(255, 255, 255, .72);
       color: var(--text);
-      padding: 5px 9px;
-      font-size: 12px;
-      font-weight: 600;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 750;
     }}
     .toolbar button.active {{
       border-color: var(--primary);
-      background: #e7f4f2;
+      background: #e6f1ee;
       color: var(--primary-strong);
+      box-shadow: inset 0 0 0 1px rgba(47, 111, 100, .18);
     }}
     label {{
       display: grid;
       gap: 6px;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.3;
+      font-weight: 650;
     }}
     input, textarea {{
       width: 100%;
       min-height: 38px;
       border: 1px solid var(--line);
-      border-radius: 6px;
+      border-radius: 8px;
       padding: 8px 10px;
       color: var(--text);
-      background: #fff;
+      background: rgba(255, 255, 255, .76);
       font: inherit;
       font-size: 14px;
+      outline: none;
+      transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+    }}
+    input:focus, textarea:focus {{
+      border-color: rgba(47, 111, 100, .72);
+      box-shadow: 0 0 0 4px rgba(47, 111, 100, .12);
+      background: #fff;
     }}
     textarea {{
       min-height: 92px;
@@ -586,24 +795,33 @@ def _render_shell(status: dict[str, Any]) -> str:
     button {{
       min-height: 38px;
       border: 1px solid var(--primary);
-      border-radius: 6px;
+      border-radius: 8px;
       padding: 8px 12px;
       background: var(--primary);
       color: #fff;
       font: inherit;
-      font-weight: 650;
+      font-weight: 800;
       cursor: pointer;
+      transition: transform .14s ease, background .14s ease, box-shadow .14s ease;
     }}
     button.secondary {{
       border-color: var(--line);
-      background: #fff;
+      background: rgba(255, 255, 255, .78);
       color: var(--text);
     }}
     button:hover {{
       background: var(--primary-strong);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-soft);
     }}
     button.secondary:hover {{
-      background: #eef2f6;
+      background: #fff;
+    }}
+    button:disabled {{
+      cursor: wait;
+      opacity: .62;
+      transform: none;
+      box-shadow: none;
     }}
     .row {{
       display: grid;
@@ -616,61 +834,141 @@ def _render_shell(status: dict[str, Any]) -> str:
       gap: 10px;
     }}
     .log {{
-      min-height: 220px;
-      max-height: 420px;
+      min-height: 180px;
+      max-height: 360px;
       overflow: auto;
       border-radius: 8px;
-      border: 1px solid var(--line);
-      background: #111827;
-      color: #e5e7eb;
+      border: 1px solid #233047;
+      background: #121826;
+      color: #dbe4f0;
       padding: 12px;
-      font: 13px/1.5 Consolas, "Cascadia Mono", monospace;
+      font: 12px/1.55 Consolas, "Cascadia Mono", monospace;
       white-space: pre-wrap;
     }}
     .table-wrap {{
       overflow: auto;
       border: 1px solid var(--line);
       border-radius: 8px;
+      background: #fff;
     }}
     table {{
       width: 100%;
       border-collapse: collapse;
-      min-width: 760px;
+      min-width: 960px;
+      table-layout: fixed;
       font-size: 13px;
     }}
     th, td {{
-      padding: 9px 10px;
+      padding: 9px 12px;
       border-bottom: 1px solid var(--line);
       text-align: left;
       vertical-align: top;
     }}
     th {{
+      position: sticky;
+      top: 0;
+      z-index: 1;
       background: #f8fafc;
       color: var(--muted);
-      font-weight: 650;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0;
       white-space: nowrap;
     }}
+    tr:hover td {{
+      background: rgba(47, 111, 100, .035);
+    }}
     tr:last-child td {{ border-bottom: 0; }}
+    .missing-table .col-student {{ width: 17%; }}
+    .missing-table .col-lesson {{ width: 28%; }}
+    .missing-table .col-phone {{ width: 15%; }}
+    .missing-table .col-status {{ width: 16%; }}
+    .missing-table .col-action {{ width: 24%; }}
+    .notification-table .col-time {{ width: 18%; }}
+    .notification-table .col-student {{ width: 18%; }}
+    .notification-table .col-phone {{ width: 16%; }}
+    .notification-table .col-status {{ width: 14%; }}
+    .notification-table .col-message {{ width: 34%; }}
+    .cell-title {{
+      color: var(--text);
+      font-weight: 800;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }}
+    .cell-sub {{
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.28;
+      overflow-wrap: anywhere;
+    }}
+    .cell-stack {{
+      display: grid;
+      gap: 5px;
+      justify-items: start;
+    }}
+    .meta-row {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+      margin-top: 5px;
+    }}
+    .action-copy {{
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.32;
+    }}
+    .context-line {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 5px;
+    }}
+    .context-badge {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 1px 6px;
+      border: 1px solid #c9d8d1;
+      border-radius: 999px;
+      background: #eef6f3;
+      color: var(--primary-strong);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }}
+    .context-summary {{
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.32;
+    }}
     .empty {{
       padding: 18px;
       color: var(--muted);
       text-align: center;
       border: 1px dashed var(--line);
       border-radius: 8px;
-      background: #fbfcfd;
+      background: rgba(255, 255, 255, .55);
     }}
     .status-pill {{
       display: inline-flex;
       align-items: center;
-      min-height: 24px;
-      padding: 3px 8px;
+      min-height: 22px;
+      padding: 2px 7px;
       border-radius: 999px;
       border: 1px solid var(--line);
       white-space: nowrap;
       font-size: 12px;
+      line-height: 1.2;
+      font-weight: 800;
     }}
     .status-pill.pending {{ color: var(--accent); background: #fff8eb; border-color: #f3d2a1; }}
-    .status-pill.dry_run {{ color: #0f5f8c; background: #edf7ff; border-color: #b7dcf3; }}
+    .status-pill.dry_run {{ color: var(--blue); background: #edf7ff; border-color: #b7dcf3; }}
     .status-pill.sent {{ color: var(--ok); background: #effaf4; border-color: rgba(22, 120, 75, .25); }}
     .status-pill.failed {{ color: var(--danger); background: #fff1f0; border-color: rgba(180, 35, 24, .25); }}
     .action-list {{
@@ -683,9 +981,9 @@ def _render_shell(status: dict[str, Any]) -> str:
       padding: 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #fbfcfd;
+      background: rgba(255, 255, 255, .62);
       font-size: 13px;
-      line-height: 1.35;
+      line-height: 1.34;
     }}
     .action-item strong {{ font-size: 14px; }}
     .action-item span {{ color: var(--muted); }}
@@ -700,13 +998,16 @@ def _render_shell(status: dict[str, Any]) -> str:
     .badge {{
       display: inline-flex;
       align-items: center;
-      min-height: 28px;
-      padding: 4px 10px;
+      min-height: 22px;
+      padding: 2px 7px;
       border-radius: 999px;
       border: 1px solid var(--line);
       color: var(--muted);
       font-size: 12px;
-      background: #fff;
+      line-height: 1.2;
+      font-weight: 750;
+      background: rgba(255, 255, 255, .72);
+      white-space: nowrap;
     }}
     .badge.ok {{
       color: var(--ok);
@@ -720,7 +1021,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
     dl {{
       display: grid;
-      grid-template-columns: 120px 1fr;
+      grid-template-columns: 92px 1fr;
       gap: 8px 12px;
       margin: 0;
       font-size: 13px;
@@ -731,17 +1032,46 @@ def _render_shell(status: dict[str, Any]) -> str:
       margin: 0;
       overflow-wrap: anywhere;
     }}
-    @media (max-width: 860px) {{
+    @media (max-width: 1280px) {{
+      main {{
+        width: min(100vw - 32px, 1120px);
+      }}
+      .status-strip {{
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }}
+      .grid {{
+        grid-template-columns: 1fr;
+      }}
+      aside {{
+        position: static;
+      }}
+    }}
+    @media (max-width: 760px) {{
       header {{
         align-items: flex-start;
         flex-direction: column;
+        padding: 16px 18px;
       }}
-      .status-strip, .grid, .actions {{
+      .status-strip, .grid, .actions, .control-grid {{
         grid-template-columns: 1fr;
       }}
       main {{
         width: min(100vw - 20px, 720px);
-        margin-top: 10px;
+        margin-top: 12px;
+      }}
+      .panel, .hero-panel {{
+        padding: 14px;
+        border-radius: 8px;
+      }}
+      .panel-head {{
+        display: grid;
+        gap: 6px;
+      }}
+      table {{
+        min-width: 820px;
+      }}
+      th, td {{
+        padding: 9px;
       }}
       dl {{
         grid-template-columns: 1fr;
@@ -767,9 +1097,15 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     <section class="grid">
       <div>
-        <div class="panel">
-          <h2>오늘 미제출 상황</h2>
-          <div class="actions">
+        <div class="panel hero-panel">
+          <div class="panel-head">
+            <div>
+              <h2>오늘 미제출 상황</h2>
+              <p>반복 누락, 연락처 보완, 발송 실패를 먼저 볼 수 있게 정리했습니다.</p>
+            </div>
+            <span class="section-subtitle">운영 큐</span>
+          </div>
+          <div class="control-grid">
             <label>조회 시간<input id="windowHours" type="number" min="1" step="1" value="24"></label>
             <label>수업 ID<input id="lessonId" type="text"></label>
             <button data-action="refreshMissing" class="secondary">목록 새로고침</button>
@@ -784,7 +1120,7 @@ def _render_shell(status: dict[str, Any]) -> str:
             <button data-filter="repeat">반복</button>
             <button data-filter="done">완료</button>
           </div>
-          <div id="missingTable" style="margin-top:12px"></div>
+          <div id="missingTable" style="margin-top:8px"></div>
         </div>
 
         <div class="panel">
@@ -933,6 +1269,21 @@ def _render_shell(status: dict[str, Any]) -> str:
       return "알림 처리가 완료된 학생입니다.";
     }}
 
+    function contextHtml(item) {{
+      const context = item.report_context || {{}};
+      const badges = Array.isArray(context.badges) ? context.badges.slice(0, 2) : [];
+      if (!context.has_context || !badges.length) return "";
+      return `<div class="context-line">${{badges
+        .map((badge) => `<span class="context-badge">${{escapeHtml(badge)}}</span>`)
+        .join("")}}</div>`;
+    }}
+
+    function contextSummaryHtml(item) {{
+      const context = item.report_context || {{}};
+      if (!context.has_context || !context.summary) return "";
+      return `<span class="context-summary">${{escapeHtml(context.summary)}}</span>`;
+    }}
+
     async function callApi(path, payload) {{
       const response = await fetch(path, {{
         method: "POST",
@@ -997,13 +1348,18 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
       target.innerHTML = `
         <div class="table-wrap">
-          <table>
+          <table class="missing-table">
+            <colgroup>
+              <col class="col-student">
+              <col class="col-lesson">
+              <col class="col-phone">
+              <col class="col-status">
+              <col class="col-action">
+            </colgroup>
             <thead>
               <tr>
                 <th>학생</th>
-                <th>반</th>
-                <th>수업</th>
-                <th>출석</th>
+                <th>수업 / 출석</th>
                 <th>학부모 연락처</th>
                 <th>알림 상태</th>
                 <th>다음 액션</th>
@@ -1012,17 +1368,35 @@ def _render_shell(status: dict[str, Any]) -> str:
             <tbody>
               ${{items.map((item) => `
                 <tr>
-                  <td>${{escapeHtml(item.student_name)}}<br><span class="badge">${{escapeHtml(item.student_classin_id)}}</span></td>
-                  <td>${{escapeHtml(item.class_name || "-")}}</td>
                   <td>
-                    ${{escapeHtml(item.lesson_classin_id || "-")}}
-                    ${{item.is_repeat ? `<br><span class="repeat-mark">반복 ${{escapeHtml(item.missing_count)}}건</span>` : ""}}
-                    <br><span class="badge">${{escapeHtml(formatDate(item.date))}}</span>
+                    <div class="cell-title">${{escapeHtml(item.student_name)}}</div>
+                    <div class="cell-sub">${{escapeHtml(item.class_name || "-")}}</div>
+                    <div class="meta-row"><span class="badge">${{escapeHtml(item.student_classin_id)}}</span></div>
+                    ${{contextHtml(item)}}
                   </td>
-                  <td>${{escapeHtml(item.attendance || "-")}}</td>
-                  <td>${{item.has_parent_phone ? escapeHtml(item.parent_phone) : '<span class="status-pill failed">없음</span>'}}</td>
-                  <td>${{statusPill(item.notification_status)}}<br><span class="badge">${{escapeHtml(formatDate(item.notification_at))}}</span></td>
-                  <td><strong>${{escapeHtml(actionLabel(item.action_required))}}</strong><br><span class="badge">${{escapeHtml(actionDetail(item))}}</span></td>
+                  <td>
+                    <div class="cell-title">${{escapeHtml(item.lesson_classin_id || "-")}}</div>
+                    <div class="meta-row">
+                      <span class="status-pill pending">${{escapeHtml(item.attendance || "-")}}</span>
+                      ${{item.is_repeat ? `<span class="repeat-mark">반복 ${{escapeHtml(item.missing_count)}}건</span>` : ""}}
+                    </div>
+                    <div class="cell-sub">${{escapeHtml(formatDate(item.date))}}</div>
+                  </td>
+                  <td>
+                    ${{item.has_parent_phone
+                      ? `<div class="cell-title">${{escapeHtml(item.parent_phone)}}</div>`
+                      : '<span class="status-pill failed">연락처 없음</span>'}}
+                  </td>
+                  <td>
+                    <div class="cell-stack">
+                      ${{statusPill(item.notification_status)}}
+                      <span class="badge">${{escapeHtml(formatDate(item.notification_at))}}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="cell-title">${{escapeHtml(actionLabel(item.action_required))}}</div>
+                    <span class="action-copy">${{escapeHtml(actionDetail(item))}}</span>
+                  </td>
                 </tr>
               `).join("")}}
             </tbody>
@@ -1057,6 +1431,7 @@ def _render_shell(status: dict[str, Any]) -> str:
           <strong>${{escapeHtml(item.student_name)}} · ${{escapeHtml(actionLabel(item.action_required))}}</strong>
           <span>${{escapeHtml(item.class_name || "-")}} / ${{escapeHtml(item.lesson_classin_id || "-")}} / ${{item.is_repeat ? `반복 ${{item.missing_count}}건` : "단건"}}</span>
           <span>${{escapeHtml(actionDetail(item))}}</span>
+          ${{contextSummaryHtml(item)}}
         </div>
       `).join("");
     }}
@@ -1082,7 +1457,14 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
       target.innerHTML = `
         <div class="table-wrap">
-          <table>
+          <table class="notification-table">
+            <colgroup>
+              <col class="col-time">
+              <col class="col-student">
+              <col class="col-phone">
+              <col class="col-status">
+              <col class="col-message">
+            </colgroup>
             <thead>
               <tr>
                 <th>시간</th>
@@ -1095,11 +1477,19 @@ def _render_shell(status: dict[str, Any]) -> str:
             <tbody>
               ${{items.map((item) => `
                 <tr>
-                  <td>${{escapeHtml(formatDate(item.created_at))}}</td>
-                  <td>${{escapeHtml(item.student_name || "미등록")}}<br><span class="badge">${{escapeHtml(item.student_classin_id || "")}}</span></td>
-                  <td>${{escapeHtml(item.parent_phone || "-")}}</td>
-                  <td>${{statusPill(item.status)}}<br><span class="badge">${{escapeHtml(item.provider || "-")}}</span></td>
-                  <td>${{escapeHtml(shorten(item.message || "", 90))}}</td>
+                  <td><div class="cell-sub">${{escapeHtml(formatDate(item.created_at))}}</div></td>
+                  <td>
+                    <div class="cell-title">${{escapeHtml(item.student_name || "미등록")}}</div>
+                    <div class="meta-row"><span class="badge">${{escapeHtml(item.student_classin_id || "")}}</span></div>
+                  </td>
+                  <td><div class="cell-title">${{escapeHtml(item.parent_phone || "-")}}</div></td>
+                  <td>
+                    <div class="cell-stack">
+                      ${{statusPill(item.status)}}
+                      <span class="badge">${{escapeHtml(item.provider || "-")}}</span>
+                    </div>
+                  </td>
+                  <td><span class="action-copy">${{escapeHtml(shorten(item.message || "", 120))}}</span></td>
                 </tr>
               `).join("")}}
             </tbody>

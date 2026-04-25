@@ -62,6 +62,8 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
     assert missing["ok"] is True
     assert missing["summary"]["total_missing"] > 0
     assert missing["summary"]["needs_phone"] > 0
+    assert missing["data_context"]["summary"]["students_with_context"] > 0
+    assert any(item["report_context"]["has_context"] for item in missing["items"])
     assert notifications["summary"]["total"] > 0
     assert sweep["demo"] is True
 
@@ -162,5 +164,6 @@ def test_ui_missing_homework_includes_notification_status(monkeypatch, tmp_path)
     }
     assert body["items"][0]["notification_status"] == "dry_run"
     assert body["items"][0]["action_required"] == "needs_review"
+    assert body["items"][0]["report_context"]["has_context"] is False
     assert body["items"][1]["notification_status"] == "pending"
     assert body["items"][1]["action_required"] == "needs_phone"
