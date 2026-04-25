@@ -17,6 +17,7 @@
 │              missing_homework.py   미제출자 sweep (배치)
 │              daily.py              일일 현황 HTML 렌더
 │              weekly.py             주간 드래프트 + 승인 아카이브
+│              data_merge.py         로컬/오프라인 공유 데이터 → 학생별 context (예정)
 ├─ Layer 3 : 지능화 ─────────────── intelligence/
 │              claude_client.py      Anthropic SDK 래퍼 + prompt caching
 │              schedule_parser.py    자유형 스케줄 → 구조화 JSON       (자동 파이프라인용)
@@ -95,7 +96,25 @@ Scheduler (cron / 수동 CLI)
 공개 URL: `output.daily.public_url_base` 에 Cloudflare Tunnel 호스트 입력 →
 HTML 링크가 카톡 문구에 자연스럽게 포함됨 (모바일에서 즉시 열림).
 
-### E. 수동 오더 에이전트 (상시 대기)
+### E. 보고서 + 로컬/오프라인 데이터 병합 (예정)
+```
+reports_out/weekly + Notion 리포트 DB
+local_data/inbox/*.csv, *.xlsx, *.md, attachments/*
+   └─> pipelines/data_merge.py
+        ├─ 원본 보존
+        ├─ 학생명 + 반 + 날짜 + ClassIn ID 기반 보수적 매칭
+        ├─ 자동 매칭 실패 항목은 확인 필요 큐로 분리
+        └─ 학생별 report_context 생성
+              ├─ 선생님 상황판
+              ├─ weekly_report 프롬프트
+              └─ agent 질문 응답
+```
+
+ClassIn 수업 기록은 기본 운영 데이터이고, 로컬 CSV/XLSX/PDF/메모는 보강 맥락이다.
+외부 데이터는 원본을 수정하지 않고 정규화 결과만 파생 산출물로 둔다.
+자세한 UX와 병합 기준은 `docs/18_teacher_dashboard_data_merge.md`를 따른다.
+
+### F. 수동 오더 에이전트 (상시 대기)
 ```
 원장 터미널  ──>  classin-toolkit agent
                      └─ intelligence/agent.chat_loop

@@ -21,7 +21,9 @@
 4. 수업 종료 직후 `replay-webhook` 으로 After-Class 페이로드 재생
 5. Notion 수업 기록 DB 에 5명 데이터 자동 적재 (화면 분할)
 6. `notify_dry_run/*.md` 에 학생마다 다른 카톡 문구 생성된 것 보여주기
-7. 매주 금요일 `weekly-reports` → Notion 리포트 페이지 5개 (각기 다른 내용)
+7. 로컬 공유 자료 예시(CSV/XLSX 상담 메모)를 학생별 맥락으로 붙여 상황판에서 확인
+8. 매주 금요일 `weekly-reports` → Notion 리포트 페이지 5개 (각기 다른 내용)
+9. 보고서 미리보기에서 ClassIn 기록 + 오프라인 데이터가 함께 반영된 코멘트 확인
 
 ## 데모 데이터 생성
 

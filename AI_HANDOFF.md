@@ -28,7 +28,8 @@ AI는 작업 전에 아래 순서로 읽는다.
 7. `docs/14_developer_guide.md`
 
 작업이 UI, 배포, 영업 데모에 가까우면 `docs/15_demo_scenario.md`와
-`docs/16_roadmap.md`도 확인한다.
+`docs/16_roadmap.md`도 확인한다. 선생님 상황판, 보고서 맥락, 로컬/오프라인 공유 데이터 병합은
+`docs/18_teacher_dashboard_data_merge.md`를 먼저 읽는다.
 
 ## 3. 핵심 구조
 
@@ -49,6 +50,8 @@ Layer 5  notify/         dry-run or live notification dispatch
 - 카톡, 이메일, SMS 같은 출력 변경은 `src/classin_toolkit/notify/*` 또는 출력 계층에서 처리한다.
 - 학원별 정책, 톤, 키 값은 코드가 아니라 `config.yaml`과 `intelligence/prompts/*.md`에서 다룬다.
 - 파이프라인끼리 무리하게 서로 import하지 않는다.
+- 선생님 상황판은 기능 나열이 아니라 "오늘 처리할 학생 큐"가 되게 한다.
+- 보고서, 오프라인 출결, 성적, 상담 메모 같은 로컬 공유 데이터는 원본을 보존한 채 학생별 context로 병합한다.
 
 ## 4. 로컬 실행
 
@@ -81,6 +84,7 @@ classin-toolkit approve-weekly --week YYYY-MM-DD
 classin-toolkit write-memo --classin-id 10001 --text "상담 기록" --tag 상담
 classin-toolkit agent
 classin-toolkit ui
+classin-toolkit ui --demo
 ```
 
 검증:
@@ -151,6 +155,19 @@ dry_run 동작은 유지하고, provider-specific 코드는 notify 계층에 격
 미제출 sweep, 메모 작성, 간단한 AI 질문입니다.
 ```
 
+### 선생님 상황판 + 로컬 데이터 병합
+
+```text
+docs/18_teacher_dashboard_data_merge.md를 먼저 읽고 작업하세요.
+선생님 화면은 복잡한 관리자 페이지가 아니라 오늘 처리할 학생 큐여야 합니다.
+
+보고서(`reports_out/weekly`, Notion 리포트 DB)와 로컬/오프라인 공유 데이터
+(`local_data/inbox`의 CSV/XLSX/메모/첨부)를 학생별 context로 병합하세요.
+원본 파일은 절대 수정하지 말고, 자동 매칭이 애매하면 확인 필요 큐로 올리세요.
+
+병합 결과는 미제출 상황판, 주간 보고서 생성, AI 질문 응답에서 재사용되게 하세요.
+```
+
 ## 8. 개인정보와 운영 안전
 
 - `config.yaml`, `.env`, API key, token은 절대 커밋하지 않는다.
@@ -163,9 +180,10 @@ dry_run 동작은 유지하고, provider-specific 코드는 notify 계층에 격
 
 1. 파일럿 학원 1곳 기준으로 Notion DB 4종을 실제 생성하고 `config.yaml`을 채운다.
 2. Webhook SafeKey 검증 알고리즘을 ClassIn 담당자에게 확인한다.
-3. 로컬 UI 또는 Notion 운영 화면을 정리해 원장/컨설턴트가 반복 작업을 쉽게 실행하게 한다.
-4. 1~2주 실데이터로 리포트 품질과 미제출 알림 문구를 검증한다.
-5. 카톡 live 발송은 템플릿 심사 후 별도 단계로 전환한다.
+3. 로컬 UI를 선생님용 상황판 중심으로 정리해 미제출, 발송 여부, 확인 필요 학생을 바로 처리하게 한다.
+4. 보고서와 로컬/오프라인 공유 데이터 병합 구조를 추가해 상담 맥락을 상황판과 주간 리포트에 반영한다.
+5. 1~2주 실데이터로 리포트 품질과 미제출 알림 문구를 검증한다.
+6. 카톡 live 발송은 템플릿 심사 후 별도 단계로 전환한다.
 
 ## 10. 작업 완료 보고 형식
 

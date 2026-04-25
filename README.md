@@ -68,6 +68,7 @@ classin-toolkit ui --demo # config/Notion 없이 데모 상황판
 - [x] MVP1: After-Class Webhook → Notion 적재 → 미제출 sweep → 카톡 dry-run
 - [x] MVP2: 주간 학생별 개인화 리포트 → Notion 페이지 + 학부모 문구
 - [x] 에이전트: tool-use 채팅 (수동 오더)
+- [ ] 선생님 상황판: 미제출·발송 여부·보고서 맥락·로컬 공유 데이터 병합
 - [ ] 실제 카톡 알림톡 연동 (템플릿 심사 후 Standard 티어)
 - [ ] Notion DB 3종 스키마 세팅 (학원별 1회) — [docs/12_notion_schema.md](docs/12_notion_schema.md)
 - [ ] 파일럿 학원 1곳 확보 → 실 데이터 검증
@@ -95,5 +96,6 @@ classin-toolkit ui --demo # config/Notion 없이 데모 상황판
 1. ClassIn 담당자에게 `datasub/publicfield.html` 내 SafeKey 정확 알고리즘 확인
 2. Notion DB 3종 실제 생성 후 `config.yaml` 의 DB ID 채우기
 3. 5 페르소나 페이크 데이터로 MVP2 리포트 차별화 수동 검증
-4. 파일럿 학원 확보 → 실 Webhook 스트림 1~2주 캡처
-5. `cloudflared` 패키징 + Windows 작업 스케줄러 스크립트 정리
+4. 선생님 상황판을 "오늘 처리할 학생 큐"로 재구성하고 보고서·로컬/오프라인 데이터 병합 반영
+5. 파일럿 학원 확보 → 실 Webhook 스트림 1~2주 캡처
+6. `cloudflared` 패키징 + Windows 작업 스케줄러 스크립트 정리
