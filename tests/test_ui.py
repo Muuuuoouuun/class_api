@@ -40,6 +40,7 @@ def test_ui_home_renders_with_config(tmp_path):
     assert res.status_code == 200
     assert "ClassIn Toolkit UI" in res.text
     assert "테스트학원" in res.text
+    assert "다음 액션" in res.text
 
 
 def test_ui_status_reports_local_counts(tmp_path):
@@ -130,6 +131,13 @@ def test_ui_missing_homework_includes_notification_status(monkeypatch, tmp_path)
         "dry_run": 1,
         "sent": 0,
         "failed": 0,
+        "needs_phone": 1,
+        "needs_message": 0,
+        "needs_review": 1,
+        "needs_retry": 0,
+        "repeat_students": 0,
     }
     assert body["items"][0]["notification_status"] == "dry_run"
+    assert body["items"][0]["action_required"] == "needs_review"
     assert body["items"][1]["notification_status"] == "pending"
+    assert body["items"][1]["action_required"] == "needs_phone"

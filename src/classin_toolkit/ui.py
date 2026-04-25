@@ -253,26 +253,32 @@ def _count_history_rows(path: Path) -> int:
 
 def _missing_homework_payload(rows: list[dict], history: list[dict[str, Any]]) -> dict[str, Any]:
     latest_by_student = _latest_notification_by_student(history)
+    missing_counts = _missing_count_by_student(rows)
     items = []
     for row in rows:
         student_id = row.get("student_classin_id") or ""
         latest = latest_by_student.get(student_id)
+        has_parent_phone = bool(row.get("parent_phone"))
+        notification_status = latest.get("status") if latest else "pending"
         items.append(
             {
                 "student_classin_id": student_id,
                 "student_name": row.get("student_name") or "미등록",
                 "class_name": row.get("student_class_name") or "",
                 "parent_phone": row.get("parent_phone") or "",
-                "has_parent_phone": bool(row.get("parent_phone")),
+                "has_parent_phone": has_parent_phone,
                 "lesson_classin_id": row.get("lesson_classin_id") or "",
                 "course_classin_id": row.get("course_classin_id") or "",
                 "date": row.get("date") or "",
                 "attendance": row.get("attendance") or "",
                 "homework_late": row.get("homework_late"),
                 "homework_score": row.get("homework_score"),
-                "notification_status": latest.get("status") if latest else "pending",
+                "notification_status": notification_status,
                 "notification_at": latest.get("created_at") if latest else "",
                 "notification_provider": latest.get("provider") if latest else "",
+                "missing_count": missing_counts.get(student_id, 1),
+                "is_repeat": missing_counts.get(student_id, 1) > 1,
+                "action_required": _missing_action(has_parent_phone, notification_status),
             }
         )
 
@@ -284,8 +290,33 @@ def _missing_homework_payload(rows: list[dict], history: list[dict[str, Any]]) -
         "dry_run": sum(1 for item in items if item["notification_status"] == "dry_run"),
         "sent": sum(1 for item in items if item["notification_status"] == "sent"),
         "failed": sum(1 for item in items if item["notification_status"] == "failed"),
+        "needs_phone": sum(1 for item in items if item["action_required"] == "needs_phone"),
+        "needs_message": sum(1 for item in items if item["action_required"] == "needs_message"),
+        "needs_review": sum(1 for item in items if item["action_required"] == "needs_review"),
+        "needs_retry": sum(1 for item in items if item["action_required"] == "needs_retry"),
+        "repeat_students": len({item["student_classin_id"] for item in items if item["is_repeat"]}),
     }
     return {"ok": True, "summary": summary, "items": items}
+
+
+def _missing_count_by_student(rows: list[dict]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        student_id = row.get("student_classin_id") or ""
+        counts[student_id] = counts.get(student_id, 0) + 1
+    return counts
+
+
+def _missing_action(has_parent_phone: bool, notification_status: str) -> str:
+    if not has_parent_phone:
+        return "needs_phone"
+    if notification_status == "failed":
+        return "needs_retry"
+    if notification_status == "pending":
+        return "needs_message"
+    if notification_status == "dry_run":
+        return "needs_review"
+    return "done"
 
 
 def _latest_notification_by_student(history: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -413,6 +444,26 @@ def _render_shell(status: dict[str, Any]) -> str:
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
     }}
+    .toolbar {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+    }}
+    .toolbar button {{
+      min-height: 30px;
+      border-color: var(--line);
+      background: #fff;
+      color: var(--text);
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 600;
+    }}
+    .toolbar button.active {{
+      border-color: var(--primary);
+      background: #e7f4f2;
+      color: var(--primary-strong);
+    }}
     label {{
       display: grid;
       gap: 6px;
@@ -525,6 +576,30 @@ def _render_shell(status: dict[str, Any]) -> str:
     .status-pill.dry_run {{ color: #0f5f8c; background: #edf7ff; border-color: #b7dcf3; }}
     .status-pill.sent {{ color: var(--ok); background: #effaf4; border-color: rgba(22, 120, 75, .25); }}
     .status-pill.failed {{ color: var(--danger); background: #fff1f0; border-color: rgba(180, 35, 24, .25); }}
+    .action-list {{
+      display: grid;
+      gap: 8px;
+    }}
+    .action-item {{
+      display: grid;
+      gap: 4px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfd;
+      font-size: 13px;
+      line-height: 1.35;
+    }}
+    .action-item strong {{ font-size: 14px; }}
+    .action-item span {{ color: var(--muted); }}
+    .action-item.needs_phone {{ border-color: rgba(180, 35, 24, .35); background: #fff8f7; }}
+    .action-item.needs_message {{ border-color: #f3d2a1; background: #fffaf1; }}
+    .action-item.needs_review {{ border-color: #b7dcf3; background: #f3faff; }}
+    .repeat-mark {{
+      color: var(--accent);
+      font-weight: 700;
+      white-space: nowrap;
+    }}
     .badge {{
       display: inline-flex;
       align-items: center;
@@ -603,6 +678,15 @@ def _render_shell(status: dict[str, Any]) -> str:
             <button data-action="refreshMissing" class="secondary">목록 새로고침</button>
             <button data-action="sweepMissing">미제출 sweep</button>
           </div>
+          <div class="toolbar" id="missingFilters">
+            <button data-filter="all" class="active">전체</button>
+            <button data-filter="needs_message">문구 필요</button>
+            <button data-filter="needs_review">검토 필요</button>
+            <button data-filter="needs_phone">연락처 없음</button>
+            <button data-filter="needs_retry">실패</button>
+            <button data-filter="repeat">반복</button>
+            <button data-filter="done">완료</button>
+          </div>
           <div id="missingTable" style="margin-top:12px"></div>
         </div>
 
@@ -650,6 +734,10 @@ def _render_shell(status: dict[str, Any]) -> str:
 
       <aside>
         <div class="panel">
+          <h2>다음 액션</h2>
+          <div id="actionQueue" class="action-list"></div>
+        </div>
+        <div class="panel">
           <h2>설정</h2>
           <dl id="settings"></dl>
         </div>
@@ -666,6 +754,8 @@ def _render_shell(status: dict[str, Any]) -> str:
     const log = document.querySelector("#log");
     const statusNode = document.querySelector("#initial-status");
     let status = JSON.parse(statusNode.textContent);
+    let missingState = {{ summary: {{}}, items: [] }};
+    let activeMissingFilter = "all";
 
     function writeLog(message, data) {{
       const now = new Date().toLocaleTimeString();
@@ -726,6 +816,25 @@ def _render_shell(status: dict[str, Any]) -> str:
       return `<span class="status-pill ${{safe}}">${{escapeHtml(statusLabel(status))}}</span>`;
     }}
 
+    function actionLabel(action) {{
+      const labels = {{
+        needs_phone: "연락처 보완",
+        needs_message: "문구 생성 필요",
+        needs_review: "문구 검토",
+        needs_retry: "재시도 필요",
+        done: "처리 완료",
+      }};
+      return labels[action] || action || "-";
+    }}
+
+    function actionDetail(item) {{
+      if (item.action_required === "needs_phone") return "학부모 연락처가 없어 발송할 수 없습니다.";
+      if (item.action_required === "needs_message") return "sweep을 실행해 안내 문구를 생성하세요.";
+      if (item.action_required === "needs_review") return "dry-run 문구가 생성되었습니다. 발송 전 확인 대상입니다.";
+      if (item.action_required === "needs_retry") return "마지막 발송이 실패했습니다. 설정과 연락처를 확인하세요.";
+      return "알림 처리가 완료된 학생입니다.";
+    }}
+
     async function callApi(path, payload) {{
       const response = await fetch(path, {{
         method: "POST",
@@ -771,6 +880,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
 
     function renderMissing(data) {{
+      missingState = data;
       const summary = data.summary || {{}};
       document.querySelector("#missingCount").textContent = summary.total_missing || 0;
       document.querySelector("#noPhoneCount").textContent = summary.no_parent_phone || 0;
@@ -778,10 +888,13 @@ def _render_shell(status: dict[str, Any]) -> str:
       document.querySelector("#sentCount").textContent = summary.sent || 0;
       document.querySelector("#failedCount").textContent = summary.failed || 0;
 
-      const items = data.items || [];
+      renderActionQueue(data.items || []);
+      syncFilterButtons();
+
+      const items = (data.items || []).filter(itemMatchesFilter);
       const target = document.querySelector("#missingTable");
       if (!items.length) {{
-        target.innerHTML = `<div class="empty">조회 범위 안의 숙제 미제출 학생이 없습니다.</div>`;
+        target.innerHTML = `<div class="empty">선택한 조건에 해당하는 학생이 없습니다.</div>`;
         return;
       }}
       target.innerHTML = `
@@ -795,6 +908,7 @@ def _render_shell(status: dict[str, Any]) -> str:
                 <th>출석</th>
                 <th>학부모 연락처</th>
                 <th>알림 상태</th>
+                <th>다음 액션</th>
               </tr>
             </thead>
             <tbody>
@@ -802,15 +916,63 @@ def _render_shell(status: dict[str, Any]) -> str:
                 <tr>
                   <td>${{escapeHtml(item.student_name)}}<br><span class="badge">${{escapeHtml(item.student_classin_id)}}</span></td>
                   <td>${{escapeHtml(item.class_name || "-")}}</td>
-                  <td>${{escapeHtml(item.lesson_classin_id || "-")}}<br><span class="badge">${{escapeHtml(formatDate(item.date))}}</span></td>
+                  <td>
+                    ${{escapeHtml(item.lesson_classin_id || "-")}}
+                    ${{item.is_repeat ? `<br><span class="repeat-mark">반복 ${{escapeHtml(item.missing_count)}}건</span>` : ""}}
+                    <br><span class="badge">${{escapeHtml(formatDate(item.date))}}</span>
+                  </td>
                   <td>${{escapeHtml(item.attendance || "-")}}</td>
                   <td>${{item.has_parent_phone ? escapeHtml(item.parent_phone) : '<span class="status-pill failed">없음</span>'}}</td>
                   <td>${{statusPill(item.notification_status)}}<br><span class="badge">${{escapeHtml(formatDate(item.notification_at))}}</span></td>
+                  <td><strong>${{escapeHtml(actionLabel(item.action_required))}}</strong><br><span class="badge">${{escapeHtml(actionDetail(item))}}</span></td>
                 </tr>
               `).join("")}}
             </tbody>
           </table>
         </div>`;
+    }}
+
+    function itemMatchesFilter(item) {{
+      if (activeMissingFilter === "all") return true;
+      if (activeMissingFilter === "repeat") return Boolean(item.is_repeat);
+      return item.action_required === activeMissingFilter;
+    }}
+
+    function syncFilterButtons() {{
+      document.querySelectorAll("#missingFilters button").forEach((button) => {{
+        button.classList.toggle("active", button.dataset.filter === activeMissingFilter);
+      }});
+    }}
+
+    function renderActionQueue(items) {{
+      const target = document.querySelector("#actionQueue");
+      const queue = items
+        .filter((item) => item.action_required !== "done")
+        .sort((a, b) => actionRank(a) - actionRank(b))
+        .slice(0, 6);
+      if (!queue.length) {{
+        target.innerHTML = `<div class="empty">지금 바로 처리할 학생이 없습니다.</div>`;
+        return;
+      }}
+      target.innerHTML = queue.map((item) => `
+        <div class="action-item ${{escapeHtml(item.action_required)}}">
+          <strong>${{escapeHtml(item.student_name)}} · ${{escapeHtml(actionLabel(item.action_required))}}</strong>
+          <span>${{escapeHtml(item.class_name || "-")}} / ${{escapeHtml(item.lesson_classin_id || "-")}} / ${{item.is_repeat ? `반복 ${{item.missing_count}}건` : "단건"}}</span>
+          <span>${{escapeHtml(actionDetail(item))}}</span>
+        </div>
+      `).join("");
+    }}
+
+    function actionRank(item) {{
+      const ranks = {{
+        needs_retry: 1,
+        needs_phone: 2,
+        needs_message: 3,
+        needs_review: 4,
+        done: 9,
+      }};
+      const repeatBoost = item.is_repeat ? -0.5 : 0;
+      return (ranks[item.action_required] || 8) + repeatBoost;
     }}
 
     function renderNotifications(data) {{
@@ -912,6 +1074,12 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     document.addEventListener("click", async (event) => {{
       const button = event.target.closest("button[data-action]");
+      const filterButton = event.target.closest("button[data-filter]");
+      if (filterButton) {{
+        activeMissingFilter = filterButton.dataset.filter || "all";
+        renderMissing(missingState);
+        return;
+      }}
       if (!button) return;
       const action = actions[button.dataset.action];
       if (!action) return;
