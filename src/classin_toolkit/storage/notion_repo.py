@@ -313,6 +313,7 @@ class NotionRepo:
         self,
         *,
         student_classin_id: str,
+        student: StudentRecord | None = None,
         exam_name: str,
         exam_date: datetime,
         class_name: str | None = None,
@@ -327,7 +328,7 @@ class NotionRepo:
             log.warning("exams_db not configured — skip upsert_exam_result")
             return None
 
-        student = self.find_student_by_classin_id(student_classin_id)
+        student = student or self.find_student_by_classin_id(student_classin_id)
         if not student:
             log.warning("exam merge skipped — no student for %s", student_classin_id)
             return None

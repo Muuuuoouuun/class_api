@@ -77,6 +77,7 @@
 | 외부 시험 ID | Text | 외부 시스템 키값, 선택 |
 
 CLI:
+- `classin-toolkit import-exam-results exam.csv --exam-name "4월 월말평가" --exam-date 2026-04-24 --dry-run`
 - `classin-toolkit import-exam-results exam.csv --exam-name "4월 월말평가" --exam-date 2026-04-24`
 - `classin-toolkit sweep-missing-exam --exam-name "4월 월말평가" --exam-date 2026-04-24 --class-name 고2-A`
 

@@ -19,6 +19,7 @@ def _cfg(**overrides) -> AppConfig:
                 "lessons": "lessons_db",
                 "reports": "reports_db",
                 "memos": "memos_db",
+                "exams": "exams_db",
             },
         },
         "anthropic": {"api_key": "sk-ant-test"},
@@ -59,6 +60,7 @@ def test_local_demo_flags_placeholder_values(tmp_path: Path) -> None:
                     "lessons": "lessons_db",
                     "reports": "reports_db",
                     "memos": "memos_db",
+                    "exams": "exams_db",
                 },
             }
         ),
@@ -70,6 +72,21 @@ def test_local_demo_flags_placeholder_values(tmp_path: Path) -> None:
     assert "Notion 토큰" in labels
     assert "학생 Master DB ID" in labels
     assert any(item.label.startswith("샘플 페이로드") for item in report.blockers)
+
+
+def test_local_demo_requires_exam_db_id(tmp_path: Path) -> None:
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    for name in _SAMPLE_PAYLOADS:
+        (samples / name).write_text("{}", encoding="utf-8")
+
+    report = check_readiness(
+        _cfg(notion={"databases": {"exams": "REPLACE_ME_EXAMS_DB_ID"}}),
+        mode="local-demo",
+        project_root=tmp_path,
+    )
+
+    assert any(item.label == "시험 DB ID" for item in report.blockers)
 
 
 def test_classin_live_requires_webhook_secret(tmp_path: Path) -> None:

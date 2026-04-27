@@ -42,8 +42,8 @@ def test_load_exam_rows_from_csv_applies_defaults(tmp_path: Path) -> None:
     path = tmp_path / "exam.csv"
     path.write_text(
         "student_name,class_name,subject,score,max_score,attended\n"
-        "홍길동,고2-A,수학,95,100,true\n"
-        "김영희,고2-A,수학,,100,false\n",
+        "홍길동,고2-A,수학,95점,100,true\n"
+        "김영희,고2-A,수학,미응시,\"1,000\",false\n",
         encoding="utf-8",
     )
 
@@ -60,6 +60,8 @@ def test_load_exam_rows_from_csv_applies_defaults(tmp_path: Path) -> None:
     assert rows[0].score == 95.0
     assert rows[0].attended is True
     assert rows[1].attended is False
+    assert rows[1].score is None
+    assert rows[1].max_score == 1000.0
     assert rows[1].source == "academy-db"
 
 
@@ -120,8 +122,48 @@ def test_merge_exam_results_resolves_students_by_id_and_name(tmp_path: Path) -> 
     assert result.unresolved_rows == 1
     assert len(merged_calls) == 2
     assert merged_calls[0]["student_classin_id"] == "10001"
+    assert merged_calls[0]["student"].page_id == "p1"
     assert merged_calls[1]["student_classin_id"] == "10002"
     assert merged_calls[1]["attended"] is False
+
+
+def test_merge_exam_results_dry_run_does_not_write(tmp_path: Path) -> None:
+    students = [
+        StudentRecord(
+            page_id="p1",
+            classin_id="10001",
+            name="홍길동",
+            parent_phone="01012345678",
+            class_name="고2-A",
+        )
+    ]
+
+    class FakeRepo:
+        def list_active_students(self):
+            return students
+
+        def upsert_exam_result(self, **kwargs):
+            raise AssertionError("dry-run must not write to Notion")
+
+    result = merge_exam_results(
+        _cfg(tmp_path),
+        [
+            ExamImportRow(
+                exam_name="4월 월말평가",
+                exam_date=datetime(2026, 4, 24, tzinfo=timezone.utc),
+                student_classin_id="10001",
+                score=92,
+                max_score=100,
+            )
+        ],
+        repo=FakeRepo(),
+        dry_run=True,
+    )
+
+    assert result.dry_run is True
+    assert result.total_rows == 1
+    assert result.merged_rows == 1
+    assert result.skipped_rows == 0
 
 
 def test_sweep_missing_exam_dispatches_missing_exam_event(monkeypatch, tmp_path: Path) -> None:

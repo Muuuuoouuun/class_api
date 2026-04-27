@@ -40,6 +40,7 @@ class ExamImportResult:
     unresolved_rows: int
     skipped_rows: int
     errors: list[str]
+    dry_run: bool = False
 
 
 def import_exam_results(
@@ -50,6 +51,7 @@ def import_exam_results(
     exam_date: str | None = None,
     class_name: str | None = None,
     source: str | None = None,
+    dry_run: bool = False,
 ) -> ExamImportResult:
     rows = load_exam_rows(
         path,
@@ -58,7 +60,7 @@ def import_exam_results(
         default_class_name=class_name,
         default_source=source,
     )
-    return merge_exam_results(cfg, rows)
+    return merge_exam_results(cfg, rows, dry_run=dry_run)
 
 
 def load_exam_rows(
@@ -101,6 +103,7 @@ def merge_exam_results(
     rows: list[ExamImportRow],
     *,
     repo: NotionRepo | None = None,
+    dry_run: bool = False,
 ) -> ExamImportResult:
     repo = repo or NotionRepo.from_config(cfg)
     active_students = repo.list_active_students()
@@ -126,8 +129,13 @@ def merge_exam_results(
             errors.append(f"row {idx}: student not found or ambiguous: {ident}")
             continue
 
+        if dry_run:
+            merged_rows += 1
+            continue
+
         page_id = repo.upsert_exam_result(
             student_classin_id=student.classin_id,
+            student=student,
             exam_name=row.exam_name,
             exam_date=row.exam_date,
             class_name=row.class_name or student.class_name,
@@ -149,6 +157,7 @@ def merge_exam_results(
         unresolved_rows=unresolved_rows,
         skipped_rows=skipped_rows,
         errors=errors,
+        dry_run=dry_run,
     )
 
 
@@ -287,7 +296,14 @@ def _to_float(value: object | None) -> float | None:
     text = _blank_to_none(value)
     if text is None:
         return None
-    return float(text)
+    normalized = text.replace(",", "").strip()
+    if normalized.endswith("%"):
+        normalized = normalized[:-1].strip()
+    if normalized.endswith("점"):
+        normalized = normalized[:-1].strip()
+    if normalized in {"-", "미응시", "결시", "absent", "n/a"}:
+        return None
+    return float(normalized)
 
 
 def _to_bool(value: object | None, *, default: bool) -> bool:

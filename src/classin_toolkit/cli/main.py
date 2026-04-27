@@ -99,6 +99,7 @@ def import_exam_results_cmd(
     exam_date: str | None = typer.Option(None, "--exam-date", help="YYYY-MM-DD"),
     class_name: str | None = typer.Option(None, "--class-name"),
     source: str | None = typer.Option("academy-db", "--source"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Notion DB에 쓰지 않고 매칭만 확인"),
     config: Path = typer.Option(Path("config.yaml"), "--config"),
 ) -> None:
     """시험 결과 CSV/JSON 을 학생 Master 와 병합해 Notion 시험 DB 에 적재."""
@@ -110,10 +111,13 @@ def import_exam_results_cmd(
         exam_date=exam_date,
         class_name=class_name,
         source=source,
+        dry_run=dry_run,
     )
+    verb = "would merge" if result.dry_run else "merged"
     console.print(
-        "[green]merged {merged} / {total} rows[/green] "
+        "[green]{verb} {merged} / {total} rows[/green] "
         "(unresolved={unresolved}, skipped={skipped})".format(
+            verb=verb,
             merged=result.merged_rows,
             total=result.total_rows,
             unresolved=result.unresolved_rows,

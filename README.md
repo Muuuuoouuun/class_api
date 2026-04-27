@@ -34,6 +34,7 @@ classin-webhook                                             # Webhook 수신 서
 classin-toolkit parse-schedule samples/schedule_sample.csv  # 스케줄 업로드
 classin-toolkit replay-webhook samples/attendance_sample.json
 classin-toolkit sweep-missing-homework
+classin-toolkit import-exam-results samples/exam_results_sample.csv --exam-name "4월 월말평가" --exam-date 2026-04-24 --dry-run
 classin-toolkit import-exam-results samples/exam_results_sample.csv --exam-name "4월 월말평가" --exam-date 2026-04-24
 classin-toolkit sweep-missing-exam --exam-name "4월 월말평가" --exam-date 2026-04-24
 classin-toolkit weekly-reports
@@ -52,7 +53,7 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 | 자동 (CED)  | `classin-toolkit parse-schedule <csv> [--live]` | 스케줄 → ClassIn 수업 일괄 생성 |
 | 자동 (디버그) | `classin-toolkit replay-webhook <json>` | 저장된 페이로드 재생 |
 | 자동 (MVP1) | `classin-toolkit sweep-missing-homework [--lesson-id X]` | 미제출자 카톡 문구 생성 |
-| 자동 (시험) | `classin-toolkit import-exam-results <csv|json> --exam-name ... --exam-date ...` | 시험 결과를 학생 Master 와 병합해 Notion 시험 DB 에 적재 |
+| 자동 (시험) | `classin-toolkit import-exam-results <csv|json> --exam-name ... --exam-date ... [--dry-run]` | 시험 결과를 학생 Master 와 병합해 Notion 시험 DB 에 적재 |
 | 자동 (시험) | `classin-toolkit sweep-missing-exam --exam-name ... --exam-date ... [--class-name ...]` | 특정 시험 미응시자 카톡 문구 생성 |
 | 자동 (MVP2) | `classin-toolkit weekly-reports` | 학생별 주간 리포트 Notion 페이지 |
 | 자동 (SSO)  | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | ClassIn 앱 호출 링크 |

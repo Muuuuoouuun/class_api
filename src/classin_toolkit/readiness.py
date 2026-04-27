@@ -97,6 +97,12 @@ def _local_demo_items(cfg: AppConfig, project_root: Path) -> list[ReadinessItem]
         ),
         _required(
             "local-demo",
+            "시험 DB ID",
+            cfg.notion.databases.exams,
+            "시험 import/sweep 기능을 쓰려면 notion.databases.exams 를 채우세요.",
+        ),
+        _required(
+            "local-demo",
             "Claude API 키",
             cfg.anthropic.api_key,
             "anthropic.api_key 를 채우세요.",

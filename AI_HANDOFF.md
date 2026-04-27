@@ -75,6 +75,7 @@ classin-webhook
 classin-toolkit parse-schedule samples/schedule_sample.csv
 classin-toolkit replay-webhook samples/attendance_sample.json
 classin-toolkit sweep-missing-homework
+classin-toolkit import-exam-results <csv|json> --exam-name ... --exam-date ... --dry-run
 classin-toolkit import-exam-results <csv|json> --exam-name ... --exam-date ...
 classin-toolkit sweep-missing-exam --exam-name ... --exam-date ...
 classin-toolkit render-daily
