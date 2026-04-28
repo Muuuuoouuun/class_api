@@ -24,7 +24,8 @@
 │              schedule_parser.py    자유형 스케줄 → 구조화 JSON       (자동 파이프라인용)
 │              missing_homework.py   학생별 카톡 문구 생성             (자동 파이프라인용)
 │              weekly_report.py      학생별 주간 리포트 생성           (자동 파이프라인용)
-│              agent.py              Claude tool-use 채팅 (수동 오더) — 도구 5종
+│              skills.py             Claude tool-use skill registry — 도구 5종
+│              agent.py              Claude tool-use 채팅 루프 (수동 오더)
 │              prompts/*.md          프롬프트 파일(외부화)
 ├─ Layer 2 : 저장소·출력 ─────────── storage/
 │              notion_repo.py        원본 진실원 (학생 Master·수업 기록·리포트 아카이브·메모·시험)

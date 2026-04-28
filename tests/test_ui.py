@@ -20,6 +20,7 @@ def _cfg(tmp_path) -> AppConfig:
                     "lessons": "lessons",
                     "reports": "reports",
                     "memos": "memos",
+                    "exams": "exams",
                 },
             },
             "anthropic": {"api_key": "sk-ant-test"},
@@ -55,6 +56,8 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
     missing = client.get("/api/missing-homework").json()
     notifications = client.get("/api/notifications").json()
     sweep = client.post("/api/sweep-missing-homework", json={}).json()
+    exam_import = client.post("/api/import-exam-results", json={}).json()
+    exam_sweep = client.post("/api/sweep-missing-exam", json={}).json()
 
     assert status["ok"] is True
     assert status["mode"] == "demo"
@@ -66,6 +69,52 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
     assert any(item["report_context"]["has_context"] for item in missing["items"])
     assert notifications["summary"]["total"] > 0
     assert sweep["demo"] is True
+    assert exam_import["demo"] is True
+    assert exam_sweep["demo"] is True
+
+
+def test_ui_import_exam_results_calls_pipeline(monkeypatch, tmp_path):
+    cfg = _cfg(tmp_path)
+    captured = {}
+
+    class Result:
+        total_rows = 2
+        merged_rows = 1
+        unresolved_rows = 1
+        skipped_rows = 0
+        errors = ["row 2: student not found"]
+        dry_run = True
+
+    def fake_import_exam_results(cfg, **kwargs):
+        captured.update(kwargs)
+        return Result()
+
+    monkeypatch.setattr("classin_toolkit.ui.import_exam_results", fake_import_exam_results)
+    client = TestClient(create_app(config=cfg))
+
+    res = client.post(
+        "/api/import-exam-results",
+        json={
+            "path": "samples/exam_results_sample.csv",
+            "exam_name": "April Monthly Exam",
+            "exam_date": "2026-04-24",
+            "class_name": "High2-A",
+            "source": "academy-db",
+            "dry_run": True,
+        },
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert body["total"] == 2
+    assert body["merged"] == 1
+    assert body["unresolved"] == 1
+    assert captured["exam_name"] == "April Monthly Exam"
+    assert captured["exam_date"] == "2026-04-24"
+    assert captured["class_name"] == "High2-A"
+    assert captured["source"] == "academy-db"
+    assert captured["dry_run"] is True
 
 
 def test_ui_status_reports_local_counts(tmp_path):

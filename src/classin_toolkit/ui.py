@@ -23,7 +23,7 @@ from .pipelines.demo_seed import (
     build_demo_missing_homework_rows,
     build_demo_notification_history,
 )
-from .pipelines.exams import sweep_missing_exam
+from .pipelines.exams import import_exam_results, sweep_missing_exam
 from .pipelines.missing_homework import query_missing_homework, sweep_missing_homework
 from .pipelines.weekly import approve_all, generate_drafts
 from .storage.notion_repo import NotionRepo
@@ -147,6 +147,36 @@ def create_app(
         lesson_id = (payload.get("lesson_id") or "").strip() or None
         count = sweep_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id)
         return _ok(f"미제출 알림 {count}건을 처리했습니다.", count=count)
+
+    @app.post("/api/import-exam-results")
+    async def api_import_exam_results(request: Request) -> JSONResponse:
+        if state.demo:
+            return _demo_ok("Demo mode: exam import checked without external writes.", count=2)
+        cfg = _require_config(state)
+        payload = await _json_payload(request)
+        path_raw = (payload.get("path") or "").strip()
+        if not path_raw:
+            raise HTTPException(status_code=400, detail="path is required")
+        dry_run = bool(payload.get("dry_run", True))
+        result = import_exam_results(
+            cfg,
+            path=Path(path_raw).expanduser(),
+            exam_name=(payload.get("exam_name") or "").strip() or None,
+            exam_date=(payload.get("exam_date") or "").strip() or None,
+            class_name=(payload.get("class_name") or "").strip() or None,
+            source=(payload.get("source") or "").strip() or None,
+            dry_run=dry_run,
+        )
+        verb = "checked" if result.dry_run else "imported"
+        return _ok(
+            f"Exam results {verb}.",
+            total=result.total_rows,
+            merged=result.merged_rows,
+            unresolved=result.unresolved_rows,
+            skipped=result.skipped_rows,
+            errors=result.errors[:20],
+            dry_run=result.dry_run,
+        )
 
     @app.post("/api/sweep-missing-exam")
     async def api_sweep_missing_exam(request: Request) -> JSONResponse:
@@ -1165,6 +1195,22 @@ def _render_shell(status: dict[str, Any]) -> str:
         </div>
 
         <div class="panel">
+          <h2>시험</h2>
+          <div class="stack">
+            <div class="actions">
+              <label>CSV/JSON path<input id="examPath" type="text" placeholder="samples/exam_results_sample.csv"></label>
+              <label>시험명<input id="examName" type="text" placeholder="4월 월말평가"></label>
+              <label>시험일<input id="examDate" type="date" value="{today}"></label>
+              <label>반<input id="examClassName" type="text"></label>
+              <label>출처<input id="examSource" type="text" value="academy-db"></label>
+              <label><input id="examDryRun" type="checkbox" checked> dry-run</label>
+              <button data-action="importExam" class="secondary">시험 import</button>
+              <button data-action="sweepMissingExam">미응시 sweep</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
           <h2>메모</h2>
           <div class="stack">
             <div class="actions">
@@ -1551,6 +1597,26 @@ def _render_shell(status: dict[str, Any]) -> str:
         const data = await callApi("/api/sweep-missing-homework", {{
           window_hours: document.querySelector("#windowHours").value,
           lesson_id: document.querySelector("#lessonId").value,
+        }});
+        writeLog(data.message, data);
+        await loadSituation();
+      }},
+      async importExam() {{
+        const data = await callApi("/api/import-exam-results", {{
+          path: document.querySelector("#examPath").value,
+          exam_name: document.querySelector("#examName").value,
+          exam_date: document.querySelector("#examDate").value,
+          class_name: document.querySelector("#examClassName").value,
+          source: document.querySelector("#examSource").value,
+          dry_run: document.querySelector("#examDryRun").checked,
+        }});
+        writeLog(data.message, data);
+      }},
+      async sweepMissingExam() {{
+        const data = await callApi("/api/sweep-missing-exam", {{
+          exam_name: document.querySelector("#examName").value,
+          exam_date: document.querySelector("#examDate").value,
+          class_name: document.querySelector("#examClassName").value,
         }});
         writeLog(data.message, data);
         await loadSituation();
