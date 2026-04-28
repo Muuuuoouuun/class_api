@@ -23,7 +23,7 @@ from .pipelines.demo_seed import (
     build_demo_missing_homework_rows,
     build_demo_notification_history,
 )
-from .pipelines.exams import import_exam_results, sweep_missing_exam
+from .pipelines.exams import import_exam_results, query_missing_exam, sweep_missing_exam
 from .pipelines.missing_homework import query_missing_homework, sweep_missing_homework
 from .pipelines.weekly import approve_all, generate_drafts
 from .storage.notion_repo import NotionRepo
@@ -176,6 +176,39 @@ def create_app(
             skipped=result.skipped_rows,
             errors=result.errors[:20],
             dry_run=result.dry_run,
+        )
+
+    @app.get("/api/missing-exam")
+    async def api_missing_exam(
+        exam_name: str,
+        exam_date: str,
+        class_name: str | None = None,
+    ) -> dict:
+        if state.demo:
+            payload = _demo_missing_exam_payload(
+                exam_name=exam_name,
+                exam_date=exam_date,
+                class_name=(class_name or "").strip() or None,
+            )
+            payload["demo"] = True
+            return payload
+        cfg = _require_config(state)
+        exam_name = exam_name.strip()
+        exam_date = exam_date.strip()
+        class_name = (class_name or "").strip() or None
+        if not exam_name or not exam_date:
+            raise HTTPException(status_code=400, detail="exam_name and exam_date are required")
+        rows = query_missing_exam(
+            cfg,
+            exam_name=exam_name,
+            exam_date=exam_date,
+            class_name=class_name,
+        )
+        return _missing_exam_payload(
+            rows,
+            exam_name=exam_name,
+            exam_date=exam_date,
+            class_name=class_name,
         )
 
     @app.post("/api/sweep-missing-exam")
@@ -517,6 +550,50 @@ def _notification_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+def _missing_exam_payload(
+    rows: list[dict[str, Any]],
+    *,
+    exam_name: str,
+    exam_date: str,
+    class_name: str | None,
+) -> dict[str, Any]:
+    items = []
+    for row in rows:
+        parent_phone = row.get("parent_phone") or ""
+        items.append(
+            {
+                "student_classin_id": row.get("student_classin_id") or "",
+                "student_name": row.get("student_name") or "미등록",
+                "class_name": row.get("student_class_name") or row.get("class_name") or "",
+                "parent_phone": parent_phone,
+                "has_parent_phone": bool(parent_phone),
+                "exam_name": row.get("exam_name") or exam_name,
+                "exam_date": row.get("exam_date") or exam_date,
+                "attended": row.get("attended"),
+                "subject": row.get("subject") or "",
+                "score": row.get("score"),
+                "max_score": row.get("max_score"),
+                "percent": row.get("percent"),
+                "source": row.get("source") or "",
+            }
+        )
+
+    return {
+        "ok": True,
+        "summary": {
+            "exam_name": exam_name,
+            "exam_date": exam_date,
+            "class_name": class_name or "",
+            "total_missing": len(items),
+            "with_parent_phone": sum(1 for item in items if item["has_parent_phone"]),
+            "no_parent_phone": sum(1 for item in items if not item["has_parent_phone"]),
+            "recorded_absent": sum(1 for item in items if item["attended"] is False),
+            "not_recorded": sum(1 for item in items if item["attended"] is None),
+        },
+        "items": items,
+    }
+
+
 def _demo_missing_homework_payload() -> dict[str, Any]:
     contexts = _demo_report_contexts()
     return _missing_homework_payload(
@@ -548,6 +625,44 @@ def _demo_missing_homework_payload() -> dict[str, Any]:
                 }
             ],
         },
+    )
+
+
+def _demo_missing_exam_payload(
+    *,
+    exam_name: str,
+    exam_date: str,
+    class_name: str | None,
+) -> dict[str, Any]:
+    demo_class = class_name or "고2-A"
+    return _missing_exam_payload(
+        [
+            {
+                "student_classin_id": "10002",
+                "student_name": "김지각",
+                "student_class_name": demo_class,
+                "parent_phone": "01055556666",
+                "exam_name": exam_name,
+                "exam_date": exam_date,
+                "attended": False,
+                "subject": "수학",
+                "source": "demo://exam-results",
+            },
+            {
+                "student_classin_id": "10005",
+                "student_name": "최미연",
+                "student_class_name": demo_class,
+                "parent_phone": "",
+                "exam_name": exam_name,
+                "exam_date": exam_date,
+                "attended": None,
+                "subject": "수학",
+                "source": "demo://student-master",
+            },
+        ],
+        exam_name=exam_name,
+        exam_date=exam_date,
+        class_name=class_name,
     )
 
 
@@ -939,6 +1054,41 @@ def _render_shell(status: dict[str, Any]) -> str:
     .notification-table .col-phone {{ width: 16%; }}
     .notification-table .col-status {{ width: 14%; }}
     .notification-table .col-message {{ width: 34%; }}
+    .exam-preview {{
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .66);
+      font-size: 13px;
+      line-height: 1.35;
+    }}
+    .exam-preview-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+    }}
+    .exam-preview-head strong {{
+      color: var(--text);
+      font-size: 14px;
+    }}
+    .exam-preview-list {{
+      display: grid;
+      gap: 6px;
+      max-height: 176px;
+      overflow: auto;
+    }}
+    .exam-preview-item {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 0;
+      border-top: 1px solid var(--line);
+    }}
     .cell-title {{
       color: var(--text);
       font-weight: 800;
@@ -1123,6 +1273,13 @@ def _render_shell(status: dict[str, Any]) -> str:
       th, td {{
         padding: 9px;
       }}
+      .exam-preview-head, .exam-preview-item {{
+        align-items: start;
+        grid-template-columns: 1fr;
+      }}
+      .exam-preview-head {{
+        display: grid;
+      }}
       dl {{
         grid-template-columns: 1fr;
         gap: 3px;
@@ -1205,8 +1362,10 @@ def _render_shell(status: dict[str, Any]) -> str:
               <label>출처<input id="examSource" type="text" value="academy-db"></label>
               <label><input id="examDryRun" type="checkbox" checked> dry-run</label>
               <button data-action="importExam" class="secondary">시험 import</button>
+              <button data-action="previewMissingExam" class="secondary">미응시 확인</button>
               <button data-action="sweepMissingExam">미응시 sweep</button>
             </div>
+            <div id="examPreview" class="exam-preview empty">미응시 확인 결과 없음</div>
           </div>
         </div>
 
@@ -1392,6 +1551,65 @@ def _render_shell(status: dict[str, Any]) -> str:
         throw new Error(notifyData.detail || "notification load failed");
       }}
       renderNotifications(notifyData);
+    }}
+
+    function examFormPayload() {{
+      return {{
+        path: document.querySelector("#examPath").value,
+        exam_name: document.querySelector("#examName").value,
+        exam_date: document.querySelector("#examDate").value,
+        class_name: document.querySelector("#examClassName").value,
+        source: document.querySelector("#examSource").value,
+        dry_run: document.querySelector("#examDryRun").checked,
+      }};
+    }}
+
+    async function loadMissingExamPreview() {{
+      const payload = examFormPayload();
+      const params = new URLSearchParams();
+      params.set("exam_name", payload.exam_name || "");
+      params.set("exam_date", payload.exam_date || "");
+      if (payload.class_name) params.set("class_name", payload.class_name);
+
+      const response = await fetch(`/api/missing-exam?${{params.toString()}}`);
+      const data = await response.json();
+      if (!response.ok || data.ok === false) {{
+        throw new Error(data.detail || "missing exam load failed");
+      }}
+      renderExamPreview(data);
+      return data;
+    }}
+
+    function renderExamPreview(data) {{
+      const target = document.querySelector("#examPreview");
+      const summary = data.summary || {{}};
+      const items = data.items || [];
+      if (!items.length) {{
+        target.className = "exam-preview empty";
+        target.innerHTML = "미응시 확인 결과 없음";
+        return;
+      }}
+
+      target.className = "exam-preview";
+      target.innerHTML = `
+        <div class="exam-preview-head">
+          <strong>${{summary.total_missing || 0}}명 미응시</strong>
+          <span>${{summary.with_parent_phone || 0}}명 연락 가능 · ${{summary.no_parent_phone || 0}}명 연락처 없음</span>
+        </div>
+        <div class="exam-preview-list">
+          ${{items.slice(0, 12).map((item) => `
+            <div class="exam-preview-item">
+              <div>
+                <div class="cell-title">${{escapeHtml(item.student_name || "미등록")}}</div>
+                <div class="cell-sub">${{escapeHtml(item.class_name || "-")}} · ${{escapeHtml(item.student_classin_id || "-")}}</div>
+              </div>
+              ${{item.has_parent_phone
+                ? `<span class="badge ok">${{escapeHtml(item.parent_phone)}}</span>`
+                : '<span class="status-pill failed">연락처 없음</span>'}}
+            </div>
+          `).join("")}}
+        </div>
+      `;
     }}
 
     function renderMissing(data) {{
@@ -1602,23 +1820,22 @@ def _render_shell(status: dict[str, Any]) -> str:
         await loadSituation();
       }},
       async importExam() {{
-        const data = await callApi("/api/import-exam-results", {{
-          path: document.querySelector("#examPath").value,
-          exam_name: document.querySelector("#examName").value,
-          exam_date: document.querySelector("#examDate").value,
-          class_name: document.querySelector("#examClassName").value,
-          source: document.querySelector("#examSource").value,
-          dry_run: document.querySelector("#examDryRun").checked,
-        }});
+        const data = await callApi("/api/import-exam-results", examFormPayload());
         writeLog(data.message, data);
       }},
+      async previewMissingExam() {{
+        const data = await loadMissingExamPreview();
+        writeLog("미응시자 확인을 갱신했습니다.", data.summary);
+      }},
       async sweepMissingExam() {{
+        const payload = examFormPayload();
         const data = await callApi("/api/sweep-missing-exam", {{
-          exam_name: document.querySelector("#examName").value,
-          exam_date: document.querySelector("#examDate").value,
-          class_name: document.querySelector("#examClassName").value,
+          exam_name: payload.exam_name,
+          exam_date: payload.exam_date,
+          class_name: payload.class_name,
         }});
         writeLog(data.message, data);
+        await loadMissingExamPreview();
         await loadSituation();
       }},
       async refreshMissing() {{

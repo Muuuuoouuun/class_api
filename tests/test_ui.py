@@ -49,6 +49,7 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
         raise AssertionError("live query should not be called in demo mode")
 
     monkeypatch.setattr("classin_toolkit.ui.query_missing_homework", fail_query)
+    monkeypatch.setattr("classin_toolkit.ui.query_missing_exam", fail_query)
     monkeypatch.setattr("classin_toolkit.ui.load_notification_history", fail_query)
     client = TestClient(create_app(config_path=tmp_path / "missing.yaml", demo=True))
 
@@ -57,6 +58,9 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
     notifications = client.get("/api/notifications").json()
     sweep = client.post("/api/sweep-missing-homework", json={}).json()
     exam_import = client.post("/api/import-exam-results", json={}).json()
+    exam_preview = client.get(
+        "/api/missing-exam?exam_name=April%20Monthly%20Exam&exam_date=2026-04-24"
+    ).json()
     exam_sweep = client.post("/api/sweep-missing-exam", json={}).json()
 
     assert status["ok"] is True
@@ -70,6 +74,8 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
     assert notifications["summary"]["total"] > 0
     assert sweep["demo"] is True
     assert exam_import["demo"] is True
+    assert exam_preview["demo"] is True
+    assert exam_preview["summary"]["total_missing"] > 0
     assert exam_sweep["demo"] is True
 
 
@@ -115,6 +121,71 @@ def test_ui_import_exam_results_calls_pipeline(monkeypatch, tmp_path):
     assert captured["class_name"] == "High2-A"
     assert captured["source"] == "academy-db"
     assert captured["dry_run"] is True
+
+
+def test_ui_missing_exam_preview_calls_pipeline(monkeypatch, tmp_path):
+    cfg = _cfg(tmp_path)
+    captured = {}
+
+    def fake_query_missing_exam(cfg, *, exam_name, exam_date, class_name):
+        captured.update(
+            {
+                "exam_name": exam_name,
+                "exam_date": exam_date,
+                "class_name": class_name,
+            }
+        )
+        return [
+            {
+                "student_classin_id": "10002",
+                "student_name": "Kim Young-hee",
+                "student_class_name": "High2-A",
+                "parent_phone": "01055556666",
+                "exam_name": exam_name,
+                "exam_date": exam_date,
+                "attended": False,
+            },
+            {
+                "student_classin_id": "10003",
+                "student_name": "Lee Min-su",
+                "student_class_name": "High2-A",
+                "parent_phone": "",
+                "exam_name": exam_name,
+                "exam_date": exam_date,
+                "attended": None,
+            },
+        ]
+
+    monkeypatch.setattr("classin_toolkit.ui.query_missing_exam", fake_query_missing_exam)
+    client = TestClient(create_app(config=cfg))
+
+    res = client.get(
+        "/api/missing-exam"
+        "?exam_name=April%20Monthly%20Exam"
+        "&exam_date=2026-04-24"
+        "&class_name=High2-A"
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert captured == {
+        "exam_name": "April Monthly Exam",
+        "exam_date": "2026-04-24",
+        "class_name": "High2-A",
+    }
+    assert body["summary"] == {
+        "exam_name": "April Monthly Exam",
+        "exam_date": "2026-04-24",
+        "class_name": "High2-A",
+        "total_missing": 2,
+        "with_parent_phone": 1,
+        "no_parent_phone": 1,
+        "recorded_absent": 1,
+        "not_recorded": 1,
+    }
+    assert body["items"][0]["has_parent_phone"] is True
+    assert body["items"][1]["has_parent_phone"] is False
 
 
 def test_ui_status_reports_local_counts(tmp_path):

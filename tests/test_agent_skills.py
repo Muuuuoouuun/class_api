@@ -30,10 +30,12 @@ def _cfg() -> AppConfig:
 
 
 def test_agent_skills_registry_exposes_exam_tool() -> None:
-    names = {tool["name"] for tool in skills.TOOLS}
+    names = [tool["name"] for tool in skills.TOOLS]
 
-    assert "query_missing_homework" in names
-    assert "query_missing_exam" in names
+    assert len(names) == len(set(names))
+    assert "query_missing_homework" in set(names)
+    assert "query_missing_exam" in set(names)
+    assert all(tool.get("input_schema", {}).get("type") == "object" for tool in skills.TOOLS)
 
 
 def test_execute_query_missing_exam() -> None:
@@ -75,3 +77,9 @@ def test_execute_list_students() -> None:
     result = skills.execute_tool("list_students", {}, FakeRepo(), _cfg())
 
     assert result == [{"name": "Hong Gil-dong", "class": "High2-A", "classin_id": "10001"}]
+
+
+def test_execute_unknown_tool_returns_error() -> None:
+    result = skills.execute_tool("missing_tool", {}, object(), _cfg())
+
+    assert result == {"error": "unknown tool: missing_tool"}
