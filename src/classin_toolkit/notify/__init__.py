@@ -1,3 +1,4 @@
-from .dispatcher import dispatch_kakao
+from .dispatcher import dispatch_kakao, dispatch_notifications
+from .message import OutgoingMessage
 
-__all__ = ["dispatch_kakao"]
+__all__ = ["OutgoingMessage", "dispatch_kakao", "dispatch_notifications"]

@@ -16,11 +16,12 @@ def _cfg(**overrides) -> AppConfig:
             "token": "secret_test",
             "databases": {
                 "students": "students_db",
-                "lessons": "lessons_db",
-                "reports": "reports_db",
-                "memos": "memos_db",
+                    "lessons": "lessons_db",
+                    "reports": "reports_db",
+                    "memos": "memos_db",
+                    "exams": "exams_db",
+                },
             },
-        },
         "anthropic": {"api_key": "sk-ant-test"},
         "notify": {
             "mode": "dry_run",

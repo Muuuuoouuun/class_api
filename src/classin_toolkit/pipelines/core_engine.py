@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from ..classin.ced import CEDClient
 from ..classin.client import ClassInClient
-from ..classin.schemas import Course, Homework, Lesson
+from ..classin.schemas import Course, Lesson
 from ..config import AppConfig
 from ..intelligence.schedule_parser import parse_schedule
 from ..storage.notion_repo import NotionRepo
@@ -54,7 +54,7 @@ def run_core_engine(cfg: AppConfig, *, schedule_text: str, dry_run: bool = False
 
             for pl in pc.lessons:
                 try:
-                    lesson = ced.add_course_class(
+                    ced.add_course_class(
                         Lesson(
                             course_id=course.classin_id or "",
                             title=pl.title,

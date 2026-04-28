@@ -8,7 +8,7 @@
 - [x] CED API 래퍼 초안 (`classin/ced.py`)
 - [x] Claude 스케줄 파싱 프롬프트 (`intelligence/prompts/schedule_parse.md`)
 - [ ] 실제 ClassIn 샘플 Webhook 페이로드 확보 → alias 확정
-- [ ] Notion DB 3종 실제 생성 + ID 확보
+- [ ] Notion DB 5종 실제 생성 + ID 확보
 - [ ] Cloudflare Tunnel 연결 테스트
 
 ## Week 2 — MVP1 (미제출 알림)

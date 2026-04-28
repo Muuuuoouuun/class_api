@@ -101,15 +101,15 @@ def _weekly_filename(inp: WeeklyRenderInput) -> str:
 def _attendance_rate(lessons: list[dict]) -> float:
     if not lessons:
         return 0.0
-    present = sum(1 for l in lessons if l.get("attendance") in ("출석", "지각"))
+    present = sum(1 for lesson in lessons if lesson.get("attendance") in ("출석", "지각"))
     return present / len(lessons)
 
 
 def _homework_rate(lessons: list[dict]) -> float:
-    considered = [l for l in lessons if l.get("homework_submitted") is not None]
+    considered = [lesson for lesson in lessons if lesson.get("homework_submitted") is not None]
     if not considered:
         return 0.0
-    submitted = sum(1 for l in considered if l.get("homework_submitted"))
+    submitted = sum(1 for lesson in considered if lesson.get("homework_submitted"))
     return submitted / len(considered)
 
 

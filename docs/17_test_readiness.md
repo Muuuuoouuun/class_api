@@ -25,7 +25,7 @@ classin-toolkit check-ready --mode kakao-live --config config.yaml
 ## local-demo 최소 준비물
 
 - Notion Integration token
-- Notion DB ID 4개: 학생 Master, 수업 기록, 리포트, 메모
+- Notion DB ID 5개: 학생 Master, 수업 기록, 리포트, 메모, 시험
 - Claude API key
 - `samples/attendance_sample.json`
 - `samples/end_summary_sample.json`
@@ -37,7 +37,7 @@ ClassIn SID/secret 은 `local-demo` 에서는 없어도 된다. 샘플 JSON 을 
 ## Notion DB 자동 생성
 
 원장님에게는 "테스트용 빈 Notion 페이지 하나"만 만들게 하고, 그 페이지를 Integration에 공유하게 한다.
-그 다음 아래 명령으로 DB 4개를 만든다.
+그 다음 아래 명령으로 DB 5개를 만든다.
 
 ```bash
 classin-toolkit setup-notion --parent-page-id <NOTION_PAGE_ID> --dry-run

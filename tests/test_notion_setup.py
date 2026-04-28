@@ -1,7 +1,7 @@
 from classin_toolkit.storage.notion_setup import create_notion_schema, dry_run_schema
 
 
-def test_dry_run_schema_lists_four_databases() -> None:
+def test_dry_run_schema_lists_five_databases() -> None:
     schema = dry_run_schema("테스트")
 
     assert [name for name, _props in schema] == [
@@ -9,11 +9,13 @@ def test_dry_run_schema_lists_four_databases() -> None:
         "테스트 - 수업 기록",
         "테스트 - 리포트",
         "테스트 - 메모",
+        "테스트 - 시험",
     ]
     assert "학생명" in schema[0][1]
     assert "수업일시" in schema[1][1]
     assert "리포트 기간" in schema[2][1]
     assert "내용" in schema[3][1]
+    assert "시험명" in schema[4][1]
 
 
 def test_create_notion_schema_creates_relation_databases_in_order() -> None:
@@ -30,6 +32,7 @@ def test_create_notion_schema_creates_relation_databases_in_order() -> None:
     assert result.lessons == "db_2"
     assert result.reports == "db_3"
     assert result.memos == "db_4"
+    assert result.exams == "db_5"
     relation = client.created[1]["initial_data_source"]["properties"]["학생"]["relation"]
     assert relation["data_source_id"] == "db_1"
     assert relation["type"] == "single_property"
@@ -40,7 +43,11 @@ def test_create_notion_schema_creates_relation_databases_in_order() -> None:
     assert client.created[3]["initial_data_source"]["properties"]["학생"]["relation"][
         "data_source_id"
     ] == "db_1"
+    assert client.created[4]["initial_data_source"]["properties"]["학생"]["relation"][
+        "data_source_id"
+    ] == "db_1"
     assert 'students: "db_1"' in result.config_snippet()
+    assert 'exams: "db_5"' in result.config_snippet()
 
 
 class FakeNotionClient:

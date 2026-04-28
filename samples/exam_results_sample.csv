@@ -1,0 +1,3 @@
+student_classin_id,student_name,class_name,exam_name,exam_date,subject,score,max_score,attended,source
+10001,Hong Gil-dong,High2-A,April Monthly Exam,2026-04-24,Math,92,100,true,sample
+10002,Kim Young-hee,High2-A,April Monthly Exam,2026-04-24,Math,,100,false,sample

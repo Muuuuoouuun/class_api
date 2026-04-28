@@ -23,6 +23,7 @@ from .pipelines.demo_seed import (
     build_demo_missing_homework_rows,
     build_demo_notification_history,
 )
+from .pipelines.exams import sweep_missing_exam
 from .pipelines.missing_homework import query_missing_homework, sweep_missing_homework
 from .pipelines.weekly import approve_all, generate_drafts
 from .storage.notion_repo import NotionRepo
@@ -146,6 +147,25 @@ def create_app(
         lesson_id = (payload.get("lesson_id") or "").strip() or None
         count = sweep_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id)
         return _ok(f"미제출 알림 {count}건을 처리했습니다.", count=count)
+
+    @app.post("/api/sweep-missing-exam")
+    async def api_sweep_missing_exam(request: Request) -> JSONResponse:
+        if state.demo:
+            return _demo_ok("Demo mode: missing-exam sweep completed without external writes.", count=1)
+        cfg = _require_config(state)
+        payload = await _json_payload(request)
+        exam_name = (payload.get("exam_name") or "").strip()
+        exam_date = (payload.get("exam_date") or "").strip()
+        class_name = (payload.get("class_name") or "").strip() or None
+        if not exam_name or not exam_date:
+            raise HTTPException(status_code=400, detail="exam_name and exam_date are required")
+        count = sweep_missing_exam(
+            cfg,
+            exam_name=exam_name,
+            exam_date=exam_date,
+            class_name=class_name,
+        )
+        return _ok("Missing-exam notifications processed.", count=count)
 
     @app.post("/api/write-memo")
     async def api_write_memo(request: Request) -> JSONResponse:

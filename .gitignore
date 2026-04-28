@@ -11,6 +11,9 @@ local_data/
 *.sqlite
 *.sqlite3
 .pytest_cache/
+.tmp_pytest/
+tmp_pytest/
+tmp_pytest2/
 .ruff_cache/
 .mypy_cache/
 dist/

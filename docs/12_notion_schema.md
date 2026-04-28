@@ -1,6 +1,6 @@
 # Notion DB 세팅 가이드
 
-학원별 1회 세팅. **4개 DB** 를 만들고 통합 토큰 Invite → `config.yaml` 에 ID 기입.
+학원별 1회 세팅. **5개 DB** 를 만들고 통합 토큰 Invite → `config.yaml` 에 ID 기입.
 수동 생성 대신 CLI 자동 생성을 권장한다.
 
 ```bash
@@ -15,6 +15,7 @@ classin-toolkit setup-notion --parent-page-id <NOTION_PAGE_ID> --write --config 
 - 학생 Master / 수업 기록 = **원본 데이터 저장소** (자동 적재)
 - 리포트 = **승인된 아카이브만** (드래프트는 HTML 파일, 주간)
 - 메모 = **원장 편집 채널** (수동 입력, 원장이 계속 쓰는 공간)
+- 시험 = **외부 시험/학원 DB 병합 허브** (성적·미응시 관리)
 
 일일 현황은 Notion 에 쓰지 않는다 — `reports_out/daily/<date>.html` 로 생성 후 Cloudflare Tunnel 공개 URL 로 접근.
 
@@ -67,7 +68,31 @@ classin-toolkit setup-notion --parent-page-id <NOTION_PAGE_ID> --write --config 
 
 리포트 본문(마크다운 섹션)은 페이지 children 블록으로 저장된다.
 
-## 4. 메모 DB (원장 편집 채널)
+## 4. 시험 DB
+
+시험 성적·응시 여부를 기존 학생 Master 와 합치는 저장소. 외부 학원 DB, CSV, 별도 시험 API 결과를
+여기로 수렴시키고, 미응시자 판단도 이 DB 기준으로 수행한다.
+
+| 속성 이름 | 타입 | 비고 |
+|---|---|---|
+| 시험명 | Title | 예: 4월 월말평가 |
+| 학생 | Relation → 학생 Master | |
+| 시험일 | Date | 날짜만 써도 충분 |
+| 반 | Text | 스냅샷 용도 |
+| 과목 | Text | 선택 |
+| 응시 여부 | Checkbox | 응시=true, 미응시/결시=false |
+| 원점수 | Number | |
+| 만점 | Number | |
+| 백분율 | Number | `원점수 / 만점 * 100` |
+| 데이터 출처 | Text | 예: academy-db / classin / csv-import |
+| 외부 시험 ID | Text | 외부 시스템 키값, 선택 |
+
+CLI:
+- `classin-toolkit import-exam-results exam.csv --exam-name "4월 월말평가" --exam-date 2026-04-24 --dry-run`
+- `classin-toolkit import-exam-results exam.csv --exam-name "4월 월말평가" --exam-date 2026-04-24`
+- `classin-toolkit sweep-missing-exam --exam-name "4월 월말평가" --exam-date 2026-04-24 --class-name 고2-A`
+
+## 5. 메모 DB (원장 편집 채널)
 
 `output.memo.mode = notion` 일 때 사용. 원장·교사·컨설턴트가 학생 단위 대응기록을 남기는 공간.
 
