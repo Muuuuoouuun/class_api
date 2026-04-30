@@ -19,6 +19,10 @@ class ClassInConfig(BaseModel):
     secret_key: str
     webhook_secret: str = ""
     default_password: str = "Classin!2026"
+    schedule_api: Literal["lms", "legacy"] = "lms"
+    default_teacher_uid: str | None = None
+    teacher_uids: dict[str, str] = Field(default_factory=dict)
+    lms_unit_prefix: str = "API 스케줄"
 
 
 class NotionDatabases(BaseModel):

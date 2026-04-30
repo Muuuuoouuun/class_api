@@ -9,6 +9,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from ..api_diagnostics import DiagnosticItem, diagnose_apis
 from ..config import load_config
 from ..pipelines.core_engine import run_core_engine
 from ..pipelines.daily import render_daily
@@ -238,7 +239,7 @@ def sso_link(
     url = get_login_linked(
         base_url=cfg.classin.base_url,
         sid=cfg.classin.school_id,
-        safe_key=cfg.classin.secret_key,
+        secret_key=cfg.classin.secret_key,
         uid=uid,
         course_id=course_id,
         class_id=class_id,
@@ -306,6 +307,53 @@ def check_ready_cmd(
     raise typer.Exit(1)
 
 
+@app.command("diagnose-apis")
+def diagnose_apis_cmd(
+    live: bool = typer.Option(
+        False,
+        "--live",
+        help="실제 외부 API에 비파괴 probe를 보냅니다.",
+    ),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """ClassIn/Notion/Claude/Aligo API 연결 상태를 한 번에 진단."""
+    try:
+        cfg = load_config(config)
+    except FileNotFoundError as e:
+        console.print(f"[red]config not found[/red] {e}")
+        raise typer.Exit(1) from e
+
+    report = diagnose_apis(cfg, live=live)
+
+    table = Table(
+        title=f"ClassIn Toolkit API diagnostics: {'live' if report.live else 'offline'}"
+    )
+    table.add_column("상태", no_wrap=True)
+    table.add_column("서비스", no_wrap=True)
+    table.add_column("점검")
+    table.add_column("내용")
+    table.add_column("다음 조치")
+
+    for item in report.items:
+        table.add_row(
+            _diagnostic_status_label(item),
+            item.service,
+            item.check,
+            item.detail,
+            item.next_step or "-",
+        )
+    console.print(table)
+
+    if report.ready:
+        console.print("[green]api diagnostics passed[/green]")
+        if report.warnings:
+            console.print(f"[yellow]warnings[/yellow] {len(report.warnings)}개는 확인하세요.")
+        return
+
+    console.print(f"[red]api diagnostics failed[/red] 해결 필요한 항목 {len(report.blockers)}개")
+    raise typer.Exit(1)
+
+
 @app.command("ui")
 def ui_cmd(
     config: Path = typer.Option(Path("config.yaml"), "--config"),
@@ -327,6 +375,17 @@ def _status_label(item: ReadinessItem) -> str:
         "warn": "[yellow]WARN[/yellow]",
         "missing": "[red]MISSING[/red]",
         "blocked": "[magenta]BLOCKED[/magenta]",
+    }
+    return labels[item.status]
+
+
+def _diagnostic_status_label(item: DiagnosticItem) -> str:
+    labels = {
+        "ok": "[green]OK[/green]",
+        "warn": "[yellow]WARN[/yellow]",
+        "missing": "[red]MISSING[/red]",
+        "failed": "[red]FAILED[/red]",
+        "skipped": "[cyan]SKIP[/cyan]",
     }
     return labels[item.status]
 

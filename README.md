@@ -39,6 +39,7 @@ classin-toolkit import-exam-results samples/exam_results_sample.csv --exam-name 
 classin-toolkit sweep-missing-exam --exam-name "4월 월말평가" --exam-date 2026-04-24
 classin-toolkit weekly-reports
 classin-toolkit check-ready --mode local-demo
+classin-toolkit diagnose-apis --live
 
 # 수동 오더 라인
 classin-toolkit agent    # 원장 대화형 AI 어시스턴트
@@ -58,6 +59,7 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 | 자동 (MVP2) | `classin-toolkit weekly-reports` | 학생별 주간 리포트 Notion 페이지 |
 | 자동 (SSO)  | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | ClassIn 앱 호출 링크 |
 | 점검 | `classin-toolkit check-ready --mode local-demo` | 테스트 단계별 API 키·DB ID 누락 확인 |
+| 점검 | `classin-toolkit diagnose-apis [--live]` | ClassIn/Notion/Claude/Aligo 연결을 비파괴 probe로 확인 |
 | 수동 (Agent) | `classin-toolkit agent` | 원장/교사 자연어 질문 → Claude tool-use (미제출·미응시 조회 포함) |
 | 수동 (UI) | `classin-toolkit ui` | 로컬 브라우저에서 리포트·sweep·메모·AI 질문 실행 |
 
@@ -68,8 +70,8 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 - [x] MVP2: 주간 학생별 개인화 리포트 → Notion 페이지 + 학부모 문구
 - [x] 시험 결과 import + 기존 학생 Master 병합 + 미응시 sweep
 - [x] 에이전트: tool-use 채팅 (수동 오더, 시험 미응시 조회 포함)
+- [x] LMS 스케줄 생성 체인 (Unit/Classroom/Homework Activity/releaseActivity) Layer 1 + core engine mock 검증
 - [ ] 실제 카톡 알림톡 연동 (템플릿 심사 후 Standard 티어)
-- [ ] LMS 숙제 생성 체인 (Unit/Classroom/Activity/releaseActivity) 구현
 - [ ] Notion DB 5종 스키마 세팅 (학원별 1회) — [docs/12_notion_schema.md](docs/12_notion_schema.md)
 - [ ] 파일럿 학원 1곳 확보 → 실 데이터 검증
 
@@ -85,16 +87,20 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 
 ## ClassIn API 매핑 (요약)
 
-- 단일 진입점: `POST https://api.eeo.cn/partner/api/course.api.php?action=<ACTION>`
-- 인증: v2 MD5 서명 — 헤더 `X-EEO-UID` / `X-EEO-TS` / `X-EEO-SIGN`
-- 응답: `{ data, error_info: { errno, error } }`
+- v1: `POST https://api.eeo.cn/partner/api/course.api.php?action=<ACTION>`
+  - 인증: form body `SID` / `safeKey=MD5(SECRET+timeStamp)` / `timeStamp`
+  - 성공: `error_info.errno == 1`
+- v2(LMS): `POST https://api.eeo.cn/lms/...`
+  - 인증: 헤더 `X-EEO-UID` / `X-EEO-TS` / `X-EEO-SIGN`
+  - 성공: 최상위 `code == 1`
 - Webhook: 1 엔드포인트, `Cmd` 디스크리미네이터, `SafeKey` 필드 검증
 - 전체 스펙: [`docs/11_api_integration.md`](docs/11_api_integration.md)
 
 ## 다음 할 일
 
-1. ClassIn 담당자에게 `datasub/publicfield.html` 내 SafeKey 정확 알고리즘 확인
-2. Notion DB 5종 실제 생성 후 `config.yaml` 의 DB ID 채우기
-3. 5 페르소나 페이크 데이터로 MVP2 리포트 차별화 수동 검증
-4. 파일럿 학원 확보 → 실 Webhook 스트림 1~2주 캡처
-5. `cloudflared` 패키징 + Windows 작업 스케줄러 스크립트 정리
+1. `releaseActivity` 의 단일/복수 필드명(`activityId` vs `activityIds`) 실 API로 확인
+2. `config.yaml` 의 `classin.teacher_uids` 에 실제 교사명→UID 매핑 입력
+3. Notion DB 5종 실제 생성 후 `config.yaml` 의 DB ID 채우기
+4. 5 페르소나 페이크 데이터로 MVP2 리포트 차별화 수동 검증
+5. 파일럿 학원 확보 → 실 Webhook 스트림 1~2주 캡처
+6. `cloudflared` 패키징 + Windows 작업 스케줄러 스크립트 정리

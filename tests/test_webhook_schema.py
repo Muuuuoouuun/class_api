@@ -34,6 +34,36 @@ def test_parse_homework_submit() -> None:
     assert event.Data.StudentInfo.Uid == 10001
 
 
+def test_parse_homework_submit_official_lms_student_keys() -> None:
+    event = parse_event(
+        {
+            "SID": 1,
+            "Cmd": "HomeworkSubmit",
+            "CourseID": 132323,
+            "Data": {
+                "ActivityId": 99001,
+                "StudentInfo": {
+                    "StudentUid": 10001,
+                    "StudentName": "박성실",
+                    "StudentAccount": "010-0000-0001",
+                },
+                "TeacherInfo": {
+                    "TeacherUid": 20001,
+                    "TeacherName": "김선생",
+                    "TeacherAccount": "teacher@demo.kr",
+                },
+            },
+        }
+    )
+    assert isinstance(event, HomeworkSubmitEvent)
+    assert event.class_id is None
+    assert event.Data.StudentInfo is not None
+    assert event.Data.StudentInfo.Uid == 10001
+    assert event.Data.StudentInfo.Name == "박성실"
+    assert event.Data.TeacherInfo is not None
+    assert event.Data.TeacherInfo.Uid == 20001
+
+
 def test_parse_end_summary_aggregations() -> None:
     event = parse_event(_load("end_summary_sample.json"))
     assert isinstance(event, EndEvent)

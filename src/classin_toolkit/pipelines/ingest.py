@@ -72,7 +72,7 @@ async def ingest_homework_submit(event: HomeworkSubmitEvent, cfg: AppConfig) -> 
         log.warning("homework submit without StudentInfo.Uid event=%s", event.Cmd)
         return
     repo.patch_lesson_record(
-        lesson_id=event.class_id or "",
+        lesson_id=event.class_id,
         student_classin_id=str(sid),
         homework_submitted=True,
         homework_submitted_late=bool(event.Data.IsSubmitLate),
@@ -86,7 +86,8 @@ async def ingest_homework_score(event: HomeworkScoreEvent, cfg: AppConfig) -> No
     if not sid:
         return
     repo.patch_lesson_record(
-        lesson_id=event.class_id or "",
+        lesson_id=event.class_id,
         student_classin_id=str(sid),
         homework_score=event.Data.Score,
+        homework_activity_id=str(event.Data.ActivityId),
     )

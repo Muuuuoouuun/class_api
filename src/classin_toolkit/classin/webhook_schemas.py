@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # -------------- common base --------------
 
@@ -168,6 +168,18 @@ class HomeworkParty(BaseModel):
     Uid: int | None = None
     Name: str | None = None
     Account: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_official_lms_keys(cls, data: Any) -> Any:
+        """Normalize official LMS keys like StudentUid/TeacherUid to Uid."""
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        out.setdefault("Uid", out.get("StudentUid") or out.get("TeacherUid"))
+        out.setdefault("Name", out.get("StudentName") or out.get("TeacherName"))
+        out.setdefault("Account", out.get("StudentAccount") or out.get("TeacherAccount"))
+        return out
 
 
 class HomeworkSubmitData(BaseModel):

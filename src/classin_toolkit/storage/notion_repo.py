@@ -237,7 +237,7 @@ class NotionRepo:
     def patch_lesson_record(
         self,
         *,
-        lesson_id: str,
+        lesson_id: str | None,
         student_classin_id: str,
         camera_minutes: float | None = None,
         hand_raise: int | None = None,
@@ -252,17 +252,22 @@ class NotionRepo:
         if not student:
             log.warning("patch skipped — no student for %s", student_classin_id)
             return None
-        page_id = self._find_lesson_row(lesson_id, student.page_id)
+        page_id = None
+        if lesson_id:
+            page_id = self._find_lesson_row(lesson_id, student.page_id)
+        if not page_id and homework_activity_id:
+            page_id = self._find_lesson_row_by_homework_activity(
+                homework_activity_id, student.page_id
+            )
         if not page_id:
             # Attendance 가 아직 안 들어왔을 수 있다 (HomeworkSubmit 이 먼저 오는 경우).
             # 최소 필드로 새 row 생성.
-            page = self._nc.pages.create(
-                parent={"database_id": self.lessons_db},
-                properties={
-                    PROP_LESSON_CLASSIN_LESSON_ID: _rich(lesson_id),
-                    PROP_LESSON_STUDENT: {"relation": [{"id": student.page_id}]},
-                },
-            )
+            props = {PROP_LESSON_STUDENT: {"relation": [{"id": student.page_id}]}}
+            if lesson_id:
+                props[PROP_LESSON_CLASSIN_LESSON_ID] = _rich(lesson_id)
+            if homework_activity_id:
+                props[PROP_LESSON_ACTIVITY_ID] = _rich(homework_activity_id)
+            page = self._nc.pages.create(parent={"database_id": self.lessons_db}, properties=props)
             page_id = page["id"]
 
         props: dict = {}
@@ -295,6 +300,28 @@ class NotionRepo:
                     {
                         "property": PROP_LESSON_CLASSIN_LESSON_ID,
                         "rich_text": {"equals": str(lesson_id)},
+                    },
+                    {
+                        "property": PROP_LESSON_STUDENT,
+                        "relation": {"contains": student_page_id},
+                    },
+                ]
+            },
+            page_size=1,
+        )
+        items = res.get("results", [])
+        return items[0]["id"] if items else None
+
+    def _find_lesson_row_by_homework_activity(
+        self, homework_activity_id: str, student_page_id: str
+    ) -> str | None:
+        res = self._nc.databases.query(
+            database_id=self.lessons_db,
+            filter={
+                "and": [
+                    {
+                        "property": PROP_LESSON_ACTIVITY_ID,
+                        "rich_text": {"equals": str(homework_activity_id)},
                     },
                     {
                         "property": PROP_LESSON_STUDENT,
