@@ -98,7 +98,7 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 
 ## 다음 할 일
 
-1. `releaseActivity` 의 단일/복수 필드명(`activityId` vs `activityIds`) 실 API로 확인
+1. 빈 숙제 초안을 게시하려면 필요한 숙제 콘텐츠 입력 API 또는 대시보드 작성 절차 확인
 2. `config.yaml` 의 `classin.teacher_uids` 에 실제 교사명→UID 매핑 입력
 3. Notion DB 5종 실제 생성 후 `config.yaml` 의 DB ID 채우기
 4. 5 페르소나 페이크 데이터로 MVP2 리포트 차별화 수동 검증

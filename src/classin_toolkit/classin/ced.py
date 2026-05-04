@@ -266,14 +266,17 @@ class CEDClient:
     ) -> Any:
         """LMS releaseActivity — 활동 초안을 게시한다."""
         if isinstance(activity_ids, int):
-            body: dict[str, Any] = {"courseId": int(course_id), "activityId": activity_ids}
+            ids = [activity_ids]
         else:
             ids = [int(activity_id) for activity_id in activity_ids]
-            if len(ids) == 1:
-                body = {"courseId": int(course_id), "activityId": ids[0]}
-            else:
-                body = {"courseId": int(course_id), "activityIds": ids}
-        return self._c.call_v2("/lms/activity/release", body)
+        results = [
+            self._c.call_v2(
+                "/lms/activity/release",
+                {"courseId": int(course_id), "activityId": activity_id},
+            )
+            for activity_id in ids
+        ]
+        return results[0] if len(results) == 1 else results
 
     def add_activity_students(
         self,

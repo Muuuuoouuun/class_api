@@ -88,6 +88,7 @@ class NotionRepo:
         self.reports_db = reports_db
         self.memos_db = memos_db
         self.exams_db = exams_db
+        self._data_source_ids: dict[str, str] = {}
 
     @classmethod
     def from_config(cls, cfg: AppConfig) -> "NotionRepo":
@@ -103,7 +104,7 @@ class NotionRepo:
     # ============== Student ==============
 
     def find_student_by_classin_id(self, classin_id: str) -> StudentRecord | None:
-        res = self._nc.databases.query(
+        res = self._query_database(
             database_id=self.students_db,
             filter={
                 "property": PROP_STUDENT_CLASSIN_ID,
@@ -163,7 +164,7 @@ class NotionRepo:
             kwargs: dict = {"database_id": self.students_db, "page_size": 100}
             if cursor:
                 kwargs["start_cursor"] = cursor
-            res = self._nc.databases.query(**kwargs)
+            res = self._query_database(**kwargs)
             for page in res.get("results", []):
                 props = page["properties"]
                 cid = _plain(props.get(PROP_STUDENT_CLASSIN_ID))
@@ -293,7 +294,7 @@ class NotionRepo:
         return page_id
 
     def _find_lesson_row(self, lesson_id: str, student_page_id: str) -> str | None:
-        res = self._nc.databases.query(
+        res = self._query_database(
             database_id=self.lessons_db,
             filter={
                 "and": [
@@ -315,7 +316,7 @@ class NotionRepo:
     def _find_lesson_row_by_homework_activity(
         self, homework_activity_id: str, student_page_id: str
     ) -> str | None:
-        res = self._nc.databases.query(
+        res = self._query_database(
             database_id=self.lessons_db,
             filter={
                 "and": [
@@ -430,7 +431,7 @@ class NotionRepo:
                     "rich_text": {"equals": subject},
                 }
             )
-        res = self._nc.databases.query(
+        res = self._query_database(
             database_id=self.exams_db,
             filter={"and": filters},
             page_size=1,
@@ -618,11 +619,38 @@ class NotionRepo:
             query["page_size"] = 100
             if cursor:
                 query["start_cursor"] = cursor
-            res = self._nc.databases.query(**query)
+            res = self._query_database(**query)
             results.extend(res.get("results", []))
             if not res.get("has_more"):
                 return results
             cursor = res.get("next_cursor")
+
+    def _query_database(self, *, database_id: str, **kwargs: Any) -> dict[str, Any]:
+        if hasattr(self._nc.databases, "query"):
+            return self._nc.databases.query(database_id=database_id, **kwargs)
+        data_source_id = self._data_source_id(database_id)
+        return self._nc.data_sources.query(data_source_id=data_source_id, **kwargs)
+
+    def _data_source_id(self, database_id: str) -> str:
+        cached = self._data_source_ids.get(database_id)
+        if cached:
+            return cached
+
+        data_source_id = database_id
+        try:
+            database = self._nc.databases.retrieve(database_id=database_id)
+        except Exception:
+            # New Notion SDKs query data sources, while older config files may
+            # still store database IDs. If this is already a data source ID,
+            # retrieve will fail but query can proceed with the original value.
+            pass
+        else:
+            data_sources = database.get("data_sources") or database.get("dataSources") or []
+            if data_sources:
+                data_source_id = str(data_sources[0]["id"])
+
+        self._data_source_ids[database_id] = data_source_id
+        return data_source_id
 
     # ============== Report ==============
 

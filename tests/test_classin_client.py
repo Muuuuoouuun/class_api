@@ -179,3 +179,19 @@ def test_ced_create_non_class_activity_requires_activity_id() -> None:
             name="Homework",
             teacher_uid=3,
         )
+
+
+def test_ced_release_activity_uses_singular_activity_id_per_call() -> None:
+    fake = FakeClassInClient()
+    ced = CEDClient(fake)  # type: ignore[arg-type]
+
+    result = ced.release_activity(course_id=2001, activity_ids=[3001, 3002])
+
+    assert result == [
+        {"unitId": 99, "activityId": 88, "classId": 77},
+        {"unitId": 99, "activityId": 88, "classId": 77},
+    ]
+    assert fake.v2_calls == [
+        ("/lms/activity/release", {"courseId": 2001, "activityId": 3001}, {}),
+        ("/lms/activity/release", {"courseId": 2001, "activityId": 3002}, {}),
+    ]

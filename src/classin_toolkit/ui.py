@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
+from .api_diagnostics import DiagnosticReport, diagnose_apis
 from .config import AppConfig, DEFAULT_CONFIG_PATH, load_config
 from .notify.dispatcher import load_notification_history, notification_history_path
 from .pipelines.daily import render_daily
@@ -50,33 +51,53 @@ def create_app(
         cfg, error = state.load()
         return _status_payload(cfg, error, state.config_path)
 
+    @app.get("/api/diagnostics")
+    async def api_diagnostics(live: bool = False) -> dict:
+        cfg = _require_config(state)
+        report = diagnose_apis(cfg, live=live)
+        return _diagnostics_payload(report)
+
     @app.get("/api/missing-homework")
     async def api_missing_homework(
         window_hours: int = 24,
         lesson_id: str | None = None,
     ) -> dict:
         cfg = _require_config(state)
-        rows = query_missing_homework(
-            cfg,
-            window_hours=window_hours,
-            lesson_id=(lesson_id or "").strip() or None,
-        )
-        history = load_notification_history(cfg, limit=300)
+        _require_service_config(cfg, "Notion")
+        try:
+            rows = query_missing_homework(
+                cfg,
+                window_hours=window_hours,
+                lesson_id=(lesson_id or "").strip() or None,
+            )
+            history = load_notification_history(cfg, limit=300)
+        except Exception as exc:
+            raise _service_error("미제출 조회", exc) from exc
         return _missing_homework_payload(rows, history)
 
     @app.get("/api/notifications")
     async def api_notifications(limit: int = 80) -> dict:
         cfg = _require_config(state)
-        rows = load_notification_history(cfg, limit=limit)
+        try:
+            rows = load_notification_history(cfg, limit=limit)
+        except Exception as exc:
+            raise _service_error("알림 기록 조회", exc) from exc
         return {"ok": True, "items": rows, "summary": _notification_summary(rows)}
 
     @app.post("/api/render-daily")
     async def api_render_daily(request: Request) -> JSONResponse:
         cfg = _require_config(state)
+        _require_service_config(cfg, "Notion")
         payload = await _json_payload(request)
         raw_date = (payload.get("date") or "").strip()
-        target = date_cls.fromisoformat(raw_date) if raw_date else None
-        result = render_daily(cfg, target=target)
+        try:
+            target = date_cls.fromisoformat(raw_date) if raw_date else None
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="date는 YYYY-MM-DD 형식이어야 합니다.") from exc
+        try:
+            result = render_daily(cfg, target=target)
+        except Exception as exc:
+            raise _service_error("일일 현황 생성", exc) from exc
         if not result:
             return _ok("daily mode가 notion이라 HTML 생성을 건너뛰었습니다.")
         return _ok(
@@ -88,32 +109,48 @@ def create_app(
     @app.post("/api/generate-weekly-drafts")
     async def api_generate_weekly_drafts() -> JSONResponse:
         cfg = _require_config(state)
-        count = generate_drafts(cfg)
+        _require_service_config(cfg, "Notion")
+        try:
+            count = generate_drafts(cfg)
+        except Exception as exc:
+            raise _service_error("주간 드래프트 생성", exc) from exc
         return _ok(f"주간 드래프트 {count}건을 생성했습니다.", count=count)
 
     @app.post("/api/approve-weekly")
     async def api_approve_weekly(request: Request) -> JSONResponse:
         cfg = _require_config(state)
+        _require_service_config(cfg, "Notion")
         payload = await _json_payload(request)
         week = (payload.get("week") or "").strip()
         if not week:
             raise HTTPException(status_code=400, detail="week 값이 필요합니다.")
-        period_start = datetime.fromisoformat(week).replace(tzinfo=timezone.utc)
-        count = approve_all(cfg, period_start=period_start)
+        try:
+            period_start = datetime.fromisoformat(week).replace(tzinfo=timezone.utc)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="week는 YYYY-MM-DD 형식이어야 합니다.") from exc
+        try:
+            count = approve_all(cfg, period_start=period_start)
+        except Exception as exc:
+            raise _service_error("주간 리포트 승인", exc) from exc
         return _ok(f"주간 리포트 {count}건을 승인 처리했습니다.", count=count)
 
     @app.post("/api/sweep-missing-homework")
     async def api_sweep_missing_homework(request: Request) -> JSONResponse:
         cfg = _require_config(state)
+        _require_service_config(cfg, "Notion")
         payload = await _json_payload(request)
         window_hours = int(payload.get("window_hours") or 24)
         lesson_id = (payload.get("lesson_id") or "").strip() or None
-        count = sweep_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id)
+        try:
+            count = sweep_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id)
+        except Exception as exc:
+            raise _service_error("미제출 sweep", exc) from exc
         return _ok(f"미제출 알림 {count}건을 처리했습니다.", count=count)
 
     @app.post("/api/write-memo")
     async def api_write_memo(request: Request) -> JSONResponse:
         cfg = _require_config(state)
+        _require_service_config(cfg, "Notion")
         payload = await _json_payload(request)
         classin_id = (payload.get("classin_id") or "").strip()
         text = (payload.get("text") or "").strip()
@@ -122,23 +159,30 @@ def create_app(
             raise HTTPException(status_code=400, detail="classin_id와 text가 필요합니다.")
         if cfg.output.memo.mode == "off":
             return _ok("memo mode가 off라 기록을 건너뛰었습니다.")
-        page_id = NotionRepo.from_config(cfg).write_memo(
-            student_classin_id=classin_id,
-            text=text,
-            tag=tag,
-        )
+        try:
+            page_id = NotionRepo.from_config(cfg).write_memo(
+                student_classin_id=classin_id,
+                text=text,
+                tag=tag,
+            )
+        except Exception as exc:
+            raise _service_error("메모 저장", exc) from exc
         return _ok("메모를 저장했습니다.", page_id=page_id)
 
     @app.post("/api/agent")
     async def api_agent(request: Request) -> JSONResponse:
         cfg = _require_config(state)
+        _require_service_config(cfg, "Claude")
         payload = await _json_payload(request)
         question = (payload.get("question") or "").strip()
         if not question:
             raise HTTPException(status_code=400, detail="question 값이 필요합니다.")
         from .intelligence.agent import run_agent_turn
 
-        answer, _messages = run_agent_turn(cfg, [{"role": "user", "content": question}])
+        try:
+            answer, _messages = run_agent_turn(cfg, [{"role": "user", "content": question}])
+        except Exception as exc:
+            raise _service_error("AI 응답 생성", exc) from exc
         return _ok("AI 응답을 생성했습니다.", answer=answer)
 
     @app.get("/reports/{kind}/{filename}")
@@ -190,6 +234,28 @@ async def _json_payload(request: Request) -> dict[str, Any]:
 
 def _ok(message: str, **extra: Any) -> JSONResponse:
     return JSONResponse({"ok": True, "message": message, **extra})
+
+
+def _service_error(action: str, exc: Exception) -> HTTPException:
+    return HTTPException(status_code=502, detail=f"{action} 실패: {_safe_exception(exc)}")
+
+
+def _require_service_config(cfg: AppConfig, service: str) -> None:
+    blockers = [
+        item
+        for item in diagnose_apis(cfg, live=False).items
+        if item.service == service and item.status in ("missing", "failed")
+    ]
+    if not blockers:
+        return
+
+    detail = "; ".join(f"{item.check}: {item.detail}" for item in blockers[:3])
+    raise HTTPException(status_code=400, detail=f"{service} 설정이 필요합니다: {detail}")
+
+
+def _safe_exception(exc: Exception) -> str:
+    text = str(exc).strip() or exc.__class__.__name__
+    return " ".join(text.split())[:240]
 
 
 def _status_payload(
@@ -304,6 +370,30 @@ def _notification_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
         "dry_run": sum(1 for row in rows if row.get("status") == "dry_run"),
         "sent": sum(1 for row in rows if row.get("status") == "sent"),
         "failed": sum(1 for row in rows if row.get("status") == "failed"),
+    }
+
+
+def _diagnostics_payload(report: DiagnosticReport) -> dict[str, Any]:
+    statuses = ("ok", "warn", "missing", "failed", "skipped")
+    summary = {
+        status: sum(1 for item in report.items if item.status == status)
+        for status in statuses
+    }
+    return {
+        "ok": True,
+        "ready": report.ready,
+        "live": report.live,
+        "summary": summary,
+        "items": [
+            {
+                "service": item.service,
+                "check": item.check,
+                "status": item.status,
+                "detail": item.detail,
+                "next_step": item.next_step,
+            }
+            for item in report.items
+        ],
     }
 
 
@@ -457,6 +547,26 @@ def _render_shell(status: dict[str, Any]) -> str:
     button.secondary:hover {{
       background: #eef2f6;
     }}
+    button:disabled {{
+      cursor: progress;
+      opacity: .62;
+    }}
+    .panel-head {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }}
+    .panel-head h2 {{
+      margin: 0;
+    }}
+    .inline-actions {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }}
     .row {{
       display: grid;
       grid-template-columns: 1fr auto;
@@ -525,6 +635,39 @@ def _render_shell(status: dict[str, Any]) -> str:
     .status-pill.dry_run {{ color: #0f5f8c; background: #edf7ff; border-color: #b7dcf3; }}
     .status-pill.sent {{ color: var(--ok); background: #effaf4; border-color: rgba(22, 120, 75, .25); }}
     .status-pill.failed {{ color: var(--danger); background: #fff1f0; border-color: rgba(180, 35, 24, .25); }}
+    .status-pill.ok {{ color: var(--ok); background: #effaf4; border-color: rgba(22, 120, 75, .25); }}
+    .status-pill.warn {{ color: var(--accent); background: #fff8eb; border-color: #f3d2a1; }}
+    .status-pill.missing {{ color: var(--danger); background: #fff1f0; border-color: rgba(180, 35, 24, .25); }}
+    .status-pill.skipped {{ color: var(--muted); background: #f8fafc; border-color: var(--line); }}
+    .diagnostic-summary {{
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }}
+    .diagnostic-count {{
+      min-height: 58px;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfd;
+    }}
+    .diagnostic-count span {{
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+    }}
+    .diagnostic-count strong {{
+      display: block;
+      margin-top: 5px;
+      font-size: 18px;
+      line-height: 1.1;
+    }}
+    .diagnostic-count.ok strong {{ color: var(--ok); }}
+    .diagnostic-count.warn strong {{ color: var(--accent); }}
+    .diagnostic-count.failed strong,
+    .diagnostic-count.missing strong {{ color: var(--danger); }}
     .badge {{
       display: inline-flex;
       align-items: center;
@@ -564,8 +707,12 @@ def _render_shell(status: dict[str, Any]) -> str:
         align-items: flex-start;
         flex-direction: column;
       }}
-      .status-strip, .grid, .actions {{
+      .status-strip, .grid, .actions, .diagnostic-summary {{
         grid-template-columns: 1fr;
+      }}
+      .panel-head {{
+        align-items: flex-start;
+        flex-direction: column;
       }}
       main {{
         width: min(100vw - 20px, 720px);
@@ -595,6 +742,18 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     <section class="grid">
       <div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>API 연결 점검</h2>
+            <div class="inline-actions">
+              <button data-action="refreshDiagnostics" class="secondary">설정 점검</button>
+              <button data-action="runLiveDiagnostics">실 API 점검</button>
+            </div>
+          </div>
+          <div id="diagnosticSummary" class="diagnostic-summary"></div>
+          <div id="diagnosticTable"></div>
+        </div>
+
         <div class="panel">
           <h2>오늘 미제출 상황</h2>
           <div class="actions">
@@ -666,6 +825,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     const log = document.querySelector("#log");
     const statusNode = document.querySelector("#initial-status");
     let status = JSON.parse(statusNode.textContent);
+    let diagnostics = null;
 
     function writeLog(message, data) {{
       const now = new Date().toLocaleTimeString();
@@ -717,6 +877,10 @@ def _render_shell(status: dict[str, Any]) -> str:
         dry_run: "문구 생성",
         sent: "발송 완료",
         failed: "실패",
+        ok: "정상",
+        warn: "확인",
+        missing: "누락",
+        skipped: "건너뜀",
       }};
       return labels[status] || status || "-";
     }}
@@ -768,6 +932,89 @@ def _render_shell(status: dict[str, Any]) -> str:
         throw new Error(notifyData.detail || "notification load failed");
       }}
       renderNotifications(notifyData);
+    }}
+
+    async function loadDiagnostics(live) {{
+      const summaryTarget = document.querySelector("#diagnosticSummary");
+      const tableTarget = document.querySelector("#diagnosticTable");
+      if (!status.ok) {{
+        summaryTarget.innerHTML = "";
+        tableTarget.innerHTML = `<div class="empty">config.yaml을 읽은 뒤 점검할 수 있습니다.</div>`;
+        return;
+      }}
+      const response = await fetch(`/api/diagnostics?live=${{live ? "true" : "false"}}`);
+      const data = await response.json();
+      if (!response.ok || data.ok === false) {{
+        throw new Error(data.detail || "diagnostics failed");
+      }}
+      diagnostics = data;
+      renderDiagnostics(data);
+      return data;
+    }}
+
+    function canLoadNotion(data) {{
+      const items = (data && data.items) || [];
+      return !items.some((item) =>
+        item.service === "Notion" && ["missing", "failed"].includes(item.status)
+      );
+    }}
+
+    function renderBlockedSituation() {{
+      renderMissing({{ summary: {{}}, items: [] }});
+      document.querySelector("#missingTable").innerHTML =
+        `<div class="empty">Notion 설정을 먼저 채워야 조회할 수 있습니다.</div>`;
+      renderNotifications({{ items: [] }});
+    }}
+
+    function renderDiagnostics(data) {{
+      const summary = data.summary || {{}};
+      const labels = [
+        ["ok", "정상"],
+        ["warn", "확인"],
+        ["missing", "누락"],
+        ["failed", "실패"],
+        ["skipped", "건너뜀"],
+      ];
+      document.querySelector("#diagnosticSummary").innerHTML = labels
+        .map(([key, label]) => `
+          <div class="diagnostic-count ${{key}}">
+            <span>${{label}}</span>
+            <strong>${{summary[key] || 0}}</strong>
+          </div>
+        `)
+        .join("");
+
+      const items = data.items || [];
+      const target = document.querySelector("#diagnosticTable");
+      if (!items.length) {{
+        target.innerHTML = `<div class="empty">점검 결과가 없습니다.</div>`;
+        return;
+      }}
+      target.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>서비스</th>
+                <th>점검</th>
+                <th>상태</th>
+                <th>내용</th>
+                <th>다음 조치</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${{items.map((item) => `
+                <tr>
+                  <td>${{escapeHtml(item.service)}}</td>
+                  <td>${{escapeHtml(item.check)}}</td>
+                  <td>${{statusPill(item.status)}}</td>
+                  <td>${{escapeHtml(item.detail || "-")}}</td>
+                  <td>${{escapeHtml(item.next_step || "-")}}</td>
+                </tr>
+              `).join("")}}
+            </tbody>
+          </table>
+        </div>`;
     }}
 
     function renderMissing(data) {{
@@ -886,6 +1133,12 @@ def _render_shell(status: dict[str, Any]) -> str:
         await loadSituation();
       }},
       async refreshMissing() {{
+        const data = await loadDiagnostics(false);
+        if (!canLoadNotion(data)) {{
+          renderBlockedSituation();
+          writeLog("Notion 설정을 먼저 채워야 조회할 수 있습니다.");
+          return;
+        }}
         await loadSituation();
         writeLog("미제출/알림 상황을 갱신했습니다.");
       }},
@@ -905,8 +1158,27 @@ def _render_shell(status: dict[str, Any]) -> str:
       }},
       async refreshStatus() {{
         await refreshStatus();
-        await loadSituation();
+        const data = await loadDiagnostics(false);
+        if (canLoadNotion(data)) {{
+          await loadSituation();
+        }} else {{
+          renderBlockedSituation();
+        }}
         writeLog("상태를 갱신했습니다.");
+      }},
+      async refreshDiagnostics() {{
+        const data = await loadDiagnostics(false);
+        writeLog("설정 점검을 완료했습니다.", {{
+          ready: data.ready,
+          summary: data.summary,
+        }});
+      }},
+      async runLiveDiagnostics() {{
+        const data = await loadDiagnostics(true);
+        writeLog("실 API 점검을 완료했습니다.", {{
+          ready: data.ready,
+          summary: data.summary,
+        }});
       }},
     }};
 
@@ -926,7 +1198,12 @@ def _render_shell(status: dict[str, Any]) -> str:
     }});
 
     renderStatus(status);
-    loadSituation().catch((error) => writeLog(error.message));
+    loadDiagnostics(false)
+      .then((data) => {{
+        if (canLoadNotion(data)) return loadSituation();
+        renderBlockedSituation();
+      }})
+      .catch((error) => writeLog(error.message));
   </script>
 </body>
 </html>"""

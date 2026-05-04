@@ -97,7 +97,7 @@ MD5 → X-EEO-SIGN 헤더
 - `POST /lms/unit/create` — 단원 생성. `data.unitId`
 - `POST /lms/activity/createClass` — 권장课堂 활동 생성. `data.activityId`, `data.classId`
 - `POST /lms/activity/createActivityNoClass` — 숙제/퀴즈/자료 등 비课堂 활동 초안 생성. `activityType=2` 가 숙제.
-- `POST /lms/activity/release` — 활동 게시. 문서 표는 `activityIds`, 예시는 `activityId` 라서 단일/복수 모두 주의.
+- `POST /lms/activity/release` — 활동 게시. 실 API 확인 결과 단일 `activityId` 필드 필요. 복수 게시도 client에서 단일 호출을 반복한다.
 - `POST /lms/activity/addStudent` / `deleteStudent` — 활동 대상 학생 관리.
 
 ### 4.4 SSO (v1)
@@ -124,6 +124,7 @@ classin:
 - `schedule_api: lms`: `addCourse` → `createUnit` → `createClass` → 숙제가 있으면 `createActivityNoClass` → `releaseActivity`
 - `schedule_api: legacy`: `addCourse` → `addCourseClass`; 숙제가 있으면 LMS homework activity 만 별도로 생성한다.
 - LMS `createClass` 와 homework 생성에는 `teacherUid` 가 필요하므로 `teacher_uids` 또는 `default_teacher_uid` 를 채워야 한다.
+- `createActivityNoClass(activityType=2)` 로 빈 숙제 초안은 만들 수 있지만, 실 API에서 내용 없는 숙제를 `releaseActivity` 하면 `errno=29601 内容不能为空` 이 반환된다. ClassIn 대시보드에서 숙제 내용을 채우거나 숙제 콘텐츠 작성 API가 필요하다.
 
 ## 5. Datasub Webhook
 
@@ -198,7 +199,8 @@ classin:
 | `HomeworkSubmit` 필드명 (`Data.ActivityId/StudentInfo.Uid/IsSubmitLate`) | ✅ 확정 | coursedata.html |
 | `End` 내부 `handsupEnd/awardEnd/inoutEnd` 키 구조 | ⚠️ 추정 | 카테고리 존재는 확정, 세부 키는 샘플 페이로드 확인 필요 |
 | `SafeKey` 계산식 | ✅ 확정 | `MD5(SECRET+TimeStamp)` |
-| `releaseActivity` 단일/복수 필드명 | ⚠️ 추정 | 문서 표는 `activityIds`, 예시는 `activityId` |
+| `releaseActivity` 필드명 | ✅ 확정 | 실 API상 `activityId` 필요. `activityIds` 배열은 `field "activityId" is not set` |
+| 빈 숙제 초안 release | ✅ 확정 | `createActivityNoClass(activityType=2)` 후 내용 없이 release 시 `errno=29601 内容不能为空` |
 | Webhook 재전송 정책 | ❌ 미확인 | ClassIn 담당자 확인 필요 |
 
 `⚠️` 항목은 실 샘플 페이로드로 alias 조정하면 바로 확정 가능.
