@@ -1,25 +1,41 @@
 # classin-toolkit skills
 
-`classin-toolkit` 운영·개발용 Claude 스킬 모음. 미래의 Claude가 이 레포에서 작업할 때 어떤 워크플로우/Layer를 어떻게 다뤄야 할지 알려주는 reference 문서다.
+`classin-toolkit` 운영·개발용 Claude/Codex 스킬 모음. 미래의 AI 에이전트가 이 레포에서 작업할 때 어떤 워크플로우/Layer를 어떻게 다뤄야 할지 알려주는 reference 문서다.
+
+가장 먼저 쓰는 진입점은 [`classin-academy-ops`](classin-academy-ops/SKILL.md) 다. 전체 운영 판단, API 진단, 안전 게이트, Claude/Codex skill 과 plugin 방향을 라우팅한다.
 
 ## 설치
 
-스킬은 `~/.claude/skills/<name>/SKILL.md` 위치에서 자동 로드된다. 두 가지 방법:
+스킬은 Claude 또는 Codex skills 디렉터리에 symlink 해서 사용한다. 레포가 갱신되면 skill 내용도 즉시 반영된다.
 
 ```bash
-# A. 심볼릭 링크 (레포 갱신 즉시 반영)
-./skills/install.sh
+# Claude 기본 설치
+./skills/install.sh claude
 
-# B. 수동 복사
+# Codex 설치
+./skills/install.sh codex
+
+# 둘 다 설치
+./skills/install.sh both
+
+# 수동 복사 예시
 cp -r skills/classin-* ~/.claude/skills/
+cp -r skills/classin-* ~/.codex/skills/
 ```
 
 확인:
 ```bash
 ls ~/.claude/skills/ | grep classin-
+ls ~/.codex/skills/ | grep classin-
 ```
 
 ## 스킬 목록
+
+### 마스터 진입점
+
+| 스킬 | 트리거 |
+|---|---|
+| [`classin-academy-ops`](classin-academy-ops/SKILL.md) | 설치·진단·운영·코드수정·skill/plugin 패키징을 시작할 때 전체 라우터 |
 
 ### 운영자 라인 (원장/컨설턴트가 toolkit 사용)
 

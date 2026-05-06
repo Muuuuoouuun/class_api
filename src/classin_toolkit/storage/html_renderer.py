@@ -78,6 +78,7 @@ class HtmlWeeklyRenderer:
             ),
             generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
             lessons=inp.lessons,
+            exam_results=inp.exam_results or [],
             attendance_rate=att_rate,
             hw_rate=hw_rate,
             summary_html=summary_html,

@@ -114,12 +114,24 @@ def test_weekly_draft_html(tmp_path) -> None:
         prev_week_lessons=[],
         summary_markdown="## 이번 주 요약\n박성실 학생은 출석률 100%.\n\n- 손들기 6회\n- 트로피 2개",
         parent_message="안녕하세요 성실 어머님, 이번 주 수고하셨어요.",
+        exam_results=[
+            {
+                "exam_date": "2026-04-24",
+                "exam_name": "4월 월말평가",
+                "subject": "수학",
+                "score": 92,
+                "max_score": 100,
+                "attended": True,
+            }
+        ],
     )
     result = HtmlWeeklyRenderer().write_draft(cfg, inp)
     assert result.path is not None and result.path.exists()
     body = result.path.read_text(encoding="utf-8")
     assert "박성실" in body
     assert "<h3>이번 주 요약</h3>" in body  # md_to_html h2 -> h3
+    assert "4월 월말평가" in body
+    assert "92" in body
     assert "성실 어머님" in body
 
 

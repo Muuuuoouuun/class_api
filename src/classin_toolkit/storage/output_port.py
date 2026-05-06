@@ -37,6 +37,7 @@ class WeeklyRenderInput:
     prev_week_lessons: list[dict]
     summary_markdown: str            # Claude 생성
     parent_message: str              # Claude 생성 카톡 문구
+    exam_results: list[dict] | None = None
 
 
 @dataclass

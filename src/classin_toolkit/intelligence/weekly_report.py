@@ -31,6 +31,7 @@ def build_weekly_report(
     period_end: datetime,
     lessons: list[dict],
     prev_week_lessons: list[dict] | None = None,
+    exam_results: list[dict] | None = None,
 ) -> WeeklyReport:
     system = load_prompt("weekly_report")
     payload = {
@@ -46,6 +47,7 @@ def build_weekly_report(
         },
         "this_week_lessons": lessons,
         "prev_week_lessons": prev_week_lessons or [],
+        "this_week_exams": exam_results or [],
     }
     text = run_structured(
         cfg,

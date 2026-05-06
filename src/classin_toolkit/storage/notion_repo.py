@@ -517,6 +517,35 @@ class NotionRepo:
         )
         return [_row_summary(p) for p in pages]
 
+    def student_exam_results(
+        self, *, student_page_id: str, since: datetime, until: datetime
+    ) -> list[dict]:
+        if not self.exams_db:
+            log.warning("exams_db not configured — skip student_exam_results")
+            return []
+
+        pages = self._query_all(
+            database_id=self.exams_db,
+            filter={
+                "and": [
+                    {
+                        "property": PROP_EXAM_STUDENT,
+                        "relation": {"contains": student_page_id},
+                    },
+                    {
+                        "property": PROP_EXAM_DATE,
+                        "date": {"on_or_after": since.date().isoformat()},
+                    },
+                    {
+                        "property": PROP_EXAM_DATE,
+                        "date": {"on_or_before": until.date().isoformat()},
+                    },
+                ]
+            },
+            sorts=[{"property": PROP_EXAM_DATE, "direction": "ascending"}],
+        )
+        return self._attach_student_metadata([_exam_row_summary(p) for p in pages])
+
     def list_exam_results(
         self,
         *,

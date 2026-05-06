@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import html
 import json
+import tempfile
 from datetime import date as date_cls
 from datetime import datetime, timezone
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +20,9 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from .api_diagnostics import DiagnosticReport, diagnose_apis
 from .config import AppConfig, DEFAULT_CONFIG_PATH, load_config
 from .notify.dispatcher import load_notification_history, notification_history_path
+from .pipelines.core_engine import run_core_engine
 from .pipelines.daily import render_daily
+from .pipelines.exams import import_exam_results
 from .pipelines.missing_homework import query_missing_homework, sweep_missing_homework
 from .pipelines.weekly import approve_all, generate_drafts
 from .storage.notion_repo import NotionRepo
@@ -56,6 +60,28 @@ def create_app(
         cfg = _require_config(state)
         report = diagnose_apis(cfg, live=live)
         return _diagnostics_payload(report)
+
+    @app.get("/api/schedule")
+    async def api_schedule(
+        start: str | None = None,
+        days: int = 7,
+    ) -> dict:
+        cfg = _require_config(state)
+        _require_service_config(cfg, "Notion")
+        try:
+            start_date = date_cls.fromisoformat(start) if start else date_cls.today()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="start는 YYYY-MM-DD 형식이어야 합니다.") from exc
+        if days < 1 or days > 62:
+            raise HTTPException(status_code=400, detail="days는 1~62 사이여야 합니다.")
+
+        since = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+        until = since + timedelta(days=days)
+        try:
+            rows = NotionRepo.from_config(cfg).lesson_records(since=since, until=until)
+        except Exception as exc:
+            raise _service_error("스케줄 조회", exc) from exc
+        return _schedule_payload(rows, start_date=start_date, days=days)
 
     @app.get("/api/missing-homework")
     async def api_missing_homework(
@@ -147,6 +173,120 @@ def create_app(
             raise _service_error("미제출 sweep", exc) from exc
         return _ok(f"미제출 알림 {count}건을 처리했습니다.", count=count)
 
+    @app.post("/api/parse-schedule-dry-run")
+    async def api_parse_schedule_dry_run(request: Request) -> JSONResponse:
+        cfg = _require_config(state)
+        _require_service_config(cfg, "Claude")
+        payload = await _json_payload(request)
+        schedule_text = (payload.get("schedule_text") or "").strip()
+        if not schedule_text:
+            raise HTTPException(status_code=400, detail="schedule_text 값이 필요합니다.")
+        try:
+            result = run_core_engine(cfg, schedule_text=schedule_text, dry_run=True)
+        except Exception as exc:
+            raise _service_error("스케줄 dry-run", exc) from exc
+        return _ok(
+            "스케줄 dry-run을 완료했습니다.",
+            summary={
+                "courses": result.courses_created,
+                "lessons": result.lessons_created,
+                "homework": result.homework_created,
+                "errors": len(result.errors),
+            },
+            errors=result.errors,
+        )
+
+    @app.post("/api/create-schedule")
+    async def api_create_schedule(request: Request) -> JSONResponse:
+        cfg = _require_config(state)
+        _require_service_config(cfg, "Claude")
+        payload = await _json_payload(request)
+        schedule_text = (payload.get("schedule_text") or "").strip()
+        dry_run = bool(payload.get("dry_run", True))
+        if not schedule_text:
+            raise HTTPException(status_code=400, detail="schedule_text 값이 필요합니다.")
+        if not dry_run:
+            _require_service_config(cfg, "ClassIn")
+        try:
+            result = run_core_engine(cfg, schedule_text=schedule_text, dry_run=dry_run)
+        except Exception as exc:
+            raise _service_error("스케줄 생성", exc) from exc
+        return _ok(
+            "스케줄 검토를 완료했습니다." if dry_run else "수업과 숙제를 생성했습니다.",
+            summary={
+                "courses": result.courses_created,
+                "lessons": result.lessons_created,
+                "homework": result.homework_created,
+                "errors": len(result.errors),
+            },
+            errors=result.errors,
+            dry_run=dry_run,
+        )
+
+    @app.post("/api/generate-class-reports")
+    async def api_generate_class_reports(request: Request) -> JSONResponse:
+        cfg = _require_config(state)
+        _require_service_config(cfg, "Notion")
+        _require_service_config(cfg, "Claude")
+        payload = await _json_payload(request)
+        raw_week = (payload.get("week") or "").strip()
+        class_name = (payload.get("class_name") or "").strip() or None
+        reference = None
+        if raw_week:
+            try:
+                reference = datetime.fromisoformat(raw_week).replace(tzinfo=timezone.utc)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="week는 YYYY-MM-DD 형식이어야 합니다.") from exc
+        try:
+            count = generate_drafts(cfg, reference=reference, class_name=class_name)
+        except Exception as exc:
+            raise _service_error("반별 리포트 생성", exc) from exc
+        return _ok(
+            f"{class_name or '전체 반'} 리포트 드래프트 {count}건을 생성했습니다.",
+            count=count,
+            class_name=class_name,
+            week=raw_week,
+            includes=["출결", "숙제", "시험 점수"],
+        )
+
+    @app.post("/api/import-exam-results")
+    async def api_import_exam_results(request: Request) -> JSONResponse:
+        cfg = _require_config(state)
+        _require_service_config(cfg, "Notion")
+        payload = await _json_payload(request)
+        csv_text = (payload.get("csv_text") or "").strip()
+        if not csv_text:
+            raise HTTPException(status_code=400, detail="csv_text 값이 필요합니다.")
+
+        tmp_path = _temp_text_file(csv_text, suffix=".csv")
+        try:
+            result = import_exam_results(
+                cfg,
+                path=tmp_path,
+                exam_name=(payload.get("exam_name") or "").strip() or None,
+                exam_date=(payload.get("exam_date") or "").strip() or None,
+                class_name=(payload.get("class_name") or "").strip() or None,
+                source=(payload.get("source") or "").strip() or "ui-csv-import",
+                dry_run=bool(payload.get("dry_run", True)),
+            )
+        except Exception as exc:
+            raise _service_error("시험 결과 가져오기", exc) from exc
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        return _ok(
+            "시험 결과 dry-run을 완료했습니다." if result.dry_run else "시험 결과를 가져왔습니다.",
+            summary={
+                "total": result.total_rows,
+                "merged": result.merged_rows,
+                "unresolved": result.unresolved_rows,
+                "skipped": result.skipped_rows,
+                "errors": len(result.errors),
+            },
+            errors=result.errors[:20],
+            dry_run=result.dry_run,
+        )
+
     @app.post("/api/write-memo")
     async def api_write_memo(request: Request) -> JSONResponse:
         cfg = _require_config(state)
@@ -236,6 +376,15 @@ def _ok(message: str, **extra: Any) -> JSONResponse:
     return JSONResponse({"ok": True, "message": message, **extra})
 
 
+def _temp_text_file(text: str, *, suffix: str) -> Path:
+    tmp = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=suffix, delete=False)
+    try:
+        tmp.write(text)
+        return Path(tmp.name)
+    finally:
+        tmp.close()
+
+
 def _service_error(action: str, exc: Exception) -> HTTPException:
     return HTTPException(status_code=502, detail=f"{action} 실패: {_safe_exception(exc)}")
 
@@ -315,6 +464,82 @@ def _count_history_rows(path: Path) -> int:
     if not path.exists():
         return 0
     return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
+def _schedule_payload(rows: list[dict], *, start_date: date_cls, days: int) -> dict[str, Any]:
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (
+            row.get("date") or "",
+            row.get("lesson_classin_id") or "",
+            row.get("course_classin_id") or "",
+        )
+        item = grouped.setdefault(
+            key,
+            {
+                "date": row.get("date") or "",
+                "lesson_classin_id": row.get("lesson_classin_id") or "",
+                "course_classin_id": row.get("course_classin_id") or "",
+                "class_names": set(),
+                "student_count": 0,
+                "attendance": {"출석": 0, "지각": 0, "결석": 0, "미기록": 0},
+                "homework_done": 0,
+                "homework_missing": 0,
+                "homework_unknown": 0,
+                "students": [],
+            },
+        )
+        class_name = row.get("student_class_name")
+        if class_name:
+            item["class_names"].add(class_name)
+
+        attendance = row.get("attendance") or "미기록"
+        if attendance not in item["attendance"]:
+            item["attendance"][attendance] = 0
+        item["attendance"][attendance] += 1
+
+        homework_submitted = row.get("homework_submitted")
+        if homework_submitted is True:
+            item["homework_done"] += 1
+        elif homework_submitted is False:
+            item["homework_missing"] += 1
+        else:
+            item["homework_unknown"] += 1
+
+        item["student_count"] += 1
+        item["students"].append(
+            {
+                "student_classin_id": row.get("student_classin_id") or "",
+                "student_name": row.get("student_name") or "미등록",
+                "class_name": class_name or "",
+                "attendance": attendance,
+                "homework_submitted": homework_submitted,
+                "homework_late": row.get("homework_late"),
+                "homework_score": row.get("homework_score"),
+            }
+        )
+
+    items = []
+    for item in grouped.values():
+        item["class_names"] = sorted(item["class_names"])
+        item["students"].sort(key=lambda student: (student["class_name"], student["student_name"]))
+        items.append(item)
+    items.sort(key=lambda item: (item["date"], item["course_classin_id"], item["lesson_classin_id"]))
+
+    summary = {
+        "total_lessons": len(items),
+        "total_student_rows": len(rows),
+        "late": sum(item["attendance"].get("지각", 0) for item in items),
+        "absent": sum(item["attendance"].get("결석", 0) for item in items),
+        "homework_missing": sum(item["homework_missing"] for item in items),
+    }
+    return {
+        "ok": True,
+        "start": start_date.isoformat(),
+        "days": days,
+        "summary": summary,
+        "items": items,
+    }
 
 
 def _missing_homework_payload(rows: list[dict], history: list[dict[str, Any]]) -> dict[str, Any]:
@@ -422,6 +647,9 @@ def _render_shell(status: dict[str, Any]) -> str:
       --danger: #b42318;
       --ok: #16784b;
       --shadow: 0 1px 2px rgba(16, 24, 40, .07);
+      --nav: #111827;
+      --nav-muted: #cbd5e1;
+      --nav-line: rgba(255, 255, 255, .12);
     }}
     * {{ box-sizing: border-box; }}
     body {{
@@ -437,7 +665,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 18px 24px;
+      padding: 14px 18px;
       border-bottom: 1px solid var(--line);
       background: #ffffff;
     }}
@@ -451,11 +679,165 @@ def _render_shell(status: dict[str, Any]) -> str:
       width: min(1180px, calc(100vw - 32px));
       margin: 18px auto 32px;
     }}
+    .app-shell {{
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      min-height: 100vh;
+    }}
+    .sidebar {{
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 14px;
+      color: #f8fafc;
+      background: var(--nav);
+      border-right: 1px solid #0b1220;
+    }}
+    .brand {{
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      min-height: 40px;
+    }}
+    .brand-mark {{
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--nav-line);
+      border-radius: 8px;
+      background: #0f766e;
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+    }}
+    .brand h1 {{
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #fff;
+      font-size: 16px;
+    }}
+    .brand span {{
+      display: block;
+      margin-top: 3px;
+      color: var(--nav-muted);
+      font-size: 12px;
+    }}
+    .sidebar .tabs {{
+      display: grid;
+      gap: 5px;
+      margin: 0;
+      padding: 0;
+      overflow: visible;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }}
+    .sidebar .tab-button {{
+      justify-content: flex-start;
+      width: 100%;
+      min-height: 40px;
+      border-color: transparent;
+      color: var(--nav-muted);
+      padding: 8px 10px;
+      text-align: left;
+    }}
+    .sidebar .tab-button:hover {{
+      background: rgba(255, 255, 255, .08);
+      color: #fff;
+    }}
+    .sidebar .tab-button.active {{
+      border-color: rgba(255, 255, 255, .18);
+      background: #ffffff;
+      color: #172033;
+    }}
+    .sidebar-footer {{
+      display: grid;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 14px;
+      border-top: 1px solid var(--nav-line);
+    }}
+    .sidebar-footer .badge {{
+      width: fit-content;
+    }}
+    .last-updated {{
+      color: var(--nav-muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }}
+    .workspace {{
+      min-width: 0;
+    }}
+    .topbar {{
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: rgba(255, 255, 255, .94);
+      backdrop-filter: blur(10px);
+    }}
+    .topbar-title {{
+      display: grid;
+      gap: 4px;
+    }}
+    .topbar-title h2 {{
+      margin: 0;
+      font-size: 18px;
+    }}
+    .topbar-title span {{
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    .workspace main {{
+      width: auto;
+      margin: 0;
+      padding: 14px 18px 24px;
+    }}
     .status-strip {{
       display: grid;
       grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 10px;
-      margin-bottom: 14px;
+      gap: 8px;
+      margin-bottom: 10px;
+    }}
+    .tabs {{
+      display: flex;
+      gap: 6px;
+      margin: 0 0 14px;
+      padding: 4px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: var(--shadow);
+    }}
+    .tab-button {{
+      min-height: 36px;
+      flex: 0 0 auto;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      white-space: nowrap;
+    }}
+    .tab-button:hover {{
+      background: #eef2f6;
+      color: var(--text);
+    }}
+    .tab-button.active {{
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }}
+    .tab-panel {{
+      display: none;
+    }}
+    .tab-panel.active {{
+      display: block;
     }}
     .metric, .panel {{
       background: var(--panel);
@@ -464,8 +846,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       box-shadow: var(--shadow);
     }}
     .metric {{
-      padding: 12px 14px;
-      min-height: 74px;
+      padding: 9px 11px;
+      min-height: 58px;
     }}
     .metric span {{
       display: block;
@@ -475,8 +857,8 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
     .metric strong {{
       display: block;
-      margin-top: 6px;
-      font-size: 22px;
+      margin-top: 4px;
+      font-size: 18px;
       line-height: 1.1;
     }}
     .metric.warn strong {{ color: var(--accent); }}
@@ -484,14 +866,14 @@ def _render_shell(status: dict[str, Any]) -> str:
     .grid {{
       display: grid;
       grid-template-columns: 1.2fr .8fr;
-      gap: 14px;
+      gap: 10px;
       align-items: start;
     }}
     .panel {{
-      padding: 16px;
+      padding: 12px;
     }}
     .panel + .panel {{
-      margin-top: 14px;
+      margin-top: 10px;
     }}
     h2 {{
       margin: 0 0 12px;
@@ -503,6 +885,133 @@ def _render_shell(status: dict[str, Any]) -> str:
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
     }}
+    .actions.compact {{
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }}
+    .action-layout {{
+      display: grid;
+      gap: 10px;
+      align-items: start;
+    }}
+    .action-grid {{
+      display: grid;
+      gap: 8px;
+    }}
+    .core-panel {{
+      padding: 12px;
+    }}
+    .core-panel .panel-head {{
+      margin-bottom: 10px;
+    }}
+    .core-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }}
+    .core-button {{
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      grid-template-rows: auto auto;
+      gap: 4px 9px;
+      align-content: center;
+      min-height: 92px;
+      border-color: var(--line);
+      background: #fff;
+      color: var(--text);
+      padding: 12px;
+      text-align: left;
+    }}
+    .core-button:hover {{
+      background: #eef2f6;
+      color: var(--text);
+    }}
+    .core-button strong {{
+      display: block;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-size: 14px;
+      line-height: 1.25;
+    }}
+    .core-button span {{
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      font-weight: 500;
+    }}
+    .core-number {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      grid-row: 1 / span 2;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      color: #fff;
+      background: var(--primary);
+      font-size: 13px;
+      font-weight: 800;
+    }}
+    .action-controls {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }}
+    .action-controls .panel {{
+      margin-top: 0;
+      padding: 12px;
+    }}
+    .action-controls .panel-head {{
+      margin-bottom: 10px;
+    }}
+    .action-button {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 66px;
+      border-color: var(--line);
+      background: #fff;
+      color: var(--text);
+      text-align: left;
+    }}
+    .action-button:hover {{
+      background: #eef2f6;
+      color: var(--text);
+    }}
+    .action-button strong,
+    .action-button span {{
+      display: block;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }}
+    .action-button span {{
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      font-weight: 500;
+    }}
+    .action-tag {{
+      display: inline-flex;
+      align-items: center;
+      align-self: center;
+      min-height: 26px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 650;
+      white-space: nowrap;
+    }}
+    .mini-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }}
     label {{
       display: grid;
       gap: 6px;
@@ -510,12 +1019,12 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-size: 12px;
       line-height: 1.3;
     }}
-    input, textarea {{
+    input, select, textarea {{
       width: 100%;
-      min-height: 38px;
+      min-height: 34px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      padding: 8px 10px;
+      padding: 7px 9px;
       color: var(--text);
       background: #fff;
       font: inherit;
@@ -525,11 +1034,14 @@ def _render_shell(status: dict[str, Any]) -> str:
       min-height: 92px;
       resize: vertical;
     }}
+    textarea.large {{
+      min-height: 104px;
+    }}
     button {{
-      min-height: 38px;
+      min-height: 34px;
       border: 1px solid var(--primary);
       border-radius: 6px;
-      padding: 8px 12px;
+      padding: 7px 10px;
       background: var(--primary);
       color: #fff;
       font: inherit;
@@ -575,7 +1087,27 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
     .stack {{
       display: grid;
-      gap: 10px;
+      gap: 8px;
+    }}
+    .action-preview {{
+      min-height: 86px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fbfcfd;
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }}
+    .action-preview strong {{
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }}
+    .action-preview ul {{
+      margin: 8px 0 0;
+      padding-left: 18px;
     }}
     .log {{
       min-height: 220px;
@@ -601,7 +1133,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-size: 13px;
     }}
     th, td {{
-      padding: 9px 10px;
+      padding: 7px 9px;
       border-bottom: 1px solid var(--line);
       text-align: left;
       vertical-align: top;
@@ -668,6 +1200,20 @@ def _render_shell(status: dict[str, Any]) -> str:
     .diagnostic-count.warn strong {{ color: var(--accent); }}
     .diagnostic-count.failed strong,
     .diagnostic-count.missing strong {{ color: var(--danger); }}
+    .schedule-summary {{
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }}
+    .schedule-summary .diagnostic-count strong {{
+      color: var(--text);
+    }}
+    .student-list {{
+      max-width: 280px;
+      color: var(--muted);
+      line-height: 1.55;
+    }}
     .badge {{
       display: inline-flex;
       align-items: center;
@@ -703,12 +1249,74 @@ def _render_shell(status: dict[str, Any]) -> str:
       overflow-wrap: anywhere;
     }}
     @media (max-width: 860px) {{
+      .app-shell {{
+        display: block;
+      }}
+      .sidebar {{
+        position: sticky;
+        z-index: 10;
+        height: auto;
+        gap: 12px;
+        padding: 12px 10px;
+      }}
+      .brand {{
+        grid-template-columns: 34px minmax(0, 1fr);
+      }}
+      .brand-mark {{
+        width: 34px;
+        height: 34px;
+      }}
+      .sidebar .tabs {{
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        overflow: visible;
+      }}
+      .sidebar .tab-button {{
+        justify-content: center;
+        width: 100%;
+        white-space: nowrap;
+      }}
+      .sidebar-footer {{
+        display: none;
+      }}
       header {{
         align-items: flex-start;
         flex-direction: column;
       }}
-      .status-strip, .grid, .actions, .diagnostic-summary {{
+      .status-strip {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
+      .grid, .actions, .actions.compact, .action-layout, .action-controls, .mini-grid,
+      .diagnostic-summary, .schedule-summary {{
         grid-template-columns: 1fr;
+      }}
+      .core-grid {{
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }}
+      .core-button {{
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
+        justify-items: center;
+        min-height: 84px;
+        padding: 9px 7px;
+        text-align: center;
+      }}
+      .core-button strong {{
+        font-size: 12px;
+        line-height: 1.25;
+      }}
+      .core-button > span:not(.core-number) {{
+        display: none;
+      }}
+      .core-number {{
+        grid-row: auto;
+        width: 24px;
+        height: 24px;
+        font-size: 11px;
+      }}
+      .metric {{
+        min-height: 64px;
       }}
       .panel-head {{
         align-items: flex-start;
@@ -718,6 +1326,10 @@ def _render_shell(status: dict[str, Any]) -> str:
         width: min(100vw - 20px, 720px);
         margin-top: 10px;
       }}
+      .workspace main {{
+        width: auto;
+        padding: 10px;
+      }}
       dl {{
         grid-template-columns: 1fr;
         gap: 3px;
@@ -726,11 +1338,40 @@ def _render_shell(status: dict[str, Any]) -> str:
   </style>
 </head>
 <body>
-  <header>
-    <h1>{title}</h1>
-    <span id="configBadge" class="badge">config</span>
-  </header>
-  <main>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">CI</div>
+        <div>
+          <h1>{title}</h1>
+          <span>ClassIn Toolkit</span>
+        </div>
+      </div>
+      <nav class="tabs" aria-label="운영 메뉴">
+        <button class="tab-button active" data-tab="dashboard">대시보드</button>
+        <button class="tab-button" data-tab="actions">액션</button>
+        <button class="tab-button" data-tab="schedule">스케줄</button>
+        <button class="tab-button" data-tab="missing">미제출</button>
+        <button class="tab-button" data-tab="reports">리포트</button>
+        <button class="tab-button" data-tab="memo">메모·AI</button>
+        <button class="tab-button" data-tab="settings">설정</button>
+      </nav>
+      <div class="sidebar-footer">
+        <span id="configBadge" class="badge">config</span>
+        <span id="lastUpdated" class="last-updated">-</span>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="topbar-title">
+          <h2 id="viewTitle">대시보드</h2>
+          <span id="viewMeta">{today}</span>
+        </div>
+        <div class="inline-actions">
+          <button data-action="refreshStatus" class="secondary">상태 새로고침</button>
+        </div>
+      </header>
+      <main>
     <section class="status-strip">
       <div class="metric"><span>Webhook 원본</span><strong id="incomingCount">0</strong></div>
       <div class="metric warn"><span>숙제 미제출</span><strong id="missingCount">0</strong></div>
@@ -740,85 +1381,202 @@ def _render_shell(status: dict[str, Any]) -> str:
       <div class="metric alert"><span>발송 실패</span><strong id="failedCount">0</strong></div>
     </section>
 
-    <section class="grid">
-      <div>
-        <div class="panel">
+    <section id="tab-dashboard" class="tab-panel active">
+      <section class="grid">
+        <div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>API 연결 점검</h2>
+              <div class="inline-actions">
+                <button data-action="refreshDiagnostics" class="secondary">설정 점검</button>
+                <button data-action="runLiveDiagnostics">실 API 점검</button>
+              </div>
+            </div>
+            <div id="diagnosticSummary" class="diagnostic-summary"></div>
+            <div id="diagnosticTable"></div>
+          </div>
+        </div>
+        <aside>
+          <div class="panel">
+            <h2>실행 로그</h2>
+            <div id="log" class="log"></div>
+          </div>
+        </aside>
+      </section>
+    </section>
+
+    <section id="tab-actions" class="tab-panel">
+      <div class="action-layout">
+        <div class="panel core-panel">
           <div class="panel-head">
-            <h2>API 연결 점검</h2>
-            <div class="inline-actions">
-              <button data-action="refreshDiagnostics" class="secondary">설정 점검</button>
-              <button data-action="runLiveDiagnostics">실 API 점검</button>
-            </div>
+            <h2>핵심 기능</h2>
+            <span class="badge">기본 3개</span>
           </div>
-          <div id="diagnosticSummary" class="diagnostic-summary"></div>
-          <div id="diagnosticTable"></div>
-        </div>
-
-        <div class="panel">
-          <h2>오늘 미제출 상황</h2>
-          <div class="actions">
-            <label>조회 시간<input id="windowHours" type="number" min="1" step="1" value="24"></label>
-            <label>수업 ID<input id="lessonId" type="text"></label>
-            <button data-action="refreshMissing" class="secondary">목록 새로고침</button>
-            <button data-action="sweepMissing">미제출 sweep</button>
-          </div>
-          <div id="missingTable" style="margin-top:12px"></div>
-        </div>
-
-        <div class="panel">
-          <h2>알림 발송 현황</h2>
-          <div id="notificationTable"></div>
-        </div>
-
-        <div class="panel">
-          <h2>리포트</h2>
-          <div class="actions">
-            <div class="row">
-              <label>일자<input id="dailyDate" type="date" value="{today}"></label>
-              <button data-action="renderDaily">생성</button>
-            </div>
-            <div class="row">
-              <label>주 시작일<input id="weekDate" type="date" value="{week_start}"></label>
-              <button data-action="approveWeekly" class="secondary">승인</button>
-            </div>
-            <button data-action="generateWeekly">주간 드래프트 생성</button>
-            <button data-action="refreshStatus" class="secondary">상태 새로고침</button>
+          <div class="core-grid">
+            <button data-action="focusMissingCore" class="core-button">
+              <span class="core-number">1</span>
+              <strong>숙제 미제출 전체 문자 발송</strong>
+              <span>미제출 조회 후 연락처 있는 학부모에게 발송</span>
+            </button>
+            <button data-action="focusScheduleCore" class="core-button">
+              <span class="core-number">2</span>
+              <strong>스케줄표로 수업·숙제 생성</strong>
+              <span>CSV/표 붙여넣기, 검토 후 ClassIn 생성</span>
+            </button>
+            <button data-action="focusReportCore" class="core-button">
+              <span class="core-number">3</span>
+              <strong>반별 리포트 생성</strong>
+              <span>시험 점수, 숙제, 출결을 모아 초안 생성</span>
+            </button>
           </div>
         </div>
 
-        <div class="panel">
-          <h2>메모</h2>
-          <div class="stack">
-            <div class="actions">
-              <label>ClassIn ID<input id="memoClassinId" type="text"></label>
-              <label>태그<input id="memoTag" type="text"></label>
+        <div class="action-controls">
+          <div class="panel">
+            <div class="panel-head">
+              <h2>숙제 미제출 문자</h2>
+              <span id="actionModeBadge" class="badge">대기</span>
             </div>
-            <label>내용<textarea id="memoText"></textarea></label>
-            <button data-action="writeMemo">메모 저장</button>
+            <div class="stack">
+              <div class="mini-grid">
+                <label>조회 범위<input id="windowHours" type="number" min="1" step="1" value="24"></label>
+                <label>특정 수업만 보기<input id="lessonId" type="text"></label>
+              </div>
+              <div class="inline-actions">
+                <button data-action="refreshMissing" class="secondary">미제출 조회</button>
+                <button data-action="sendMissingHomeworkSms">숙제 미제출 전체 문자 발송</button>
+              </div>
+              <div id="actionPreview" class="action-preview">미제출 학생을 조회하면 발송 대상과 현재 발송 모드가 정리됩니다.</div>
+            </div>
           </div>
-        </div>
 
-        <div class="panel">
-          <h2>AI 질문</h2>
-          <div class="stack">
-            <label>질문<textarea id="agentQuestion"></textarea></label>
-            <button data-action="askAgent">질문 보내기</button>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>스케줄표 입력</h2>
+              <span class="badge">수업·숙제</span>
+            </div>
+            <div class="stack">
+              <input id="importFile" type="file" accept=".csv,.tsv,.txt">
+              <label>스케줄표<textarea id="importText" class="large"></textarea></label>
+              <div class="inline-actions">
+                <button data-action="readSelectedFile" class="secondary">파일 읽기</button>
+                <button data-action="downloadScheduleTemplate" class="secondary">스케줄 템플릿</button>
+                <button data-action="runScheduleImportDryRun" class="secondary">먼저 검토</button>
+                <button data-action="createScheduleFromText">수업·숙제 생성</button>
+              </div>
+              <div id="importPreview" class="action-preview">스케줄표를 붙여넣거나 파일을 읽어오세요.</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h2>반별 리포트</h2>
+              <span class="badge">시험·숙제·출결</span>
+            </div>
+            <div class="stack">
+              <div class="mini-grid">
+                <label>반 이름<input id="reportClassName" type="text"></label>
+                <label>주 시작일<input id="weekDate" type="date" value="{week_start}"></label>
+              </div>
+              <div class="inline-actions">
+                <button data-action="generateClassReports">반별 리포트 생성</button>
+                <button data-action="approveWeekly" class="secondary">승인</button>
+              </div>
+              <div id="reportPreview" class="action-preview">시험 점수, 숙제, 출결 기록을 모아 주간 리포트 초안을 생성합니다.</div>
+            </div>
           </div>
         </div>
       </div>
-
-      <aside>
-        <div class="panel">
-          <h2>설정</h2>
-          <dl id="settings"></dl>
-        </div>
-        <div class="panel">
-          <h2>실행 로그</h2>
-          <div id="log" class="log"></div>
-        </div>
-      </aside>
     </section>
-  </main>
+
+    <section id="tab-schedule" class="tab-panel">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>스케줄 표</h2>
+          <button data-action="refreshSchedule" class="secondary">스케줄 새로고침</button>
+        </div>
+        <div class="actions compact">
+          <label>시작일<input id="scheduleStart" type="date" value="{week_start}"></label>
+          <label>기간<input id="scheduleDays" type="number" min="1" max="62" step="1" value="7"></label>
+          <button data-action="loadThisWeekSchedule" class="secondary">이번 주</button>
+          <button data-action="loadTodaySchedule" class="secondary">오늘</button>
+        </div>
+        <div id="scheduleSummary" class="schedule-summary"></div>
+        <div id="scheduleTable"></div>
+      </div>
+    </section>
+
+    <section id="tab-missing" class="tab-panel">
+      <div class="grid">
+        <div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>미제출 목록</h2>
+              <div class="inline-actions">
+                <button data-action="focusMissingCore" class="secondary">문자 발송으로 이동</button>
+                <button data-action="refreshMissing" class="secondary">미제출 조회</button>
+              </div>
+            </div>
+            <div id="missingTable" style="margin-top:12px"></div>
+          </div>
+
+          <div class="panel">
+            <h2>알림 발송 현황</h2>
+            <div id="notificationTable"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-reports" class="tab-panel">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>리포트</h2>
+          <button data-action="focusReportCore" class="secondary">반별 리포트로 이동</button>
+        </div>
+        <div class="inline-actions">
+          <label>일자<input id="dailyDate" type="date" value="{today}"></label>
+          <button data-action="renderDaily">일일 현황 생성</button>
+          <button data-action="generateClassReports">반별 리포트 생성</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-memo" class="tab-panel">
+      <div class="grid">
+        <div>
+          <div class="panel">
+            <h2>메모</h2>
+            <div class="stack">
+              <div class="actions">
+                <label>ClassIn ID<input id="memoClassinId" type="text"></label>
+                <label>태그<input id="memoTag" type="text"></label>
+              </div>
+              <label>내용<textarea id="memoText"></textarea></label>
+              <button data-action="writeMemo">메모 저장</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2>AI 질문</h2>
+            <div class="stack">
+              <label>질문<textarea id="agentQuestion"></textarea></label>
+              <button data-action="askAgent">질문 보내기</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings" class="tab-panel">
+      <div class="panel">
+        <h2>설정</h2>
+        <dl id="settings"></dl>
+      </div>
+    </section>
+      </main>
+    </div>
+  </div>
 
   <script id="initial-status" type="application/json">{status_json}</script>
   <script>
@@ -826,6 +1584,8 @@ def _render_shell(status: dict[str, Any]) -> str:
     const statusNode = document.querySelector("#initial-status");
     let status = JSON.parse(statusNode.textContent);
     let diagnostics = null;
+    let currentSchedule = [];
+    let currentMissing = [];
 
     function writeLog(message, data) {{
       const now = new Date().toLocaleTimeString();
@@ -841,6 +1601,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       const badge = document.querySelector("#configBadge");
       badge.className = status.ok ? "badge ok" : "badge error";
       badge.textContent = status.ok ? "config loaded" : "config needed";
+      document.querySelector("#lastUpdated").textContent =
+        `updated ${{new Date().toLocaleTimeString()}}`;
 
       const output = status.output || {{}};
       const webhook = status.webhook || {{}};
@@ -952,18 +1714,128 @@ def _render_shell(status: dict[str, Any]) -> str:
       return data;
     }}
 
-    function canLoadNotion(data) {{
+    function canLoadService(data, service) {{
       const items = (data && data.items) || [];
       return !items.some((item) =>
-        item.service === "Notion" && ["missing", "failed"].includes(item.status)
+        item.service === service && ["missing", "failed"].includes(item.status)
       );
     }}
 
+    function canLoadNotion(data) {{
+      return canLoadService(data, "Notion");
+    }}
+
     function renderBlockedSituation() {{
+      currentMissing = [];
       renderMissing({{ summary: {{}}, items: [] }});
       document.querySelector("#missingTable").innerHTML =
         `<div class="empty">Notion 설정을 먼저 채워야 조회할 수 있습니다.</div>`;
       renderNotifications({{ items: [] }});
+    }}
+
+    function renderBlockedSchedule() {{
+      currentSchedule = [];
+      document.querySelector("#scheduleSummary").innerHTML = "";
+      document.querySelector("#scheduleTable").innerHTML =
+        `<div class="empty">Notion 설정을 먼저 채워야 스케줄을 조회할 수 있습니다.</div>`;
+    }}
+
+    async function loadSchedule() {{
+      const data = await loadDiagnostics(false);
+      if (!canLoadNotion(data)) {{
+        renderBlockedSchedule();
+        writeLog("Notion 설정을 먼저 채워야 스케줄을 조회할 수 있습니다.");
+        return;
+      }}
+
+      const params = new URLSearchParams();
+      params.set("start", document.querySelector("#scheduleStart").value);
+      params.set("days", document.querySelector("#scheduleDays").value || "7");
+      const response = await fetch(`/api/schedule?${{params.toString()}}`);
+      const schedule = await response.json();
+      if (!response.ok || schedule.ok === false) {{
+        throw new Error(schedule.detail || "schedule load failed");
+      }}
+      renderSchedule(schedule);
+      writeLog("스케줄을 갱신했습니다.", schedule.summary);
+    }}
+
+    function renderSchedule(data) {{
+      const summary = data.summary || {{}};
+      const summaryRows = [
+        ["수업", summary.total_lessons || 0],
+        ["학생 기록", summary.total_student_rows || 0],
+        ["지각", summary.late || 0],
+        ["결석", summary.absent || 0],
+        ["숙제 미제출", summary.homework_missing || 0],
+      ];
+      document.querySelector("#scheduleSummary").innerHTML = summaryRows
+        .map(([label, value]) => `
+          <div class="diagnostic-count">
+            <span>${{escapeHtml(label)}}</span>
+            <strong>${{escapeHtml(value)}}</strong>
+          </div>
+        `)
+        .join("");
+
+      const items = data.items || [];
+      currentSchedule = items;
+      const target = document.querySelector("#scheduleTable");
+      if (!items.length) {{
+        target.innerHTML = `<div class="empty">조회 범위 안의 수업 기록이 없습니다.</div>`;
+        return;
+      }}
+      target.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>일시</th>
+                <th>반</th>
+                <th>ClassIn</th>
+                <th>학생</th>
+                <th>출석</th>
+                <th>숙제</th>
+                <th>학생 목록</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${{items.map((item) => `
+                <tr>
+                  <td>${{escapeHtml(formatDate(item.date))}}</td>
+                  <td>${{escapeHtml((item.class_names || []).join(", ") || "-")}}</td>
+                  <td>
+                    <span class="badge">${{escapeHtml(item.lesson_classin_id || "-")}}</span><br>
+                    <span class="badge">${{escapeHtml(item.course_classin_id || "-")}}</span>
+                  </td>
+                  <td>${{escapeHtml(item.student_count || 0)}}명</td>
+                  <td>
+                    출석 ${{escapeHtml((item.attendance || {{}})["출석"] || 0)}} ·
+                    지각 ${{escapeHtml((item.attendance || {{}})["지각"] || 0)}} ·
+                    결석 ${{escapeHtml((item.attendance || {{}})["결석"] || 0)}}
+                  </td>
+                  <td>
+                    제출 ${{escapeHtml(item.homework_done || 0)}} ·
+                    미제출 ${{escapeHtml(item.homework_missing || 0)}} ·
+                    미기록 ${{escapeHtml(item.homework_unknown || 0)}}
+                  </td>
+                  <td><div class="student-list">${{escapeHtml(studentSummary(item.students || []))}}</div></td>
+                </tr>
+              `).join("")}}
+            </tbody>
+          </table>
+        </div>`;
+    }}
+
+    function studentSummary(students) {{
+      const names = students.map((student) => {{
+        const state = student.attendance && student.attendance !== "출석"
+          ? `(${{student.attendance}})`
+          : "";
+        return `${{student.student_name || "미등록"}}${{state}}`;
+      }});
+      const text = names.slice(0, 8).join(", ");
+      return names.length > 8 ? `${{text}} 외 ${{names.length - 8}}명` : text || "-";
     }}
 
     function renderDiagnostics(data) {{
@@ -1026,6 +1898,10 @@ def _render_shell(status: dict[str, Any]) -> str:
       document.querySelector("#failedCount").textContent = summary.failed || 0;
 
       const items = data.items || [];
+      currentMissing = items;
+      const withPhone = items.filter((item) => item.has_parent_phone).length;
+      document.querySelector("#actionPreview").innerHTML =
+        `<strong>숙제 미제출 전체 문자 발송</strong>대상: ${{items.length}}명\\n연락처 있음: ${{withPhone}}명\\n현재 발송 모드: ${{escapeHtml(notifyMode())}}`;
       const target = document.querySelector("#missingTable");
       if (!items.length) {{
         target.innerHTML = `<div class="empty">조회 범위 안의 숙제 미제출 학생이 없습니다.</div>`;
@@ -1104,7 +1980,322 @@ def _render_shell(status: dict[str, Any]) -> str:
       return text.length > max ? text.slice(0, max - 1) + "..." : text;
     }}
 
+    function localIsoDate(value) {{
+      const offset = value.getTimezoneOffset() * 60000;
+      return new Date(value.getTime() - offset).toISOString().slice(0, 10);
+    }}
+
+    function weekStartIso(value) {{
+      const date = new Date(value);
+      const day = (date.getDay() + 6) % 7;
+      date.setDate(date.getDate() - day);
+      return localIsoDate(date);
+    }}
+
+    function activateTab(tab) {{
+      document.querySelectorAll(".tab-button").forEach((button) => {{
+        button.classList.toggle("active", button.dataset.tab === tab);
+      }});
+      document.querySelectorAll(".tab-panel").forEach((panel) => {{
+        panel.classList.toggle("active", panel.id === `tab-${{tab}}`);
+      }});
+      document.querySelector("#viewTitle").textContent = viewTitles[tab] || "대시보드";
+      document.querySelector("#viewMeta").textContent = localIsoDate(new Date());
+    }}
+
+    function setActionMode(mode, html) {{
+      document.querySelector("#actionModeBadge").textContent = mode;
+      document.querySelector("#actionPreview").innerHTML = html;
+    }}
+
+    function notifyMode() {{
+      return ((status.output || {{}}).notify_mode || "-");
+    }}
+
+    function focusMissingCore() {{
+      activateTab("actions");
+      document.querySelector("#windowHours").focus();
+      const withPhone = currentMissing.filter((item) => item.has_parent_phone).length;
+      setActionMode(
+        "미제출 문자",
+        `<strong>숙제 미제출 전체 문자 발송</strong>대상: ${{currentMissing.length}}명\\n연락처 있음: ${{withPhone}}명\\n현재 발송 모드: ${{escapeHtml(notifyMode())}}`
+      );
+    }}
+
+    function focusScheduleCore() {{
+      activateTab("actions");
+      document.querySelector("#importText").focus();
+      document.querySelector("#importPreview").innerHTML =
+        `<strong>스케줄표로 수업·숙제 생성</strong>스케줄표를 붙여넣고 먼저 검토한 뒤 생성하세요.`;
+    }}
+
+    function focusReportCore() {{
+      activateTab("actions");
+      document.querySelector("#reportClassName").focus();
+      document.querySelector("#reportPreview").innerHTML =
+        `<strong>반별 리포트 생성</strong>반 이름과 주 시작일을 확인한 뒤 리포트 초안을 만듭니다.`;
+    }}
+
+    async function sendMissingHomeworkSms() {{
+      const data = await loadDiagnostics(false);
+      if (!canLoadNotion(data)) {{
+        renderBlockedSituation();
+        writeLog("Notion 설정을 먼저 채워야 미제출 문자를 처리할 수 있습니다.");
+        return;
+      }}
+      if (!currentMissing.length) {{
+        await loadSituation();
+      }}
+      const withPhone = currentMissing.filter((item) => item.has_parent_phone).length;
+      const mode = notifyMode();
+      if (mode === "live") {{
+        const ok = window.confirm(
+          `실제 문자 발송 모드입니다. 연락처가 있는 미제출자 ${{withPhone}}명에게 발송합니다.`
+        );
+        if (!ok) return;
+      }}
+      const result = await callApi("/api/sweep-missing-homework", {{
+        window_hours: document.querySelector("#windowHours").value,
+        lesson_id: document.querySelector("#lessonId").value,
+      }});
+      await loadSituation();
+      setActionMode(
+        "문자 처리",
+        `<strong>숙제 미제출 전체 문자 발송</strong>처리: ${{escapeHtml(result.count || 0)}}건\\n모드: ${{escapeHtml(mode)}}`
+      );
+      writeLog(result.message, result);
+    }}
+
+    function inspectDelimited(text) {{
+      const lines = String(text)
+        .split(/\\r?\\n/)
+        .filter((line) => line.trim());
+      const first = lines[0] || "";
+      const delimiter = first.includes("\\t") ? "\\t" : ",";
+      const headers = first
+        .split(delimiter)
+        .map((header) => header.trim())
+        .filter(Boolean);
+      return {{
+        rows: Math.max(lines.length - 1, 0),
+        headers,
+        delimiter: delimiter === "\\t" ? "TSV" : "CSV",
+      }};
+    }}
+
+    function renderImportPreview(text, source) {{
+      const parsed = inspectDelimited(text);
+      document.querySelector("#importPreview").innerHTML =
+        `<strong>${{escapeHtml(source || "가져오기 데이터")}}</strong>` +
+        `형식: ${{escapeHtml(parsed.delimiter)}}\\n` +
+        `행: ${{parsed.rows}}\\n` +
+        `헤더: ${{escapeHtml(parsed.headers.join(", ") || "-")}}`;
+    }}
+
+    async function readSelectedFile() {{
+      const input = document.querySelector("#importFile");
+      const file = input.files && input.files[0];
+      if (!file) throw new Error("읽을 파일을 선택하세요.");
+      const text = await file.text();
+      document.querySelector("#importText").value = text;
+      renderImportPreview(text, file.name);
+      writeLog("가져오기 파일을 읽었습니다.", {{ name: file.name, size: file.size }});
+    }}
+
+    function csvEscape(value) {{
+      const text = String(value ?? "");
+      return /[",\\n\\r]/.test(text) ? `"${{text.replaceAll('"', '""')}}"` : text;
+    }}
+
+    function downloadCsv(filename, headers, rows) {{
+      const csv = "\\ufeff" + [headers, ...rows]
+        .map((row) => row.map(csvEscape).join(","))
+        .join("\\n");
+      const blob = new Blob([csv], {{ type: "text/csv;charset=utf-8" }});
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }}
+
+    function exportScheduleCsv() {{
+      if (!currentSchedule.length) throw new Error("먼저 스케줄 표를 조회하세요.");
+      const headers = [
+        "date",
+        "class_names",
+        "course_classin_id",
+        "lesson_classin_id",
+        "student_count",
+        "attendance",
+        "homework_done",
+        "homework_missing",
+        "homework_unknown",
+        "students",
+      ];
+      const rows = currentSchedule.map((item) => [
+        formatDate(item.date),
+        (item.class_names || []).join("|"),
+        item.course_classin_id || "",
+        item.lesson_classin_id || "",
+        item.student_count || 0,
+        JSON.stringify(item.attendance || {{}}),
+        item.homework_done || 0,
+        item.homework_missing || 0,
+        item.homework_unknown || 0,
+        studentSummary(item.students || []),
+      ]);
+      downloadCsv(`schedule-${{document.querySelector("#scheduleStart").value || localIsoDate(new Date())}}.csv`, headers, rows);
+      writeLog("스케줄 CSV를 만들었습니다.", {{ rows: rows.length }});
+    }}
+
+    function exportMissingCsv() {{
+      if (!currentMissing.length) throw new Error("먼저 미제출 목록을 조회하세요.");
+      const headers = [
+        "student_classin_id",
+        "student_name",
+        "class_name",
+        "parent_phone",
+        "lesson_classin_id",
+        "date",
+        "attendance",
+        "notification_status",
+      ];
+      const rows = currentMissing.map((item) => [
+        item.student_classin_id || "",
+        item.student_name || "",
+        item.class_name || "",
+        item.parent_phone || "",
+        item.lesson_classin_id || "",
+        formatDate(item.date),
+        item.attendance || "",
+        item.notification_status || "",
+      ]);
+      downloadCsv(`missing-homework-${{localIsoDate(new Date())}}.csv`, headers, rows);
+      writeLog("미제출 CSV를 만들었습니다.", {{ rows: rows.length }});
+    }}
+
+    function downloadScheduleTemplate() {{
+      const headers = [
+        "course_name",
+        "teacher",
+        "date",
+        "start",
+        "end",
+        "lesson_title",
+        "homework_title",
+        "homework_due",
+      ];
+      const rows = [[
+        "고2 수학 A반",
+        "김선생",
+        "2026-05-06",
+        "19:00",
+        "21:00",
+        "수1 - 지수함수 1",
+        "워크북 p.42-48",
+        "2026-05-08 23:59",
+      ]];
+      downloadCsv("schedule-template.csv", headers, rows);
+      writeLog("스케줄 템플릿을 만들었습니다.");
+    }}
+
+    function renderDryRunResult(title, data) {{
+      const summary = data.summary || {{}};
+      const errors = data.errors || [];
+      document.querySelector("#importPreview").innerHTML =
+        `<strong>${{escapeHtml(title)}}</strong>` +
+        Object.entries(summary)
+          .map(([key, value]) => `${{escapeHtml(key)}}: ${{escapeHtml(value)}}`)
+          .join("\\n") +
+        (errors.length
+          ? `\\n\\n오류\\n${{escapeHtml(errors.slice(0, 8).join("\\n"))}}`
+          : "");
+    }}
+
+    async function runScheduleImportDryRun() {{
+      const text = document.querySelector("#importText").value.trim();
+      if (!text) throw new Error("스케줄 dry-run에 사용할 CSV / 표 데이터가 필요합니다.");
+      const data = await callApi("/api/create-schedule", {{
+        schedule_text: text,
+        dry_run: true,
+      }});
+      renderDryRunResult("스케줄 검토", data);
+      writeLog(data.message, data.summary);
+    }}
+
+    async function createScheduleFromText() {{
+      const text = document.querySelector("#importText").value.trim();
+      if (!text) throw new Error("생성할 스케줄표가 필요합니다.");
+      const ok = window.confirm("ClassIn에 실제 수업과 숙제를 생성합니다.");
+      if (!ok) return;
+      const data = await callApi("/api/create-schedule", {{
+        schedule_text: text,
+        dry_run: false,
+      }});
+      renderDryRunResult("수업·숙제 생성", data);
+      writeLog(data.message, data.summary);
+    }}
+
+    async function generateClassReports() {{
+      const data = await callApi("/api/generate-class-reports", {{
+        class_name: document.querySelector("#reportClassName").value,
+        week: document.querySelector("#weekDate").value,
+      }});
+      document.querySelector("#reportPreview").innerHTML =
+        `<strong>반별 리포트 생성</strong>${{escapeHtml(data.message)}}`;
+      writeLog(data.message, data);
+      await refreshStatus();
+    }}
+
+    const viewTitles = {{
+      dashboard: "대시보드",
+      actions: "핵심 기능",
+      schedule: "스케줄",
+      missing: "미제출",
+      reports: "리포트",
+      memo: "메모·AI",
+      settings: "설정",
+    }};
+
     const actions = {{
+      async focusMissingCore() {{
+        focusMissingCore();
+      }},
+      async focusScheduleCore() {{
+        focusScheduleCore();
+      }},
+      async focusReportCore() {{
+        focusReportCore();
+      }},
+      async sendMissingHomeworkSms() {{
+        await sendMissingHomeworkSms();
+      }},
+      async createScheduleFromText() {{
+        await createScheduleFromText();
+      }},
+      async generateClassReports() {{
+        await generateClassReports();
+      }},
+      async exportScheduleCsv() {{
+        exportScheduleCsv();
+      }},
+      async exportMissingCsv() {{
+        exportMissingCsv();
+      }},
+      async readSelectedFile() {{
+        await readSelectedFile();
+      }},
+      async downloadScheduleTemplate() {{
+        downloadScheduleTemplate();
+      }},
+      async runScheduleImportDryRun() {{
+        await runScheduleImportDryRun();
+      }},
       async renderDaily() {{
         const data = await callApi("/api/render-daily", {{
           date: document.querySelector("#dailyDate").value,
@@ -1142,6 +2333,19 @@ def _render_shell(status: dict[str, Any]) -> str:
         await loadSituation();
         writeLog("미제출/알림 상황을 갱신했습니다.");
       }},
+      async refreshSchedule() {{
+        await loadSchedule();
+      }},
+      async loadThisWeekSchedule() {{
+        document.querySelector("#scheduleStart").value = weekStartIso(new Date());
+        document.querySelector("#scheduleDays").value = "7";
+        await loadSchedule();
+      }},
+      async loadTodaySchedule() {{
+        document.querySelector("#scheduleStart").value = localIsoDate(new Date());
+        document.querySelector("#scheduleDays").value = "1";
+        await loadSchedule();
+      }},
       async writeMemo() {{
         const data = await callApi("/api/write-memo", {{
           classin_id: document.querySelector("#memoClassinId").value,
@@ -1161,8 +2365,10 @@ def _render_shell(status: dict[str, Any]) -> str:
         const data = await loadDiagnostics(false);
         if (canLoadNotion(data)) {{
           await loadSituation();
+          await loadSchedule();
         }} else {{
           renderBlockedSituation();
+          renderBlockedSchedule();
         }}
         writeLog("상태를 갱신했습니다.");
       }},
@@ -1197,11 +2403,20 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
     }});
 
+    document.addEventListener("click", (event) => {{
+      const tabButton = event.target.closest("button[data-tab]");
+      if (!tabButton) return;
+      activateTab(tabButton.dataset.tab);
+    }});
+
     renderStatus(status);
     loadDiagnostics(false)
       .then((data) => {{
-        if (canLoadNotion(data)) return loadSituation();
+        if (canLoadNotion(data)) {{
+          return Promise.all([loadSituation(), loadSchedule()]);
+        }}
         renderBlockedSituation();
+        renderBlockedSchedule();
       }})
       .catch((error) => writeLog(error.message));
   </script>
