@@ -35,3 +35,25 @@ def parse_schedule(cfg: AppConfig, raw_text: str) -> list[ParsedCourse]:
     if not isinstance(data, list):
         raise ValueError(f"expected list, got {type(data).__name__}")
     return [ParsedCourse.model_validate(c) for c in data]
+
+
+_KOR_WEEKDAY = ("월", "화", "수", "목", "금", "토", "일")
+
+
+def parse_schedule_text(cfg: AppConfig, raw_text: str) -> list[dict[str, Any]]:
+    """드롭존 UI용 평탄화된 행 포맷으로 스케줄을 반환한다."""
+    rows: list[dict[str, Any]] = []
+    for course in parse_schedule(cfg, raw_text):
+        for lesson in course.lessons:
+            start, end = lesson.start_at, lesson.end_at
+            rows.append(
+                {
+                    "day": _KOR_WEEKDAY[start.weekday()],
+                    "time": f"{start:%H:%M}-{end:%H:%M}",
+                    "class_name": course.course_name,
+                    "teacher": course.teacher_name or "",
+                    "room": "",
+                    "confidence": 0.95,
+                }
+            )
+    return rows

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from datetime import date as date_cls
 from datetime import datetime, timezone
 from pathlib import Path
@@ -72,6 +73,16 @@ def create_app(
             return _demo_status_payload(state.config_path)
         cfg, error = state.load()
         return _status_payload(cfg, error, state.config_path)
+
+    @app.get("/api/connections")
+    async def api_connections() -> dict:
+        if state.demo:
+            payload = _demo_status_payload(state.config_path)
+            return {"ok": True, "items": payload.get("connections", [])}
+        cfg, error = state.load()
+        if not cfg:
+            return {"ok": False, "items": [], "error": error}
+        return {"ok": True, "items": _connection_payload(cfg)}
 
     @app.get("/api/missing-homework")
     async def api_missing_homework(
@@ -288,6 +299,37 @@ def create_app(
         )
         return _ok("메모를 저장했습니다.", page_id=page_id)
 
+    @app.post("/api/schedule/parse")
+    async def api_schedule_parse(request: Request) -> JSONResponse:
+        payload = await _json_payload(request)
+        text = (payload.get("text") or "").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="text 또는 image_base64 값이 필요합니다.")
+        if state.demo:
+            rows = _parse_schedule_heuristic(text)
+            return _demo_ok(
+                "Demo mode: 텍스트에서 스케줄을 추출했습니다.",
+                items=rows,
+                source="heuristic",
+            )
+        cfg = _require_config(state)
+        ak = (cfg.anthropic.api_key or "").strip()
+        if ak and not ak.lower().startswith(("test", "dummy", "your-")):
+            try:
+                from .intelligence.schedule_parser import parse_schedule_text
+
+                rows = parse_schedule_text(cfg, text)
+                return _ok("AI가 스케줄을 인식했습니다.", items=rows, source="claude")
+            except Exception as exc:  # noqa: BLE001
+                rows = _parse_schedule_heuristic(text)
+                return _ok(
+                    f"AI 호출 실패, 휴리스틱 파서로 폴백했습니다: {exc}",
+                    items=rows,
+                    source="heuristic",
+                )
+        rows = _parse_schedule_heuristic(text)
+        return _ok("Claude API 키가 없어 휴리스틱 파서로 인식했습니다.", items=rows, source="heuristic")
+
     @app.post("/api/agent")
     async def api_agent(request: Request) -> JSONResponse:
         if state.demo:
@@ -415,7 +457,53 @@ def _status_payload(
             "weekly_indexes": _count_files(weekly_dir, "*_drafts.json"),
             "notification_history": _count_history_rows(notification_history_path(cfg)),
         },
+        "connections": _connection_payload(cfg),
     }
+
+
+def _connection_payload(cfg: AppConfig | None) -> list[dict[str, Any]]:
+    if not cfg:
+        return []
+    ak = (cfg.anthropic.api_key or "").strip()
+    anthropic_ok = bool(ak) and not ak.lower().startswith(("test", "dummy", "your-"))
+    aligo = cfg.notify.aligo
+    aligo_ok = bool((aligo.api_key or "").strip() and (aligo.user_id or "").strip() and (aligo.sender or "").strip())
+    notify_live = cfg.notify.mode == "live"
+    classin_ok = bool((cfg.classin.school_id or "").strip() and (cfg.classin.secret_key or "").strip())
+    notion_ok = bool((cfg.notion.token or "").strip() and (cfg.notion.databases.students or "").strip())
+    return [
+        {
+            "key": "claude",
+            "label": "Claude AI",
+            "kind": "API",
+            "connected": anthropic_ok,
+            "detail": f"model · {cfg.anthropic.model}" if anthropic_ok else "ANTHROPIC_API_KEY 미설정",
+        },
+        {
+            "key": "classin",
+            "label": "ClassIn API",
+            "kind": "API",
+            "connected": classin_ok,
+            "detail": "appid + secret 확인" if classin_ok else "appid/secret 미설정",
+        },
+        {
+            "key": "notify",
+            "label": "알림톡 / SMS (Aligo)",
+            "kind": "발송",
+            "connected": aligo_ok,
+            "detail": (
+                f"{'LIVE' if notify_live else 'DRY_RUN'} · sender {aligo.sender or '-'}"
+                if aligo_ok else "api_key·user_id·sender 미설정"
+            ),
+        },
+        {
+            "key": "notion",
+            "label": "Notion 저장소",
+            "kind": "출력",
+            "connected": notion_ok,
+            "detail": "주간 리포트/메모 동기화" if notion_ok else "Notion api_key 미설정",
+        },
+    ]
 
 
 def _demo_status_payload(config_path: Path) -> dict[str, Any]:
@@ -452,6 +540,16 @@ def _demo_status_payload(config_path: Path) -> dict[str, Any]:
             "missing_rows": len(missing_rows),
             "external_writes": False,
         },
+        "connections": [
+            {"key": "claude", "label": "Claude AI", "kind": "API", "connected": True,
+             "detail": "demo · claude-sonnet-4-6"},
+            {"key": "classin", "label": "ClassIn API", "kind": "API", "connected": True,
+             "detail": "demo school_id"},
+            {"key": "notify", "label": "알림톡 / SMS (Aligo)", "kind": "발송", "connected": False,
+             "detail": "DRY_RUN · 연결 안됨"},
+            {"key": "notion", "label": "Notion 저장소", "kind": "출력", "connected": False,
+             "detail": "demo 모드 — 외부 쓰기 비활성"},
+        ],
     }
 
 
@@ -459,6 +557,53 @@ def _count_files(path: Path, pattern: str) -> int:
     if not path.exists():
         return 0
     return sum(1 for p in path.glob(pattern) if p.is_file())
+
+
+_DAY_TOKENS = ("월", "화", "수", "목", "금", "토", "일")
+_SCHEDULE_LINE_RE = re.compile(
+    r"^\s*(?P<day>[월화수목금토일])\s*[\.,/ -]*\s*"
+    r"(?P<time>\d{1,2}[:시]\d{0,2}\s*[-~–]\s*\d{1,2}[:시]\d{0,2})\s+"
+    r"(?P<rest>.+)$"
+)
+
+
+def _parse_schedule_heuristic(text: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        m = _SCHEDULE_LINE_RE.match(line)
+        if not m:
+            continue
+        day = m.group("day")
+        time = m.group("time").replace("시", ":").replace(" ", "").replace("~", "-").replace("–", "-")
+        if ":" not in time.split("-")[0]:
+            continue
+        tokens = m.group("rest").split()
+        room = tokens[-1] if tokens and (tokens[-1].endswith("호") or tokens[-1].endswith("실")) else ""
+        teacher = ""
+        class_tokens = tokens
+        if room:
+            class_tokens = tokens[:-1]
+        if class_tokens and len(class_tokens[-1]) <= 4 and not any(
+            ch.isdigit() for ch in class_tokens[-1]
+        ):
+            teacher = class_tokens[-1]
+            class_name = " ".join(class_tokens[:-1]).strip()
+        else:
+            class_name = " ".join(class_tokens).strip()
+        rows.append(
+            {
+                "day": day,
+                "time": time,
+                "class_name": class_name or "(미지정)",
+                "teacher": teacher,
+                "room": room,
+                "confidence": 0.92 if class_name and teacher else 0.78,
+            }
+        )
+    return rows
 
 
 def _count_history_rows(path: Path) -> int:
@@ -1263,6 +1408,169 @@ def _render_shell(status: dict[str, Any]) -> str:
       color: var(--accent-ink);
       border-color: rgba(180, 92, 25, .25);
     }}
+    .schedule-paste {{
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      background: #fff;
+    }}
+    .schedule-paste summary {{
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-2);
+      list-style: none;
+      padding: 4px 0;
+      user-select: none;
+    }}
+    .schedule-paste summary::-webkit-details-marker {{ display: none; }}
+    .schedule-paste summary::before {{
+      content: "▸";
+      display: inline-block;
+      margin-right: 6px;
+      transition: transform .15s ease;
+    }}
+    .schedule-paste[open] summary::before {{ transform: rotate(90deg); }}
+    .schedule-paste textarea {{
+      margin-top: 10px;
+      min-height: 140px;
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      font-size: 12.5px;
+      line-height: 1.55;
+    }}
+    .schedule-review {{
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #fff;
+    }}
+    .schedule-review-head {{
+      padding: 12px 14px;
+      background: var(--primary-softer);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line-2);
+    }}
+    .schedule-review table {{ min-width: 0; }}
+    .schedule-review td .low {{
+      color: var(--accent-ink);
+      font-weight: 700;
+    }}
+    .conn-list {{
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+    }}
+    .conn-item {{
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }}
+    .conn-item:hover {{
+      border-color: var(--line-strong);
+      box-shadow: var(--shadow-soft);
+    }}
+    .conn-led {{
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--muted-2);
+      flex: 0 0 auto;
+      box-shadow: 0 0 0 3px rgba(0,0,0,0);
+      transition: background .2s ease, box-shadow .2s ease;
+    }}
+    .conn-item.on .conn-led {{
+      background: var(--ok);
+      box-shadow: 0 0 0 3px var(--ok-soft);
+      animation: conn-pulse 2.4s ease-in-out infinite;
+    }}
+    .conn-item.off .conn-led {{
+      background: var(--danger);
+      box-shadow: 0 0 0 3px var(--danger-soft);
+    }}
+    @keyframes conn-pulse {{
+      0%, 100% {{ box-shadow: 0 0 0 3px var(--ok-soft); }}
+      50% {{ box-shadow: 0 0 0 5px rgba(31, 122, 82, .12); }}
+    }}
+    .conn-text {{
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }}
+    .conn-label {{
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }}
+    .conn-kind {{
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: var(--panel-soft);
+      color: var(--muted);
+      text-transform: uppercase;
+      border: 1px solid var(--line);
+    }}
+    .conn-detail {{
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .conn-status {{
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }}
+    .conn-item.on .conn-status {{
+      background: var(--ok-soft);
+      color: var(--ok);
+    }}
+    .conn-item.off .conn-status {{
+      background: var(--danger-soft);
+      color: var(--danger-ink);
+    }}
+    .conn-details {{
+      border-top: 1px solid var(--line-2);
+      padding-top: 10px;
+    }}
+    .conn-details summary {{
+      cursor: pointer;
+      font-size: 12.5px;
+      color: var(--muted);
+      font-weight: 600;
+      list-style: none;
+      padding: 4px 0;
+      user-select: none;
+    }}
+    .conn-details summary::-webkit-details-marker {{ display: none; }}
+    .conn-details summary::before {{
+      content: "▸";
+      display: inline-block;
+      margin-right: 6px;
+      transition: transform .15s ease;
+    }}
+    .conn-details[open] summary::before {{
+      transform: rotate(90deg);
+    }}
+    .conn-details dl {{ margin-top: 8px; }}
     .status-strip {{
       display: grid;
       grid-template-columns: minmax(180px, .9fr) minmax(320px, 1.6fr) minmax(420px, 2.1fr);
@@ -1528,6 +1836,205 @@ def _render_shell(status: dict[str, Any]) -> str:
     .toolbar button.active .chip-count {{
       background: #fff;
       color: var(--primary-strong);
+    }}
+    .bulk-flow {{
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }}
+    .step-card {{
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, .65);
+      padding: 16px 18px;
+    }}
+    .step-card + .step-card {{
+      margin-top: 0;
+    }}
+    .step-head {{
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }}
+    .step-head > div {{ flex: 1; min-width: 0; }}
+    .step-head h3 {{
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }}
+    .step-head p {{
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }}
+    .step-head code {{
+      font-size: 11.5px;
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: var(--text-2);
+    }}
+    .step-badge {{
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+    }}
+    .template-presets button {{
+      border-radius: 999px;
+    }}
+    .template-tokens {{
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 10px;
+    }}
+    .token-label {{
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-right: 2px;
+    }}
+    .token-chip {{
+      min-height: 28px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 999px;
+      border: 1px dashed var(--line-strong);
+      background: var(--panel-soft);
+      color: var(--text-2);
+      cursor: pointer;
+    }}
+    .token-chip:hover {{
+      background: #fff;
+      color: var(--primary-strong);
+      border-color: var(--primary);
+    }}
+    .template-label {{
+      display: grid;
+      gap: 6px;
+      margin-bottom: 10px;
+    }}
+    .template-preview {{
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--panel-soft);
+      padding: 10px 12px;
+    }}
+    .preview-label {{
+      display: block;
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 4px;
+      letter-spacing: 0.02em;
+    }}
+    .preview-body {{
+      white-space: pre-wrap;
+      color: var(--text);
+      font-size: 13.5px;
+      line-height: 1.55;
+      min-height: 20px;
+    }}
+    .preview-body.empty {{
+      color: var(--muted);
+      font-style: italic;
+    }}
+    .send-card {{
+      border: 1px solid var(--primary-soft, var(--line));
+      background: linear-gradient(180deg, rgba(46,111,99,.04), rgba(255,255,255,.6));
+    }}
+    .send-summary {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }}
+    .send-stat {{
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: #fff;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }}
+    .send-stat span {{
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 600;
+    }}
+    .send-stat strong {{
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }}
+    .send-stat.warn strong {{ color: var(--danger, #b45309); }}
+    .send-stat.ok strong {{ color: var(--primary-strong); }}
+    .send-actions {{
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }}
+    .send-toggle {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: var(--text-2);
+      font-weight: 600;
+    }}
+    .send-toggle input {{
+      width: auto;
+      min-height: 0;
+      margin: 0;
+    }}
+    .bulk-send-btn {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      font-weight: 700;
+    }}
+    .bulk-send-btn[disabled] {{
+      opacity: .55;
+      cursor: not-allowed;
+    }}
+    .btn-count {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 22px;
+      padding: 0 7px;
+      margin-left: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.22);
+      color: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }}
+    @media (max-width: 720px) {{
+      .send-summary {{ grid-template-columns: 1fr 1fr; }}
+      .send-actions {{ flex-direction: column; align-items: stretch; }}
+      .send-actions .bulk-send-btn {{ justify-content: center; }}
     }}
     label {{
       display: grid;
@@ -2334,8 +2841,8 @@ def _render_shell(status: dict[str, Any]) -> str:
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1112 0c0 7 3 7 3 9H3c0-2 3-2 3-9z"/><path d="M10 21a2 2 0 004 0"/></svg>
           </span>
           <span class="quick-meta">
-            <span class="quick-title">미제출 일괄 알림</span>
-            <span class="quick-desc" id="qaMissingDesc">미제출 학생 일괄 sweep</span>
+            <span class="quick-title">미제출 검색·단체 발송</span>
+            <span class="quick-desc" id="qaMissingDesc">조건 검색 → 문구 작성 → 단체 발송</span>
           </span>
           <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </button>
@@ -2390,8 +2897,15 @@ def _render_shell(status: dict[str, Any]) -> str:
             <div id="actionQueue" class="action-list"></div>
           </div>
           <div class="panel">
-            <h2 style="margin-bottom:10px">설정</h2>
-            <dl id="settings"></dl>
+            <div class="panel-head" style="margin-bottom:10px">
+              <h2><span class="h2-dot" style="background:var(--accent)"></span>설정 · 연결</h2>
+              <span class="section-subtitle" id="connSummary">-</span>
+            </div>
+            <div id="connList" class="conn-list"></div>
+            <details class="conn-details">
+              <summary>config 상세</summary>
+              <dl id="settings"></dl>
+            </details>
           </div>
           <div class="panel">
             <div class="panel-head" style="margin-bottom:10px">
@@ -2407,46 +2921,105 @@ def _render_shell(status: dict[str, Any]) -> str:
     <section id="tab-homework" class="tab-view">
       <header class="page-head">
         <div>
-          <div class="page-eyebrow">숙제 관리</div>
-          <h2 class="page-title">미제출자에게 알림 보내기</h2>
-          <div class="page-sub">반복 누락, 연락처 보완, 발송 실패를 우선 순위로 정리합니다.</div>
+          <div class="page-eyebrow">숙제 관리 · 단체 발송</div>
+          <h2 class="page-title">미제출 학생 검색 → 단체 발송</h2>
+          <div class="page-sub">조건으로 학생을 찾고, 단체 문구를 작성한 뒤 한 번에 발송합니다.</div>
         </div>
         <div class="page-actions">
           <button class="secondary" data-action="refreshMissing">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 5v5h-5"/></svg>
             새로고침
           </button>
-          <button data-action="sweepMissing">
+          <button data-action="sweepMissing" id="bulkSendHeaderBtn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
-            미제출 sweep 실행
+            단체 발송<span class="btn-count" id="bulkSendHeaderCount">0</span>
           </button>
         </div>
       </header>
 
-      <div class="panel hero-panel">
-        <div class="panel-head">
-          <div>
-            <h2><span class="h2-dot"></span>오늘 미제출 상황</h2>
-            <p>반복 누락, 연락처 보완, 발송 실패를 먼저 볼 수 있게 정리했습니다.</p>
+      <div class="panel hero-panel bulk-flow">
+        <div class="step-card">
+          <div class="step-head">
+            <span class="step-badge">1</span>
+            <div>
+              <h3>학생 검색</h3>
+              <p>조회 시간·수업·상태로 단체 발송 대상을 추립니다.</p>
+            </div>
+            <span class="section-subtitle" id="missingResultMeta">대기</span>
           </div>
-          <span class="section-subtitle">운영 큐</span>
+          <div class="control-grid">
+            <label>조회 시간(시간)<input id="windowHours" type="number" min="1" step="1" value="24"></label>
+            <label>수업 ID<input id="lessonId" type="text" placeholder="예: LSN-2026-04-21-1"></label>
+            <button data-action="refreshMissing" class="secondary">조건으로 검색</button>
+            <button data-action="resetBulkFilters" class="secondary">조건 초기화</button>
+          </div>
+          <div class="toolbar" id="missingFilters" role="tablist" aria-label="미제출 필터">
+            <button data-filter="all" class="active">전체<span class="chip-count" data-count="all">0</span></button>
+            <button data-filter="needs_message">문구 필요<span class="chip-count" data-count="needs_message">0</span></button>
+            <button data-filter="needs_review">검토 필요<span class="chip-count" data-count="needs_review">0</span></button>
+            <button data-filter="needs_phone">연락처 없음<span class="chip-count" data-count="needs_phone">0</span></button>
+            <button data-filter="needs_retry">실패<span class="chip-count" data-count="needs_retry">0</span></button>
+            <button data-filter="repeat">반복<span class="chip-count" data-count="repeat">0</span></button>
+            <button data-filter="done">완료<span class="chip-count" data-count="done">0</span></button>
+          </div>
+          <div id="missingTable" style="margin-top:8px"></div>
         </div>
-        <div class="control-grid">
-          <label>조회 시간<input id="windowHours" type="number" min="1" step="1" value="24"></label>
-          <label>수업 ID<input id="lessonId" type="text" placeholder="예: LSN-2026-04-21-1"></label>
-          <button data-action="refreshMissing" class="secondary">목록 새로고침</button>
-          <button data-action="sweepMissing">미제출 sweep</button>
+
+        <div class="step-card">
+          <div class="step-head">
+            <span class="step-badge">2</span>
+            <div>
+              <h3>단체 문구 작성</h3>
+              <p>템플릿을 고르거나 직접 작성합니다. 변수는 학생별로 자동 치환됩니다.</p>
+            </div>
+            <span class="section-subtitle" id="templateCharMeta">0자</span>
+          </div>
+          <div class="toolbar template-presets" id="templatePresets" role="tablist" aria-label="문구 템플릿">
+            <button type="button" data-preset="default" class="active">기본</button>
+            <button type="button" data-preset="gentle">정중</button>
+            <button type="button" data-preset="casual">캐주얼</button>
+            <button type="button" data-preset="repeat">반복 누락 강조</button>
+            <button type="button" data-preset="custom">직접 작성</button>
+          </div>
+          <div class="template-tokens" aria-label="변수 삽입">
+            <span class="token-label">변수 삽입</span>
+            <button type="button" class="token-chip" data-token="{{student_name}}">학생 이름</button>
+            <button type="button" class="token-chip" data-token="{{class_name}}">반</button>
+            <button type="button" class="token-chip" data-token="{{lesson_id}}">수업 ID</button>
+            <button type="button" class="token-chip" data-token="{{date}}">날짜</button>
+            <button type="button" class="token-chip" data-token="{{missing_count}}">누락 횟수</button>
+          </div>
+          <label class="template-label">단체 발송 문구
+            <textarea id="bulkTemplate" rows="5" placeholder="예: 안녕하세요 학부모님, {{student_name}} 학생이 {{date}} {{class_name}} 숙제를 제출하지 않았습니다. 확인 부탁드립니다."></textarea>
+          </label>
+          <div class="template-preview" aria-live="polite">
+            <span class="preview-label">미리보기 (첫 번째 대상 학생 기준)</span>
+            <div class="preview-body" id="templatePreviewBody">대상 학생이 검색되면 미리보기가 표시됩니다.</div>
+          </div>
         </div>
-        <div class="toolbar" id="missingFilters" role="tablist" aria-label="미제출 필터">
-          <button data-filter="all" class="active">전체<span class="chip-count" data-count="all">0</span></button>
-          <button data-filter="needs_message">문구 필요<span class="chip-count" data-count="needs_message">0</span></button>
-          <button data-filter="needs_review">검토 필요<span class="chip-count" data-count="needs_review">0</span></button>
-          <button data-filter="needs_phone">연락처 없음<span class="chip-count" data-count="needs_phone">0</span></button>
-          <button data-filter="needs_retry">실패<span class="chip-count" data-count="needs_retry">0</span></button>
-          <button data-filter="repeat">반복<span class="chip-count" data-count="repeat">0</span></button>
-          <button data-filter="done">완료<span class="chip-count" data-count="done">0</span></button>
+
+        <div class="step-card send-card">
+          <div class="step-head">
+            <span class="step-badge">3</span>
+            <div>
+              <h3>단체 발송</h3>
+              <p>위에서 작성한 문구로 대상 학생에게 한 번에 발송합니다.</p>
+            </div>
+            <span class="section-subtitle" id="bulkSendMeta">대기</span>
+          </div>
+          <div class="send-summary">
+            <div class="send-stat"><span>발송 대상</span><strong id="bulkSendCount">0</strong>명</div>
+            <div class="send-stat warn"><span>연락처 누락</span><strong id="bulkNoPhone">0</strong>명</div>
+            <div class="send-stat ok"><span>최근 발송 완료</span><strong id="bulkRecentSent">0</strong>건</div>
+          </div>
+          <div class="send-actions">
+            <label class="send-toggle"><input type="checkbox" id="bulkDryRun" checked> 미리 보기(dry-run)로 확인</label>
+            <button data-action="sweepMissing" id="bulkSendBtn" class="bulk-send-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+              <span id="bulkSendBtnLabel">대상 0명에게 단체 발송</span>
+            </button>
+          </div>
         </div>
-        <div id="missingTable" style="margin-top:8px"></div>
       </div>
     </section>
 
@@ -2466,17 +3039,28 @@ def _render_shell(status: dict[str, Any]) -> str:
           </div>
           <div class="dropzone-title">스케줄표 이미지를 끌어다 놓으세요</div>
           <div class="dropzone-desc">JPG, PNG, HEIC · 최대 10MB · 종이 시간표 사진도 인식돼요</div>
-          <button class="dropzone-btn">
+          <button class="dropzone-btn" data-action="scheduleUpload">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
             이미지 선택
           </button>
           <div class="dropzone-alt">또는 텍스트로 붙여넣기 · 엑셀(CSV) 업로드</div>
         </div>
 
+        <details class="schedule-paste">
+          <summary>텍스트로 붙여넣기</summary>
+          <textarea id="schedulePaste" placeholder="월 16:00-17:30 중2 수학 심화 A 박정현 301호&#10;월 19:00-20:30 중3 영어 RC 이수민 302호..."></textarea>
+          <div class="actions" style="margin-top:10px">
+            <button data-action="parseSchedule">AI로 인식하기</button>
+            <button data-action="parseScheduleReset" class="secondary">지우기</button>
+          </div>
+        </details>
+
+        <div id="scheduleReview" class="schedule-review" hidden></div>
+
         <div class="schedule-hint">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg>
           <div>인식 후 <b>요일·시간·강사·교실</b>이 자동 분류되며, 기존 클래스에 매칭됩니다. 확인 단계에서 한 번에 수정할 수 있어요.</div>
-          <span class="badge">곧 제공</span>
+          <span class="badge">이미지 OCR — 곧 제공</span>
         </div>
       </div>
     </section>
@@ -2693,6 +3277,71 @@ def _render_shell(status: dict[str, Any]) -> str:
       document.querySelector("#settings").innerHTML = rows
         .map(([k, v]) => `<dt>${{escapeHtml(k)}}</dt><dd>${{escapeHtml(v)}}</dd>`)
         .join("");
+
+      renderConnections(status.connections || []);
+    }}
+
+    function renderScheduleReview(data) {{
+      const target = document.querySelector("#scheduleReview");
+      if (!target) return;
+      const items = data.items || [];
+      if (!items.length) {{
+        target.hidden = false;
+        target.innerHTML = `<div class="schedule-review-head"><div><strong>인식 결과 없음</strong></div></div><div class="empty">텍스트 형식을 확인하거나 더 많은 줄을 추가해 주세요.</div>`;
+        return;
+      }}
+      const low = items.filter((i) => (i.confidence || 0) < 0.85).length;
+      const sourceLabel = data.source === "claude" ? "Claude AI" : "휴리스틱 파서";
+      target.hidden = false;
+      target.innerHTML = `
+        <div class="schedule-review-head">
+          <div><strong>${{items.length}}개 수업 인식됨</strong>
+            <span class="cell-sub" style="margin-left:8px">소스: ${{escapeHtml(sourceLabel)}}${{low ? ` · 확인 필요 ${{low}}건` : ""}}</span>
+          </div>
+          <span class="badge ok">검토 후 등록</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>요일</th><th>시간</th><th>클래스</th><th>강사</th><th>교실</th><th>신뢰도</th></tr></thead>
+            <tbody>
+              ${{items.map((it) => {{
+                const lowItem = (it.confidence || 0) < 0.85;
+                return `<tr>
+                  <td>${{escapeHtml(it.day || "-")}}</td>
+                  <td>${{escapeHtml(it.time || "-")}}</td>
+                  <td>${{escapeHtml(it.class_name || "-")}}</td>
+                  <td>${{escapeHtml(it.teacher || "-")}}</td>
+                  <td>${{escapeHtml(it.room || "-")}}</td>
+                  <td><span class="${{lowItem ? "low" : ""}}">${{Math.round((it.confidence || 0) * 100)}}%</span></td>
+                </tr>`;
+              }}).join("")}}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }}
+
+    function renderConnections(items) {{
+      const target = document.querySelector("#connList");
+      const summary = document.querySelector("#connSummary");
+      if (!target) return;
+      if (!items.length) {{
+        target.innerHTML = `<div class="empty">연결 상태를 확인할 수 없습니다.</div>`;
+        if (summary) summary.textContent = "-";
+        return;
+      }}
+      const on = items.filter((i) => i.connected).length;
+      if (summary) summary.textContent = `${{on}} / ${{items.length}} 연결됨`;
+      target.innerHTML = items.map((item) => `
+        <div class="conn-item ${{item.connected ? "on" : "off"}}">
+          <span class="conn-led" aria-hidden="true"></span>
+          <div class="conn-text">
+            <span class="conn-label">${{escapeHtml(item.label)}} <span class="conn-kind">${{escapeHtml(item.kind || "")}}</span></span>
+            <span class="conn-detail" title="${{escapeHtml(item.detail || "")}}">${{escapeHtml(item.detail || "")}}</span>
+          </div>
+          <span class="conn-status">${{item.connected ? "연결됨" : "미연결"}}</span>
+        </div>
+      `).join("");
     }}
 
     function escapeHtml(value) {{
@@ -3380,6 +4029,26 @@ def _render_shell(status: dict[str, Any]) -> str:
       async refreshMissing() {{
         await loadSituation();
         writeLog("미제출/알림 상황을 갱신했습니다.");
+      }},
+      async parseSchedule() {{
+        const text = (document.querySelector("#schedulePaste").value || "").trim();
+        if (!text) {{
+          writeLog("스케줄 텍스트를 먼저 붙여넣어 주세요.");
+          return;
+        }}
+        const data = await callApi("/api/schedule/parse", {{ text }});
+        renderScheduleReview(data);
+        writeLog(data.message, {{ source: data.source, items: (data.items || []).length }});
+      }},
+      async parseScheduleReset() {{
+        document.querySelector("#schedulePaste").value = "";
+        const review = document.querySelector("#scheduleReview");
+        if (review) {{ review.hidden = true; review.innerHTML = ""; }}
+      }},
+      async scheduleUpload() {{
+        writeLog("이미지 OCR은 곧 제공됩니다. 우선 '텍스트로 붙여넣기'에서 AI 인식을 시도해 보세요.");
+        const details = document.querySelector(".schedule-paste");
+        if (details) details.open = true;
       }},
       async refreshDashboard() {{
         const data = await loadDashboard();
