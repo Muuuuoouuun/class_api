@@ -1190,6 +1190,79 @@ def _render_shell(status: dict[str, Any]) -> str:
       .quick-actions {{ grid-template-columns: 1fr; }}
       .page-head {{ flex-direction: column; align-items: flex-start; }}
     }}
+    .dropzone {{
+      border: 2px dashed var(--primary);
+      border-radius: var(--radius-lg);
+      padding: 48px 32px;
+      text-align: center;
+      background: var(--primary-softer);
+      display: grid;
+      gap: 14px;
+      justify-items: center;
+    }}
+    .dropzone-icon {{
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      background: #fff;
+      color: var(--primary-strong);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow);
+    }}
+    .dropzone-title {{
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }}
+    .dropzone-desc {{
+      font-size: 13.5px;
+      color: var(--muted);
+    }}
+    .dropzone-btn {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      background: var(--primary);
+      color: #fff;
+      border: 1px solid var(--primary);
+      font-weight: 700;
+      cursor: pointer;
+    }}
+    .dropzone-btn:hover {{
+      background: var(--primary-strong);
+      border-color: var(--primary-strong);
+    }}
+    .dropzone-alt {{
+      font-size: 12px;
+      color: var(--muted-2);
+      margin-top: 4px;
+    }}
+    .schedule-hint {{
+      margin-top: 20px;
+      padding: 14px 16px;
+      background: var(--panel-soft);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-2);
+      font-size: 13px;
+    }}
+    .schedule-hint svg {{
+      color: var(--primary-strong);
+      flex: 0 0 auto;
+    }}
+    .schedule-hint > div {{ flex: 1; line-height: 1.5; }}
+    .schedule-hint .badge {{
+      background: var(--accent-soft);
+      color: var(--accent-ink);
+      border-color: rgba(180, 92, 25, .25);
+    }}
     .status-strip {{
       display: grid;
       grid-template-columns: minmax(180px, .9fr) minmax(320px, 1.6fr) minmax(420px, 2.1fr);
@@ -2170,14 +2243,26 @@ def _render_shell(status: dict[str, Any]) -> str:
         </div>
       </div>
       <nav class="sidenav" aria-label="대시보드 탭">
-        <button data-tab="operations" class="active" aria-current="page">
+        <button data-tab="home" class="active" aria-current="page">
           <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg></span>
           <span class="nav-label">홈</span>
+        </button>
+        <button data-tab="homework">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1112 0c0 7 3 7 3 9H3c0-2 3-2 3-9z"/><path d="M10 21a2 2 0 004 0"/></svg></span>
+          <span class="nav-label">숙제 미제출 알림</span>
           <span class="nav-badge" id="sideBadgeMissing" hidden>0</span>
         </button>
-        <button data-tab="performance">
+        <button data-tab="schedule">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></span>
+          <span class="nav-label">스케줄 자동 등록</span>
+        </button>
+        <button data-tab="report">
           <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V8M10 20V4M16 20v-8M22 20H2"/></svg></span>
-          <span class="nav-label">성과 대시보드</span>
+          <span class="nav-label">리포트 빌더</span>
+        </button>
+        <button data-tab="students">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14c3 0 6 1.8 6 5"/></svg></span>
+          <span class="nav-label">학생</span>
         </button>
       </nav>
       <div class="sidebar-profile">
@@ -2192,9 +2277,9 @@ def _render_shell(status: dict[str, Any]) -> str:
     <section class="app-main">
       <div class="topbar" role="banner">
         <div class="crumb">
-          <button class="crumb-home" data-tab="operations">홈</button>
+          <button class="crumb-home" data-tab="home">홈</button>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-          <span class="crumb-current" id="crumbCurrent">운영</span>
+          <span class="crumb-current" id="crumbCurrent">홈</span>
         </div>
         <div class="topbar-actions">
           <div class="topbar-search">
@@ -2208,213 +2293,268 @@ def _render_shell(status: dict[str, Any]) -> str:
         </div>
       </div>
       <main class="app-body">
-    <section class="status-strip">
-      <div class="status-group" data-label="인입" style="--cols:1">
-        <div class="metric"><span>Webhook 원본</span><strong id="incomingCount">0</strong></div>
+
+    <section id="tab-home" class="tab-view active">
+      <header class="page-head">
+        <div>
+          <div class="page-eyebrow" id="todayLabel">{today_korean} · {title}</div>
+          <h2 class="page-title">오늘 운영 현황 <span class="wave" aria-hidden="true">👋</span></h2>
+          <div class="page-sub">미제출 알림 · 스케줄 · 리포트를 한 곳에서 관리합니다.</div>
+        </div>
+        <div class="page-actions">
+          <button class="secondary" data-tab="schedule">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+            스케줄 업로드
+          </button>
+          <button data-tab="homework">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+            미제출 알림 보내기
+          </button>
+        </div>
+      </header>
+
+      <section class="status-strip">
+        <div class="status-group" data-label="인입" style="--cols:1">
+          <div class="metric"><span>Webhook 원본</span><strong id="incomingCount">0</strong></div>
+        </div>
+        <div class="status-group" data-label="필요 조치" style="--cols:2">
+          <div class="metric warn"><span>숙제 미제출</span><strong id="missingCount">0</strong></div>
+          <div class="metric alert"><span>연락처 없음</span><strong id="noPhoneCount">0</strong></div>
+        </div>
+        <div class="status-group" data-label="처리 결과" style="--cols:3">
+          <div class="metric"><span>문구 생성</span><strong id="dryRunCount">0</strong></div>
+          <div class="metric ok"><span>발송 완료</span><strong id="sentCount">0</strong></div>
+          <div class="metric alert"><span>발송 실패</span><strong id="failedCount">0</strong></div>
+        </div>
+      </section>
+
+      <div class="quick-actions" role="list">
+        <button class="quick-card" data-tab="homework" role="listitem">
+          <span class="quick-icon warn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1112 0c0 7 3 7 3 9H3c0-2 3-2 3-9z"/><path d="M10 21a2 2 0 004 0"/></svg>
+          </span>
+          <span class="quick-meta">
+            <span class="quick-title">미제출 일괄 알림</span>
+            <span class="quick-desc" id="qaMissingDesc">미제출 학생 일괄 sweep</span>
+          </span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button class="quick-card" data-tab="schedule" role="listitem">
+          <span class="quick-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+          </span>
+          <span class="quick-meta">
+            <span class="quick-title">스케줄 자동 등록</span>
+            <span class="quick-desc">이미지·CSV → 일정 자동 생성</span>
+          </span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button class="quick-card" data-tab="report" role="listitem">
+          <span class="quick-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6"/></svg>
+          </span>
+          <span class="quick-meta">
+            <span class="quick-title">리포트 만들기</span>
+            <span class="quick-desc">일일 · 주간 · 시험 · 메모</span>
+          </span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button class="quick-card" data-tab="students" role="listitem">
+          <span class="quick-icon blue">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14c3 0 6 1.8 6 5"/></svg>
+          </span>
+          <span class="quick-meta">
+            <span class="quick-title">학생 성과</span>
+            <span class="quick-desc">학생/코스 KPI · 추이</span>
+          </span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
       </div>
-      <div class="status-group" data-label="필요 조치" style="--cols:2">
-        <div class="metric warn"><span>숙제 미제출</span><strong id="missingCount">0</strong></div>
-        <div class="metric alert"><span>연락처 없음</span><strong id="noPhoneCount">0</strong></div>
-      </div>
-      <div class="status-group" data-label="처리 결과" style="--cols:3">
-        <div class="metric"><span>문구 생성</span><strong id="dryRunCount">0</strong></div>
-        <div class="metric ok"><span>발송 완료</span><strong id="sentCount">0</strong></div>
-        <div class="metric alert"><span>발송 실패</span><strong id="failedCount">0</strong></div>
+
+      <section class="grid">
+        <div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2><span class="h2-dot" style="background:var(--blue)"></span>알림 발송 현황</h2>
+              <span class="section-subtitle">최근 80건</span>
+            </div>
+            <div id="notificationTable"></div>
+          </div>
+        </div>
+        <aside>
+          <div class="panel">
+            <div class="panel-head" style="margin-bottom:10px">
+              <h2><span class="h2-dot" style="background:var(--danger)"></span>다음 액션</h2>
+              <span class="section-subtitle" id="actionQueueMeta">우선순위 순</span>
+            </div>
+            <div id="actionQueue" class="action-list"></div>
+          </div>
+          <div class="panel">
+            <h2 style="margin-bottom:10px">설정</h2>
+            <dl id="settings"></dl>
+          </div>
+          <div class="panel">
+            <div class="panel-head" style="margin-bottom:10px">
+              <h2>실행 로그</h2>
+              <span class="section-subtitle">최근 활동</span>
+            </div>
+            <div id="log" class="log"></div>
+          </div>
+        </aside>
+      </section>
+    </section>
+
+    <section id="tab-homework" class="tab-view">
+      <header class="page-head">
+        <div>
+          <div class="page-eyebrow">숙제 관리</div>
+          <h2 class="page-title">미제출자에게 알림 보내기</h2>
+          <div class="page-sub">반복 누락, 연락처 보완, 발송 실패를 우선 순위로 정리합니다.</div>
+        </div>
+        <div class="page-actions">
+          <button class="secondary" data-action="refreshMissing">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 5v5h-5"/></svg>
+            새로고침
+          </button>
+          <button data-action="sweepMissing">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+            미제출 sweep 실행
+          </button>
+        </div>
+      </header>
+
+      <div class="panel hero-panel">
+        <div class="panel-head">
+          <div>
+            <h2><span class="h2-dot"></span>오늘 미제출 상황</h2>
+            <p>반복 누락, 연락처 보완, 발송 실패를 먼저 볼 수 있게 정리했습니다.</p>
+          </div>
+          <span class="section-subtitle">운영 큐</span>
+        </div>
+        <div class="control-grid">
+          <label>조회 시간<input id="windowHours" type="number" min="1" step="1" value="24"></label>
+          <label>수업 ID<input id="lessonId" type="text" placeholder="예: LSN-2026-04-21-1"></label>
+          <button data-action="refreshMissing" class="secondary">목록 새로고침</button>
+          <button data-action="sweepMissing">미제출 sweep</button>
+        </div>
+        <div class="toolbar" id="missingFilters" role="tablist" aria-label="미제출 필터">
+          <button data-filter="all" class="active">전체<span class="chip-count" data-count="all">0</span></button>
+          <button data-filter="needs_message">문구 필요<span class="chip-count" data-count="needs_message">0</span></button>
+          <button data-filter="needs_review">검토 필요<span class="chip-count" data-count="needs_review">0</span></button>
+          <button data-filter="needs_phone">연락처 없음<span class="chip-count" data-count="needs_phone">0</span></button>
+          <button data-filter="needs_retry">실패<span class="chip-count" data-count="needs_retry">0</span></button>
+          <button data-filter="repeat">반복<span class="chip-count" data-count="repeat">0</span></button>
+          <button data-filter="done">완료<span class="chip-count" data-count="done">0</span></button>
+        </div>
+        <div id="missingTable" style="margin-top:8px"></div>
       </div>
     </section>
 
-    <section id="tab-operations" class="tab-view active">
-    <header class="page-head">
-      <div>
-        <div class="page-eyebrow" id="todayLabel">{today_korean} · {title}</div>
-        <h2 class="page-title">오늘 운영 현황 <span class="wave" aria-hidden="true">👋</span></h2>
-        <div class="page-sub">미제출 알림 · 시험 · 리포트를 한 곳에서 관리합니다.</div>
-      </div>
-      <div class="page-actions">
-        <button class="secondary" data-jump="exam">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
-          시험 결과 업로드
-        </button>
-        <button data-action="sweepMissing">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
-          미제출 sweep 실행
-        </button>
-      </div>
-    </header>
+    <section id="tab-schedule" class="tab-view">
+      <header class="page-head">
+        <div>
+          <div class="page-eyebrow">스케줄 관리</div>
+          <h2 class="page-title">스케줄표 사진으로 한 번에 등록</h2>
+          <div class="page-sub">종이 시간표를 찍어 올리면 AI가 수업·강사·시간을 인식해 ClassIn 일정으로 변환합니다.</div>
+        </div>
+      </header>
 
-    <div class="quick-actions" role="list">
-      <button class="quick-card" data-action="sweepMissing" role="listitem">
-        <span class="quick-icon warn">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1112 0c0 7 3 7 3 9H3c0-2 3-2 3-9z"/><path d="M10 21a2 2 0 004 0"/></svg>
-        </span>
-        <span class="quick-meta">
-          <span class="quick-title">미제출 일괄 알림</span>
-          <span class="quick-desc" id="qaMissingDesc">미제출 학생 일괄 sweep</span>
-        </span>
-        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-      </button>
-      <button class="quick-card" data-jump="exam" role="listitem">
-        <span class="quick-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
-        </span>
-        <span class="quick-meta">
-          <span class="quick-title">시험 결과 import</span>
-          <span class="quick-desc">CSV/JSON → 미응시 sweep</span>
-        </span>
-        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-      </button>
-      <button class="quick-card" data-jump="report" role="listitem">
-        <span class="quick-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6"/></svg>
-        </span>
-        <span class="quick-meta">
-          <span class="quick-title">리포트 만들기</span>
-          <span class="quick-desc">일일 · 주간 리포트</span>
-        </span>
-        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-      </button>
-      <button class="quick-card" data-tab="performance" role="listitem">
-        <span class="quick-icon blue">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14c3 0 6 1.8 6 5"/></svg>
-        </span>
-        <span class="quick-meta">
-          <span class="quick-title">성과 대시보드</span>
-          <span class="quick-desc">학생/코스 KPI · 추이</span>
-        </span>
-        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-      </button>
-    </div>
-
-    <section class="grid">
-      <div>
-        <div class="panel hero-panel">
-          <div class="panel-head">
-            <div>
-              <h2><span class="h2-dot"></span>오늘 미제출 상황</h2>
-              <p>반복 누락, 연락처 보완, 발송 실패를 먼저 볼 수 있게 정리했습니다.</p>
-            </div>
-            <span class="section-subtitle">운영 큐</span>
+      <div class="panel hero-panel">
+        <div class="dropzone" id="scheduleDropzone">
+          <div class="dropzone-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5L5 20"/></svg>
           </div>
-          <div class="control-grid">
-            <label>조회 시간<input id="windowHours" type="number" min="1" step="1" value="24"></label>
-            <label>수업 ID<input id="lessonId" type="text" placeholder="예: LSN-2026-04-21-1"></label>
-            <button data-action="refreshMissing" class="secondary">목록 새로고침</button>
-            <button data-action="sweepMissing">미제출 sweep</button>
-          </div>
-          <div class="toolbar" id="missingFilters" role="tablist" aria-label="미제출 필터">
-            <button data-filter="all" class="active">전체<span class="chip-count" data-count="all">0</span></button>
-            <button data-filter="needs_message">문구 필요<span class="chip-count" data-count="needs_message">0</span></button>
-            <button data-filter="needs_review">검토 필요<span class="chip-count" data-count="needs_review">0</span></button>
-            <button data-filter="needs_phone">연락처 없음<span class="chip-count" data-count="needs_phone">0</span></button>
-            <button data-filter="needs_retry">실패<span class="chip-count" data-count="needs_retry">0</span></button>
-            <button data-filter="repeat">반복<span class="chip-count" data-count="repeat">0</span></button>
-            <button data-filter="done">완료<span class="chip-count" data-count="done">0</span></button>
-          </div>
-          <div id="missingTable" style="margin-top:8px"></div>
+          <div class="dropzone-title">스케줄표 이미지를 끌어다 놓으세요</div>
+          <div class="dropzone-desc">JPG, PNG, HEIC · 최대 10MB · 종이 시간표 사진도 인식돼요</div>
+          <button class="dropzone-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+            이미지 선택
+          </button>
+          <div class="dropzone-alt">또는 텍스트로 붙여넣기 · 엑셀(CSV) 업로드</div>
         </div>
 
-        <div class="panel">
-          <div class="panel-head">
-            <h2><span class="h2-dot" style="background:var(--blue)"></span>알림 발송 현황</h2>
-            <span class="section-subtitle">최근 80건</span>
+        <div class="schedule-hint">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg>
+          <div>인식 후 <b>요일·시간·강사·교실</b>이 자동 분류되며, 기존 클래스에 매칭됩니다. 확인 단계에서 한 번에 수정할 수 있어요.</div>
+          <span class="badge">곧 제공</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-report" class="tab-view">
+      <header class="page-head">
+        <div>
+          <div class="page-eyebrow">리포트 빌더</div>
+          <h2 class="page-title">학원 브랜드 리포트</h2>
+          <div class="page-sub">일일/주간 리포트, 시험 처리, 메모, AI 질문을 한 곳에서.</div>
+        </div>
+      </header>
+
+      <div class="panel hero-panel">
+        <nav class="subtabs" aria-label="도구 탭">
+          <button data-subtab="report" class="active">리포트</button>
+          <button data-subtab="exam">시험</button>
+          <button data-subtab="memo">메모</button>
+          <button data-subtab="agent">AI 질문</button>
+        </nav>
+
+        <div data-subtabview="report" class="subtab-view active">
+          <div class="actions">
+            <div class="row">
+              <label>일자<input id="dailyDate" type="date" value="{today}"></label>
+              <button data-action="renderDaily">일일 리포트 생성</button>
+            </div>
+            <div class="row">
+              <label>주 시작일<input id="weekDate" type="date" value="{week_start}"></label>
+              <button data-action="approveWeekly" class="secondary">주간 승인</button>
+            </div>
+            <button data-action="generateWeekly">주간 드래프트 생성</button>
+            <button data-action="refreshStatus" class="secondary">상태 새로고침</button>
           </div>
-          <div id="notificationTable"></div>
         </div>
 
-        <div class="panel">
-          <div class="panel-head">
-            <div>
-              <h2><span class="h2-dot" style="background:var(--accent)"></span>도구</h2>
-              <p>일일/주간 리포트, 시험 처리, 메모, AI 질문을 한 곳에서.</p>
-            </div>
-          </div>
-          <nav class="subtabs" aria-label="도구 탭">
-            <button data-subtab="report" class="active">리포트</button>
-            <button data-subtab="exam">시험</button>
-            <button data-subtab="memo">메모</button>
-            <button data-subtab="agent">AI 질문</button>
-          </nav>
-
-          <div data-subtabview="report" class="subtab-view active">
+        <div data-subtabview="exam" class="subtab-view">
+          <div class="stack">
             <div class="actions">
-              <div class="row">
-                <label>일자<input id="dailyDate" type="date" value="{today}"></label>
-                <button data-action="renderDaily">일일 리포트 생성</button>
-              </div>
-              <div class="row">
-                <label>주 시작일<input id="weekDate" type="date" value="{week_start}"></label>
-                <button data-action="approveWeekly" class="secondary">주간 승인</button>
-              </div>
-              <button data-action="generateWeekly">주간 드래프트 생성</button>
-              <button data-action="refreshStatus" class="secondary">상태 새로고침</button>
+              <label>CSV/JSON path<input id="examPath" type="text" placeholder="samples/exam_results_sample.csv"></label>
+              <label>시험명<input id="examName" type="text" placeholder="4월 월말평가"></label>
+              <label>시험일<input id="examDate" type="date" value="{today}"></label>
+              <label>반<input id="examClassName" type="text"></label>
+              <label>출처<input id="examSource" type="text" value="academy-db"></label>
+              <label style="align-self:end; flex-direction:row; display:flex; align-items:center; gap:8px; color:var(--text-2); font-weight:600;"><input id="examDryRun" type="checkbox" checked style="width:auto; min-height:0;"> dry-run 모드</label>
+              <button data-action="importExam" class="secondary">시험 import</button>
+              <button data-action="previewMissingExam" class="secondary">미응시 확인</button>
+              <button data-action="sweepMissingExam">미응시 sweep</button>
             </div>
+            <div id="examPreview" class="exam-preview empty">미응시 확인 결과 없음</div>
           </div>
+        </div>
 
-          <div data-subtabview="exam" class="subtab-view">
-            <div class="stack">
-              <div class="actions">
-                <label>CSV/JSON path<input id="examPath" type="text" placeholder="samples/exam_results_sample.csv"></label>
-                <label>시험명<input id="examName" type="text" placeholder="4월 월말평가"></label>
-                <label>시험일<input id="examDate" type="date" value="{today}"></label>
-                <label>반<input id="examClassName" type="text"></label>
-                <label>출처<input id="examSource" type="text" value="academy-db"></label>
-                <label style="align-self:end; flex-direction:row; display:flex; align-items:center; gap:8px; color:var(--text-2); font-weight:600;"><input id="examDryRun" type="checkbox" checked style="width:auto; min-height:0;"> dry-run 모드</label>
-                <button data-action="importExam" class="secondary">시험 import</button>
-                <button data-action="previewMissingExam" class="secondary">미응시 확인</button>
-                <button data-action="sweepMissingExam">미응시 sweep</button>
-              </div>
-              <div id="examPreview" class="exam-preview empty">미응시 확인 결과 없음</div>
+        <div data-subtabview="memo" class="subtab-view">
+          <div class="stack">
+            <div class="actions">
+              <label>ClassIn ID<input id="memoClassinId" type="text"></label>
+              <label>태그<input id="memoTag" type="text" placeholder="예: 상담"></label>
             </div>
+            <label>내용<textarea id="memoText" placeholder="학생/학부모 관련 메모를 입력하세요"></textarea></label>
+            <button data-action="writeMemo">메모 저장</button>
           </div>
+        </div>
 
-          <div data-subtabview="memo" class="subtab-view">
-            <div class="stack">
-              <div class="actions">
-                <label>ClassIn ID<input id="memoClassinId" type="text"></label>
-                <label>태그<input id="memoTag" type="text" placeholder="예: 상담"></label>
-              </div>
-              <label>내용<textarea id="memoText" placeholder="학생/학부모 관련 메모를 입력하세요"></textarea></label>
-              <button data-action="writeMemo">메모 저장</button>
-            </div>
-          </div>
-
-          <div data-subtabview="agent" class="subtab-view">
-            <div class="stack">
-              <label>질문<textarea id="agentQuestion" placeholder="예: 이번 주 미제출이 가장 많은 반은?"></textarea></label>
-              <button data-action="askAgent">질문 보내기</button>
-            </div>
+        <div data-subtabview="agent" class="subtab-view">
+          <div class="stack">
+            <label>질문<textarea id="agentQuestion" placeholder="예: 이번 주 미제출이 가장 많은 반은?"></textarea></label>
+            <button data-action="askAgent">질문 보내기</button>
           </div>
         </div>
       </div>
-
-      <aside>
-        <div class="panel">
-          <div class="panel-head" style="margin-bottom:10px">
-            <h2><span class="h2-dot" style="background:var(--danger)"></span>다음 액션</h2>
-            <span class="section-subtitle" id="actionQueueMeta">우선순위 순</span>
-          </div>
-          <div id="actionQueue" class="action-list"></div>
-        </div>
-        <div class="panel">
-          <h2 style="margin-bottom:10px">설정</h2>
-          <dl id="settings"></dl>
-        </div>
-        <div class="panel">
-          <div class="panel-head" style="margin-bottom:10px">
-            <h2>실행 로그</h2>
-            <span class="section-subtitle">최근 활동</span>
-          </div>
-          <div id="log" class="log"></div>
-        </div>
-      </aside>
-    </section>
     </section>
 
-    <section id="tab-performance" class="tab-view">
+    <section id="tab-students" class="tab-view">
       <header class="page-head">
         <div>
           <div class="page-eyebrow">학생 · 코스 분석</div>
-          <h2 class="page-title">성과 대시보드</h2>
+          <h2 class="page-title">학생 성과 대시보드</h2>
           <div class="page-sub" id="performanceScope">전체 코스</div>
         </div>
         <span class="section-subtitle" id="performancePeriod">최근 90일</span>
@@ -3272,26 +3412,6 @@ def _render_shell(status: dict[str, Any]) -> str:
       const tabButton = event.target.closest("button[data-tab]");
       const modeButton = event.target.closest("button[data-mode]");
       const subtabButton = event.target.closest("button[data-subtab]");
-      const jumpButton = event.target.closest("button[data-jump]");
-      if (jumpButton) {{
-        const target = jumpButton.dataset.jump;
-        document.querySelectorAll(".sidenav button[data-tab]").forEach((item) => {{
-          item.classList.toggle("active", item.dataset.tab === "operations");
-        }});
-        document.querySelectorAll(".tab-view").forEach((view) => view.classList.toggle("active", view.id === "tab-operations"));
-        const crumb = document.querySelector("#crumbCurrent");
-        if (crumb) crumb.textContent = "운영";
-        const subtab = document.querySelector(`button[data-subtab="${{target}}"]`);
-        if (subtab) {{
-          const scope = subtab.closest(".panel");
-          if (scope) {{
-            scope.querySelectorAll("button[data-subtab]").forEach((btn) => btn.classList.toggle("active", btn === subtab));
-            scope.querySelectorAll("[data-subtabview]").forEach((view) => view.classList.toggle("active", view.dataset.subtabview === target));
-            scope.scrollIntoView({{ behavior: "smooth", block: "start" }});
-          }}
-        }}
-        return;
-      }}
       if (subtabButton) {{
         const target = subtabButton.dataset.subtab;
         const scope = subtabButton.closest(".panel");
@@ -3303,13 +3423,21 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
       if (tabButton) {{
         const targetTab = tabButton.dataset.tab;
+        const crumbMap = {{
+          home: "홈",
+          homework: "숙제 미제출 알림",
+          schedule: "스케줄 자동 등록",
+          report: "리포트 빌더",
+          students: "학생",
+        }};
         document.querySelectorAll(".sidenav button[data-tab]").forEach((item) => {{
           item.classList.toggle("active", item.dataset.tab === targetTab);
         }});
         document.querySelectorAll(".tab-view").forEach((view) => view.classList.toggle("active", view.id === `tab-${{targetTab}}`));
         const crumb = document.querySelector("#crumbCurrent");
-        if (crumb) crumb.textContent = targetTab === "performance" ? "성과 대시보드" : "운영";
-        if (targetTab === "performance") {{
+        if (crumb) crumb.textContent = crumbMap[targetTab] || "홈";
+        if (window.scrollTo) window.scrollTo({{ top: 0, behavior: "smooth" }});
+        if (targetTab === "students") {{
           try {{
             await loadDashboard();
           }} catch (error) {{
