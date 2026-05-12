@@ -2036,6 +2036,252 @@ def _render_shell(status: dict[str, Any]) -> str:
       .send-actions {{ flex-direction: column; align-items: stretch; }}
       .send-actions .bulk-send-btn {{ justify-content: center; }}
     }}
+    /* Missing-row list (Step 1 results) */
+    .missing-list-head {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 4px 6px;
+      border-bottom: 1px dashed var(--line);
+      margin-bottom: 4px;
+    }}
+    .select-all {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+    }}
+    .select-all input {{ width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: var(--primary); }}
+    .missing-list-hint {{
+      font-size: 11.5px;
+      color: var(--muted);
+    }}
+    .missing-list {{
+      display: flex;
+      flex-direction: column;
+    }}
+    .missing-row {{
+      display: grid;
+      grid-template-columns: 24px 36px 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 6px;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      transition: background .12s ease;
+    }}
+    .missing-row:last-child {{ border-bottom: none; }}
+    .missing-row:hover {{ background: var(--panel-soft); }}
+    .missing-row--locked {{ opacity: .55; cursor: not-allowed; }}
+    .missing-row-check {{
+      width: 18px;
+      height: 18px;
+      min-height: 0;
+      margin: 0;
+      accent-color: var(--primary);
+    }}
+    .missing-row-avatar {{
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #fff;
+      font-size: 13.5px;
+      letter-spacing: -0.02em;
+    }}
+    .missing-row-meta {{
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }}
+    .missing-row-name {{
+      font-weight: 700;
+      font-size: 14.5px;
+      color: var(--text);
+    }}
+    .missing-row-sub {{
+      font-size: 12.5px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }}
+    .missing-row-warn {{ color: var(--danger, #b45309); font-weight: 600; }}
+    .missing-row-stats {{
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      white-space: nowrap;
+    }}
+    .missing-row-last {{
+      font-size: 12.5px;
+      color: var(--muted);
+    }}
+    .streak-badge {{
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }}
+    .streak-badge.mute {{ background: #f1f3ef; color: var(--muted); border: 1px solid var(--line); }}
+    .streak-badge.warn {{ background: #fff3df; color: #b45309; }}
+    .streak-badge.danger {{ background: #fde2e1; color: #b42318; }}
+    @media (max-width: 720px) {{
+      .missing-row {{ grid-template-columns: 22px 32px 1fr; }}
+      .missing-row-stats {{ grid-column: 2 / -1; justify-content: space-between; }}
+    }}
+
+    /* Step 2 — message composition */
+    .msg-card .step-head {{ align-items: center; }}
+    .ai-suggest {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 4px 12px;
+      font-size: 12.5px;
+      font-weight: 600;
+      border-radius: 999px;
+      border: 1px solid var(--primary);
+      background: var(--primary-soft);
+      color: var(--primary-strong);
+    }}
+    .ai-suggest:hover {{ background: #fff; }}
+    .link-btn {{
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+      min-height: 0;
+      color: var(--primary-strong);
+      font-weight: 600;
+      font-size: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+    }}
+    .link-btn:hover {{ background: transparent; color: var(--primary); }}
+    .tone-chips {{
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }}
+    .tone-chips button {{
+      min-height: 36px;
+      padding: 6px 18px;
+      border-radius: 8px;
+      border: 1.5px solid var(--line-strong);
+      background: #fff;
+      color: var(--text-2);
+      font-weight: 600;
+      font-size: 13px;
+    }}
+    .tone-chips button:hover {{ border-color: var(--primary); color: var(--primary-strong); }}
+    .tone-chips button.active {{
+      border-color: var(--primary);
+      color: var(--primary-strong);
+      background: var(--primary-soft);
+      box-shadow: 0 0 0 3px var(--primary-ring);
+    }}
+    .msg-grid {{
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) minmax(280px, 1.1fr);
+      gap: 18px;
+      margin-bottom: 8px;
+    }}
+    .msg-col {{ display: flex; flex-direction: column; gap: 8px; min-width: 0; }}
+    .msg-col-label {{
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--text-2);
+    }}
+    .channel-list {{ display: flex; flex-direction: column; gap: 8px; }}
+    .channel-option {{
+      display: grid;
+      grid-template-columns: 20px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1.5px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: #fff;
+      cursor: pointer;
+    }}
+    .channel-option input[type=radio] {{
+      width: 16px;
+      height: 16px;
+      min-height: 0;
+      margin: 0;
+      accent-color: var(--primary);
+    }}
+    .channel-option.active {{
+      border-color: var(--primary);
+      background: var(--primary-soft);
+      box-shadow: 0 0 0 3px var(--primary-ring);
+    }}
+    .channel-option.disabled {{ cursor: default; opacity: .85; }}
+    .channel-meta {{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }}
+    .channel-title {{
+      font-weight: 700;
+      font-size: 13.5px;
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .channel-desc {{ font-size: 12px; color: var(--muted); }}
+    .channel-pill {{
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #ffe5e1;
+      color: #b42318;
+    }}
+    .channel-connect {{
+      min-height: 28px;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      color: var(--primary-strong);
+    }}
+    .channel-connect:hover {{ border-color: var(--primary); background: var(--primary-soft); }}
+    .msg-preview {{
+      flex: 1;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--panel-soft);
+      padding: 14px 16px;
+      min-height: 140px;
+    }}
+    .msg-preview .preview-body {{ white-space: pre-wrap; font-size: 13.5px; line-height: 1.6; color: var(--text); }}
+    .msg-preview .preview-body.empty {{ color: var(--muted); font-style: italic; }}
+    .bulk-editor {{
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--line);
+    }}
+    .template-char-meta {{
+      text-align: right;
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-top: 4px;
+    }}
+    @media (max-width: 760px) {{
+      .msg-grid {{ grid-template-columns: 1fr; }}
+    }}
     label {{
       display: grid;
       gap: 6px;
@@ -2965,36 +3211,72 @@ def _render_shell(status: dict[str, Any]) -> str:
           <div id="missingTable" style="margin-top:8px"></div>
         </div>
 
-        <div class="step-card">
+        <div class="step-card msg-card">
           <div class="step-head">
             <span class="step-badge">2</span>
             <div>
-              <h3>단체 문구 작성</h3>
-              <p>템플릿을 고르거나 직접 작성합니다. 변수는 학생별로 자동 치환됩니다.</p>
+              <h3>메시지 작성</h3>
+              <p>톤을 고르면 문구가 자동 적용됩니다. 필요하면 <button type="button" class="link-btn" data-action="toggleBulkEditor">직접 편집</button>도 가능해요.</p>
             </div>
-            <span class="section-subtitle" id="templateCharMeta">0자</span>
+            <button type="button" class="ai-suggest" data-action="aiSuggestTemplate">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg>
+              AI 추천
+            </button>
           </div>
-          <div class="toolbar template-presets" id="templatePresets" role="tablist" aria-label="문구 템플릿">
-            <button type="button" data-preset="default" class="active">기본</button>
-            <button type="button" data-preset="gentle">정중</button>
-            <button type="button" data-preset="casual">캐주얼</button>
-            <button type="button" data-preset="repeat">반복 누락 강조</button>
-            <button type="button" data-preset="custom">직접 작성</button>
+          <div class="tone-chips" id="templatePresets" role="tablist" aria-label="문구 톤">
+            <button type="button" data-preset="soft" class="active">부드럽게</button>
+            <button type="button" data-preset="firm">단호하게</button>
+            <button type="button" data-preset="brief">간결하게</button>
           </div>
-          <div class="template-tokens" aria-label="변수 삽입">
-            <span class="token-label">변수 삽입</span>
-            <button type="button" class="token-chip" data-token="{{student_name}}">학생 이름</button>
-            <button type="button" class="token-chip" data-token="{{class_name}}">반</button>
-            <button type="button" class="token-chip" data-token="{{lesson_id}}">수업 ID</button>
-            <button type="button" class="token-chip" data-token="{{date}}">날짜</button>
-            <button type="button" class="token-chip" data-token="{{missing_count}}">누락 횟수</button>
+          <div class="msg-grid">
+            <div class="msg-col">
+              <div class="msg-col-label">전송 채널</div>
+              <div class="channel-list" id="channelList" role="radiogroup" aria-label="전송 채널">
+                <label class="channel-option active" data-channel="classin">
+                  <input type="radio" name="bulkChannel" value="classin" checked>
+                  <span class="channel-meta">
+                    <span class="channel-title">Classin 푸시 알림</span>
+                    <span class="channel-desc">앱 사용 학부모에게 즉시</span>
+                  </span>
+                </label>
+                <label class="channel-option disabled" data-channel="kakao">
+                  <input type="radio" name="bulkChannel" value="kakao" disabled>
+                  <span class="channel-meta">
+                    <span class="channel-title">카카오톡 알림톡<span class="channel-pill">미연결</span></span>
+                    <span class="channel-desc">카카오 비즈니스 채널 연결이 필요합니다</span>
+                  </span>
+                  <button type="button" class="channel-connect" data-action="connectChannelKakao">연결하기 →</button>
+                </label>
+                <label class="channel-option disabled" data-channel="sms">
+                  <input type="radio" name="bulkChannel" value="sms" disabled>
+                  <span class="channel-meta">
+                    <span class="channel-title">SMS<span class="channel-pill">미연결</span></span>
+                    <span class="channel-desc">SMS 발신번호 등록이 필요합니다</span>
+                  </span>
+                  <button type="button" class="channel-connect" data-action="connectChannelSms">연결하기 →</button>
+                </label>
+              </div>
+            </div>
+            <div class="msg-col">
+              <div class="msg-col-label">미리보기</div>
+              <div class="msg-preview" id="msgPreviewBox">
+                <div class="preview-body" id="templatePreviewBody">대상 학생이 검색되면 미리보기가 표시됩니다.</div>
+              </div>
+            </div>
           </div>
-          <label class="template-label">단체 발송 문구
-            <textarea id="bulkTemplate" rows="5" placeholder="예: 안녕하세요 학부모님, {{student_name}} 학생이 {{date}} {{class_name}} 숙제를 제출하지 않았습니다. 확인 부탁드립니다."></textarea>
-          </label>
-          <div class="template-preview" aria-live="polite">
-            <span class="preview-label">미리보기 (첫 번째 대상 학생 기준)</span>
-            <div class="preview-body" id="templatePreviewBody">대상 학생이 검색되면 미리보기가 표시됩니다.</div>
+          <div class="bulk-editor" id="bulkEditor" hidden>
+            <div class="template-tokens" aria-label="변수 삽입">
+              <span class="token-label">변수 삽입</span>
+              <button type="button" class="token-chip" data-token="{{student_name}}">학생 이름</button>
+              <button type="button" class="token-chip" data-token="{{class_name}}">반</button>
+              <button type="button" class="token-chip" data-token="{{date}}">날짜</button>
+              <button type="button" class="token-chip" data-token="{{missing_count}}">연속 횟수</button>
+              <button type="button" class="token-chip" data-token="{{academy_name}}">학원명</button>
+            </div>
+            <label class="template-label">메시지 (직접 편집)
+              <textarea id="bulkTemplate" rows="5" placeholder="안녕하세요 학부모님 😊&#10;[{{student_name}}] 학생이 {{date}} 마감 숙제를 아직 제출하지 않았어요."></textarea>
+            </label>
+            <div class="template-char-meta"><span id="templateCharMeta">0자</span></div>
           </div>
         </div>
 
@@ -3241,6 +3523,19 @@ def _render_shell(status: dict[str, Any]) -> str:
     let courseOptions = [];
     let studentOptions = [];
     let optionSearchTimer = null;
+
+    const ACADEMY_NAME = (status && status.academy) ? status.academy : "Classin++ 학원";
+    const BULK_TEMPLATES = {{
+      soft: "안녕하세요 학부모님 😊\\n[{{student_name}}] 학생이 오늘 마감 숙제를 아직 제출하지 않았어요.\\n마감 전 한 번만 확인 부탁드려요.\\n\\n- {{academy_name}}",
+      firm: "[{{student_name}}] 학생 학부모님께 안내드립니다.\\n{{class_name}} ({{date}}) 숙제 미제출이 확인되었습니다. 최근 {{missing_count}}회 누적되었으니 오늘 안에 제출 확인 부탁드립니다.\\n\\n- {{academy_name}}",
+      brief: "[{{student_name}}] {{class_name}} 숙제 미제출. {{date}} 안에 제출 확인 부탁드립니다.\\n- {{academy_name}}",
+      custom: "",
+    }};
+    const AVATAR_PALETTE = ["#6ea8fe", "#f7a8c0", "#f4c270", "#86d6a5", "#bda7f0", "#f29b8a"];
+    let bulkPreset = "soft";
+    let bulkTemplate = BULK_TEMPLATES.soft;
+    let bulkChannel = "classin";
+    const bulkSelection = new Map();
 
     function writeLog(message, data) {{
       const now = new Date().toLocaleTimeString();
@@ -3789,66 +4084,45 @@ def _render_shell(status: dict[str, Any]) -> str:
       syncFilterButtons();
 
       const items = (data.items || []).filter(itemMatchesFilter);
+      updateBulkSendUi(items, summary);
       const target = document.querySelector("#missingTable");
       if (!items.length) {{
         target.innerHTML = `<div class="empty">선택한 조건에 해당하는 학생이 없습니다.</div>`;
         return;
       }}
+      const allSendable = items.filter((it) => it.has_parent_phone && it.action_required !== "done");
+      const allChecked = allSendable.length > 0 && allSendable.every(isItemSelected);
       target.innerHTML = `
-        <div class="table-wrap">
-          <table class="missing-table">
-            <colgroup>
-              <col class="col-student">
-              <col class="col-lesson">
-              <col class="col-phone">
-              <col class="col-status">
-              <col class="col-action">
-            </colgroup>
-            <thead>
-              <tr>
-                <th>학생</th>
-                <th>수업 / 출석</th>
-                <th>학부모 연락처</th>
-                <th>알림 상태</th>
-                <th>다음 액션</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${{items.map((item) => `
-                <tr>
-                  <td>
-                    <div class="cell-title">${{escapeHtml(item.student_name)}}</div>
-                    <div class="cell-sub">${{escapeHtml(item.class_name || "-")}}</div>
-                    <div class="meta-row"><span class="badge">${{escapeHtml(item.student_classin_id)}}</span></div>
-                    ${{contextHtml(item)}}
-                  </td>
-                  <td>
-                    <div class="cell-title">${{escapeHtml(item.lesson_classin_id || "-")}}</div>
-                    <div class="meta-row">
-                      <span class="status-pill pending">${{escapeHtml(item.attendance || "-")}}</span>
-                      ${{item.is_repeat ? `<span class="repeat-mark">반복 ${{escapeHtml(item.missing_count)}}건</span>` : ""}}
-                    </div>
-                    <div class="cell-sub">${{escapeHtml(formatDate(item.date))}}</div>
-                  </td>
-                  <td>
-                    ${{item.has_parent_phone
-                      ? `<div class="cell-title">${{escapeHtml(item.parent_phone)}}</div>`
-                      : '<span class="status-pill failed">연락처 없음</span>'}}
-                  </td>
-                  <td>
-                    <div class="cell-stack">
-                      ${{statusPill(item.notification_status)}}
-                      <span class="badge">${{escapeHtml(formatDate(item.notification_at))}}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="cell-title">${{escapeHtml(actionLabel(item.action_required))}}</div>
-                    <span class="action-copy">${{escapeHtml(actionDetail(item))}}</span>
-                  </td>
-                </tr>
-              `).join("")}}
-            </tbody>
-          </table>
+        <div class="missing-list-head">
+          <label class="select-all">
+            <input type="checkbox" id="bulkSelectAll" ${{allChecked ? "checked" : ""}} ${{allSendable.length ? "" : "disabled"}}>
+            <span>전체 선택 (${{allSendable.length}}명)</span>
+          </label>
+          <span class="missing-list-hint">발송 가능한 학생만 체크할 수 있습니다.</span>
+        </div>
+        <div class="missing-list" id="missingList">
+          ${{items.map((item) => {{
+            const initial = String(item.student_name || "").slice(0, 1);
+            const canSelect = item.has_parent_phone && item.action_required !== "done";
+            const checked = canSelect && isItemSelected(item);
+            const phoneLine = item.has_parent_phone
+              ? `학부모 ${{escapeHtml(maskPhone(item.parent_phone))}}`
+              : `<span class="missing-row-warn">연락처 없음</span>`;
+            const last = relativeLabel(item.date);
+            return `
+              <label class="missing-row ${{canSelect ? "" : "missing-row--locked"}}" data-key="${{escapeHtml(itemKey(item))}}">
+                <input type="checkbox" class="missing-row-check" ${{checked ? "checked" : ""}} ${{canSelect ? "" : "disabled"}}>
+                <span class="missing-row-avatar" style="background:${{avatarBg(item.student_name)}}">${{escapeHtml(initial)}}</span>
+                <span class="missing-row-meta">
+                  <span class="missing-row-name">${{escapeHtml(item.student_name)}}</span>
+                  <span class="missing-row-sub">${{phoneLine}}</span>
+                </span>
+                <span class="missing-row-stats">
+                  <span class="missing-row-last">마지막 제출 ${{escapeHtml(last)}}</span>
+                  ${{streakBadge(item.missing_count)}}
+                </span>
+              </label>`;
+          }}).join("")}}
         </div>`;
     }}
 
@@ -3856,6 +4130,161 @@ def _render_shell(status: dict[str, Any]) -> str:
       if (activeMissingFilter === "all") return true;
       if (activeMissingFilter === "repeat") return Boolean(item.is_repeat);
       return item.action_required === activeMissingFilter;
+    }}
+
+    function applyTemplate(tpl, item) {{
+      const vars = {{
+        student_name: (item && item.student_name) || "(학생)",
+        class_name: (item && item.class_name) || "(반)",
+        lesson_id: (item && item.lesson_classin_id) || "(수업)",
+        date: item ? formatDate(item.date) : "(날짜)",
+        missing_count: (item && item.missing_count) || 1,
+        academy_name: ACADEMY_NAME,
+      }};
+      return String(tpl || "").replace(/\\u007b(\\w+)\\u007d/g, (m, key) => (
+        vars[key] !== undefined ? vars[key] : m
+      ));
+    }}
+
+    function itemKey(item) {{
+      return `${{item.student_classin_id || ""}}::${{item.lesson_classin_id || ""}}::${{item.date || ""}}`;
+    }}
+
+    function isItemSelected(item) {{
+      if (!item.has_parent_phone || item.action_required === "done") return false;
+      const key = itemKey(item);
+      if (bulkSelection.has(key)) return bulkSelection.get(key);
+      return true;
+    }}
+
+    function setItemSelected(item, value) {{
+      bulkSelection.set(itemKey(item), Boolean(value));
+    }}
+
+    function avatarBg(name) {{
+      const text = String(name || "");
+      let hash = 0;
+      for (let i = 0; i < text.length; i++) {{
+        hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+      }}
+      return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+    }}
+
+    function maskPhone(phone) {{
+      if (!phone) return "";
+      const digits = String(phone).replace(/[^0-9]/g, "");
+      if (digits.length < 8) return phone;
+      const head = digits.slice(0, 3);
+      const mid = digits.slice(3, 7);
+      return `${{head}}-${{mid}}-****`;
+    }}
+
+    function relativeLabel(value) {{
+      if (!value) return "기록 없음";
+      const target = new Date(String(value).slice(0, 10));
+      if (Number.isNaN(target.getTime())) return formatDate(value);
+      const now = new Date();
+      const day = 24 * 60 * 60 * 1000;
+      const diffDays = Math.floor((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+        - Date.UTC(target.getFullYear(), target.getMonth(), target.getDate())) / day);
+      if (diffDays <= 0) return "오늘 새벽";
+      if (diffDays === 1) return "어제";
+      return `${{diffDays}}일 전`;
+    }}
+
+    function streakBadge(count) {{
+      const n = Number(count) || 0;
+      if (n >= 4) return `<span class="streak-badge danger">연속 ${{n}} 회</span>`;
+      if (n >= 2) return `<span class="streak-badge warn">연속 ${{n}} 회</span>`;
+      return `<span class="streak-badge mute">${{Math.max(n, 1)}}회</span>`;
+    }}
+
+    function updateBulkSendUi(filteredItems, summary) {{
+      summary = summary || {{}};
+      const items = filteredItems || [];
+      const eligible = items.filter((item) => (
+        item.has_parent_phone && item.action_required !== "done"
+      ));
+      const selected = eligible.filter(isItemSelected);
+      const noPhone = items.filter((item) => !item.has_parent_phone).length;
+      const selectedCount = selected.length;
+
+      const setText = (sel, value) => {{ const el = document.querySelector(sel); if (el) el.textContent = value; }};
+      setText("#bulkSendCount", selectedCount);
+      setText("#bulkNoPhone", noPhone);
+      setText("#bulkRecentSent", summary.sent || 0);
+      setText("#bulkSendBtnLabel", `${{selectedCount}}명에게 단체 발송`);
+      setText("#bulkSendHeaderCount", selectedCount);
+      setText("#missingResultMeta", items.length
+        ? `검색 ${{items.length}}명 · 선택 ${{selectedCount}}`
+        : "결과 없음");
+      setText("#bulkSendMeta", selectedCount ? `선택 ${{selectedCount}}명` : "선택된 학생이 없습니다");
+
+      const btn = document.querySelector("#bulkSendBtn");
+      if (btn) btn.disabled = selectedCount === 0;
+      const headerBtn = document.querySelector("#bulkSendHeaderBtn");
+      if (headerBtn) headerBtn.disabled = selectedCount === 0;
+
+      const previewItem = selected[0] || eligible[0] || items[0] || null;
+      const preview = document.querySelector("#templatePreviewBody");
+      if (preview) {{
+        if (!bulkTemplate.trim()) {{
+          preview.textContent = "문구를 입력하면 미리보기가 표시됩니다.";
+          preview.classList.add("empty");
+        }} else if (!previewItem) {{
+          preview.textContent = "대상 학생이 검색되면 미리보기가 표시됩니다.";
+          preview.classList.add("empty");
+        }} else {{
+          preview.textContent = applyTemplate(bulkTemplate, previewItem);
+          preview.classList.remove("empty");
+        }}
+      }}
+    }}
+
+    function syncChannelUi() {{
+      document.querySelectorAll("#channelList .channel-option").forEach((node) => {{
+        const enabled = !node.classList.contains("disabled");
+        node.classList.toggle("active", enabled && node.dataset.channel === bulkChannel);
+        const input = node.querySelector("input[type=radio]");
+        if (input && enabled) input.checked = node.dataset.channel === bulkChannel;
+      }});
+    }}
+
+    function syncTemplateUi() {{
+      const textarea = document.querySelector("#bulkTemplate");
+      if (textarea && textarea.value !== bulkTemplate) textarea.value = bulkTemplate;
+      const meta = document.querySelector("#templateCharMeta");
+      if (meta) meta.textContent = `${{bulkTemplate.length}}자`;
+      document.querySelectorAll("#templatePresets button[data-preset]").forEach((btn) => {{
+        btn.classList.toggle("active", btn.dataset.preset === bulkPreset);
+      }});
+    }}
+
+    function applyBulkPreset(preset) {{
+      bulkPreset = preset;
+      if (preset !== "custom") {{
+        bulkTemplate = BULK_TEMPLATES[preset] !== undefined ? BULK_TEMPLATES[preset] : bulkTemplate;
+      }}
+      syncTemplateUi();
+      const items = (missingState.items || []).filter(itemMatchesFilter);
+      updateBulkSendUi(items, missingState.summary || {{}});
+    }}
+
+    function insertBulkToken(token) {{
+      const textarea = document.querySelector("#bulkTemplate");
+      if (!textarea) return;
+      const start = textarea.selectionStart ?? textarea.value.length;
+      const end = textarea.selectionEnd ?? textarea.value.length;
+      const value = textarea.value;
+      const next = value.slice(0, start) + token + value.slice(end);
+      bulkTemplate = next;
+      bulkPreset = "custom";
+      syncTemplateUi();
+      textarea.focus();
+      const pos = start + token.length;
+      textarea.setSelectionRange(pos, pos);
+      const items = (missingState.items || []).filter(itemMatchesFilter);
+      updateBulkSendUi(items, missingState.summary || {{}});
     }}
 
     function syncFilterButtons() {{
@@ -4000,12 +4429,67 @@ def _render_shell(status: dict[str, Any]) -> str:
         await refreshStatus();
       }},
       async sweepMissing() {{
-        const data = await callApi("/api/sweep-missing-homework", {{
+        const dryRunEl = document.querySelector("#bulkDryRun");
+        const template = (bulkTemplate || "").trim();
+        if (!template) {{
+          writeLog("문구가 비어 있습니다. 톤을 고르거나 직접 편집에서 작성해 주세요.");
+          return;
+        }}
+        const items = (missingState.items || []).filter(itemMatchesFilter);
+        const selectedItems = items.filter((it) => it.has_parent_phone && it.action_required !== "done" && isItemSelected(it));
+        if (!selectedItems.length) {{
+          writeLog("선택된 학생이 없습니다. 학생 목록에서 체크 후 다시 시도해 주세요.");
+          return;
+        }}
+        const payload = {{
           window_hours: document.querySelector("#windowHours").value,
           lesson_id: document.querySelector("#lessonId").value,
-        }});
+          template,
+          preset: bulkPreset,
+          channel: bulkChannel,
+          filter: activeMissingFilter,
+          dry_run: dryRunEl ? dryRunEl.checked : true,
+          recipients: selectedItems.map((it) => ({{
+            student_classin_id: it.student_classin_id,
+            lesson_classin_id: it.lesson_classin_id,
+            date: it.date,
+          }})),
+        }};
+        const data = await callApi("/api/sweep-missing-homework", payload);
         writeLog(data.message, data);
         await loadSituation();
+      }},
+      async resetBulkFilters() {{
+        const win = document.querySelector("#windowHours");
+        if (win) win.value = 24;
+        const lesson = document.querySelector("#lessonId");
+        if (lesson) lesson.value = "";
+        activeMissingFilter = "all";
+        bulkSelection.clear();
+        renderMissing(missingState);
+      }},
+      async aiSuggestTemplate() {{
+        const items = (missingState.items || []).filter(itemMatchesFilter);
+        const repeats = items.filter((it) => (it.missing_count || 0) >= 2).length;
+        const recommended = repeats >= Math.max(2, Math.ceil(items.length / 2)) ? "firm" : "soft";
+        applyBulkPreset(recommended);
+        const label = recommended === "firm" ? "단호하게" : "부드럽게";
+        writeLog(`AI 추천: 반복 누락 ${{repeats}}건 기준으로 '${{label}}' 톤을 적용했습니다.`);
+      }},
+      async toggleBulkEditor() {{
+        const editor = document.querySelector("#bulkEditor");
+        if (!editor) return;
+        editor.hidden = !editor.hidden;
+        if (!editor.hidden) {{
+          const ta = document.querySelector("#bulkTemplate");
+          if (ta) ta.focus();
+        }}
+      }},
+      async connectChannelKakao() {{
+        writeLog("카카오톡 알림톡 연동은 곧 제공됩니다. 카카오 비즈니스 채널 인증서를 등록해 주세요.");
+      }},
+      async connectChannelSms() {{
+        writeLog("SMS 연동은 곧 제공됩니다. 발신번호 등록 후 활성화됩니다.");
       }},
       async importExam() {{
         const data = await callApi("/api/import-exam-results", examFormPayload());
@@ -4168,6 +4652,60 @@ def _render_shell(status: dict[str, Any]) -> str:
     document.querySelector("#dashboardDays").addEventListener("change", () => {{
       loadDashboard().catch((error) => writeLog(error.message));
     }});
+
+    const templatePresetsEl = document.querySelector("#templatePresets");
+    if (templatePresetsEl) {{
+      templatePresetsEl.addEventListener("click", (event) => {{
+        const btn = event.target.closest("button[data-preset]");
+        if (!btn) return;
+        applyBulkPreset(btn.dataset.preset);
+      }});
+    }}
+    document.querySelectorAll(".token-chip[data-token]").forEach((chip) => {{
+      chip.addEventListener("click", () => insertBulkToken(chip.dataset.token));
+    }});
+    const bulkTemplateEl = document.querySelector("#bulkTemplate");
+    if (bulkTemplateEl) {{
+      bulkTemplateEl.value = bulkTemplate;
+      bulkTemplateEl.addEventListener("input", (event) => {{
+        bulkTemplate = event.target.value;
+        bulkPreset = "custom";
+        syncTemplateUi();
+        const items = (missingState.items || []).filter(itemMatchesFilter);
+        updateBulkSendUi(items, missingState.summary || {{}});
+      }});
+    }}
+    const channelListEl = document.querySelector("#channelList");
+    if (channelListEl) {{
+      channelListEl.addEventListener("click", (event) => {{
+        const option = event.target.closest(".channel-option");
+        if (!option || option.classList.contains("disabled")) return;
+        if (event.target.closest(".channel-connect")) return;
+        bulkChannel = option.dataset.channel;
+        syncChannelUi();
+      }});
+    }}
+    document.addEventListener("change", (event) => {{
+      const row = event.target.closest(".missing-row");
+      if (row && event.target.classList.contains("missing-row-check")) {{
+        const key = row.dataset.key;
+        const all = (missingState.items || []);
+        const item = all.find((it) => itemKey(it) === key);
+        if (item) setItemSelected(item, event.target.checked);
+        renderMissing(missingState);
+        return;
+      }}
+      if (event.target.id === "bulkSelectAll") {{
+        const checked = event.target.checked;
+        const items = (missingState.items || []).filter(itemMatchesFilter);
+        items.forEach((it) => {{
+          if (it.has_parent_phone && it.action_required !== "done") setItemSelected(it, checked);
+        }});
+        renderMissing(missingState);
+      }}
+    }});
+    syncTemplateUi();
+    syncChannelUi();
 
     renderStatus(status);
     syncDashboardMode();
