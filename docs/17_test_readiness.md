@@ -58,3 +58,12 @@ classin-toolkit setup-notion --parent-page-id <NOTION_PAGE_ID> --write --config 
 
 현재 MVP 코드는 카톡 dry-run 까지만 완성되어 있다.
 `kakao-live` 모드는 알리고 계정 값이 채워져도 `notify.dispatcher` 의 live 발송 구현 전까지 `BLOCKED` 로 나온다.
+
+## 데모 UI (`classin-toolkit ui --demo`)
+
+`config.yaml` 과 Notion 연결 없이 데모 화면을 띄울 때 쓴다. 외부 쓰기는 모두 막혀 있으며,
+미제출 상황판/시험 미응시 sweep/시험 결과 import preview/코스·학생 성과 대시보드가 샘플 데이터로 동작한다.
+영업 자리에서 노트북만으로 흐름을 보여줄 때 사용한다.
+
+코스/학생 성과 대시보드는 Notion 의 lesson + exam 기록을 읽기 전용으로 투영하므로,
+실데이터로 전환하려면 lesson 적재(webhook)와 exam import 가 먼저 돌아가 있어야 한다.

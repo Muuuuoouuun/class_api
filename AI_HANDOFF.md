@@ -12,7 +12,8 @@
 
 - 자동 라인: ClassIn Webhook 수신, 스케줄 파싱, 미제출 sweep, 주간 리포트 생성
 - 수동 라인: `classin-toolkit agent` 터미널 기반 원장/교사용 AI 어시스턴트
-- 운영 화면: Notion DB와 HTML 리포트 파일을 우선 사용
+- 운영 화면: Notion DB와 HTML 리포트 파일을 우선 사용. 로컬 UI(`classin-toolkit ui`)는
+  미제출 상황판, 시험 결과 import/preview, 코스/학생 성과 대시보드를 한 화면에서 다룬다.
 - 향후 전환: 로컬 CLI/Notion 운영에서 웹 UI 또는 SaaS로 확장 가능하도록 Layer 분리
 
 ## 2. 먼저 읽을 파일
@@ -182,8 +183,11 @@ docs/18_teacher_dashboard_data_merge.md를 먼저 읽고 작업하세요.
 2. Webhook SafeKey 검증 알고리즘을 ClassIn 담당자에게 확인한다.
 3. 로컬 UI를 선생님용 상황판 중심으로 정리해 미제출, 발송 여부, 확인 필요 학생을 바로 처리하게 한다.
 4. 보고서와 로컬/오프라인 공유 데이터 병합 구조를 추가해 상담 맥락을 상황판과 주간 리포트에 반영한다.
-5. 1~2주 실데이터로 리포트 품질과 미제출 알림 문구를 검증한다.
-6. 카톡 live 발송은 템플릿 심사 후 별도 단계로 전환한다.
+5. 코스/학생 성과 대시보드(`pipelines/course_dashboard.py`)는 Notion lesson+exam 기록을
+   읽기 전용으로 투영한다. ClassIn API는 출결/숙제/시험 검색 엔드포인트가 빈약하므로,
+   대시보드 옵션과 트렌드는 webhook 적재 결과에서 derive 한다.
+6. 1~2주 실데이터로 리포트 품질과 미제출 알림 문구를 검증한다.
+7. 카톡 live 발송은 템플릿 심사 후 별도 단계로 전환한다.
 
 ## 10. 작업 완료 보고 형식
 

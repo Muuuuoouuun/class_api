@@ -537,6 +537,41 @@ class NotionRepo:
         )
         return self._attach_student_metadata([_exam_row_summary(p) for p in pages])
 
+    def exam_records(
+        self,
+        *,
+        since: datetime,
+        until: datetime,
+        class_name: str | None = None,
+    ) -> list[dict]:
+        if not self.exams_db:
+            log.warning("exams_db not configured — skip exam_records")
+            return []
+
+        filters: list[dict[str, Any]] = [
+            {
+                "property": PROP_EXAM_DATE,
+                "date": {"on_or_after": since.date().isoformat()},
+            },
+            {
+                "property": PROP_EXAM_DATE,
+                "date": {"before": until.date().isoformat()},
+            },
+        ]
+        if class_name:
+            filters.append(
+                {
+                    "property": PROP_EXAM_CLASS,
+                    "rich_text": {"equals": class_name},
+                }
+            )
+        pages = self._query_all(
+            self.exams_db,
+            filter={"and": filters},
+            sorts=[{"property": PROP_EXAM_DATE, "direction": "ascending"}],
+        )
+        return self._attach_student_metadata([_exam_row_summary(p) for p in pages])
+
     def find_missing_exam(
         self,
         *,

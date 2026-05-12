@@ -23,6 +23,14 @@ from .pipelines.demo_seed import (
     build_demo_missing_homework_rows,
     build_demo_notification_history,
 )
+from .pipelines.course_dashboard import (
+    build_course_dashboard,
+    build_course_options,
+    build_student_options,
+    demo_course_dashboard,
+    demo_course_options,
+    demo_student_options,
+)
 from .pipelines.exams import import_exam_results, query_missing_exam, sweep_missing_exam
 from .pipelines.missing_homework import query_missing_homework, sweep_missing_homework
 from .pipelines.weekly import approve_all, generate_drafts
@@ -98,6 +106,36 @@ def create_app(
         cfg = _require_config(state)
         rows = load_notification_history(cfg, limit=limit)
         return {"ok": True, "items": rows, "summary": _notification_summary(rows)}
+
+    @app.get("/api/course-dashboard/courses")
+    async def api_course_dashboard_courses(q: str = "", limit: int = 30) -> dict:
+        if state.demo:
+            return demo_course_options(query=q, limit=limit)
+        cfg = _require_config(state)
+        return build_course_options(cfg, query=q, limit=limit)
+
+    @app.get("/api/course-dashboard/students")
+    async def api_course_dashboard_students(q: str = "", limit: int = 30) -> dict:
+        if state.demo:
+            return demo_student_options(query=q, limit=limit)
+        cfg = _require_config(state)
+        return build_student_options(cfg, query=q, limit=limit)
+
+    @app.get("/api/course-dashboard")
+    async def api_course_dashboard(
+        course_id: str | None = None,
+        student_id: str | None = None,
+        days: int = 90,
+    ) -> dict:
+        if state.demo:
+            return demo_course_dashboard(course_id=course_id, student_id=student_id, days=days)
+        cfg = _require_config(state)
+        return build_course_dashboard(
+            cfg,
+            course_id=(course_id or "").strip() or None,
+            student_id=(student_id or "").strip() or None,
+            days=days,
+        )
 
     @app.post("/api/render-daily")
     async def api_render_daily(request: Request) -> JSONResponse:
@@ -855,6 +893,37 @@ def _render_shell(status: dict[str, Any]) -> str:
       gap: 18px;
       align-items: start;
     }}
+    .tabbar {{
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      margin: 0 0 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .72);
+      box-shadow: var(--shadow);
+    }}
+    .tabbar button {{
+      min-height: 34px;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      padding: 6px 14px;
+      box-shadow: none;
+    }}
+    .tabbar button:hover {{
+      background: #fff;
+      color: var(--text);
+      transform: none;
+      box-shadow: none;
+    }}
+    .tabbar button.active {{
+      border-color: rgba(47, 111, 100, .32);
+      background: #e6f1ee;
+      color: var(--primary-strong);
+    }}
+    .tab-view {{ display: none; }}
+    .tab-view.active {{ display: block; }}
     aside {{
       position: sticky;
       top: 96px;
@@ -935,7 +1004,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       line-height: 1.3;
       font-weight: 650;
     }}
-    input, textarea {{
+    input, textarea, select {{
       width: 100%;
       min-height: 38px;
       border: 1px solid var(--line);
@@ -948,7 +1017,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       outline: none;
       transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
     }}
-    input:focus, textarea:focus {{
+    input:focus, textarea:focus, select:focus {{
       border-color: rgba(47, 111, 100, .72);
       box-shadow: 0 0 0 4px rgba(47, 111, 100, .12);
       background: #fff;
@@ -1088,6 +1157,234 @@ def _render_shell(status: dict[str, Any]) -> str:
       align-items: center;
       padding: 8px 0;
       border-top: 1px solid var(--line);
+    }}
+    .performance-controls {{
+      display: grid;
+      grid-template-columns: auto minmax(180px, .8fr) minmax(220px, 1fr) minmax(120px, .42fr) auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 14px;
+    }}
+    .segmented {{
+      display: inline-grid;
+      grid-template-columns: repeat(2, minmax(76px, 1fr));
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }}
+    .segmented button {{
+      min-height: 30px;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      padding: 5px 10px;
+      box-shadow: none;
+      white-space: nowrap;
+    }}
+    .segmented button:hover {{
+      background: #fff;
+      color: var(--text);
+      transform: none;
+      box-shadow: none;
+    }}
+    .segmented button.active {{
+      border-color: rgba(47, 111, 100, .32);
+      background: #fff;
+      color: var(--primary-strong);
+      box-shadow: var(--shadow-soft);
+    }}
+    .mode-field.hidden {{
+      display: none;
+    }}
+    .dashboard-grid {{
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(280px, .75fr);
+      gap: 14px;
+      align-items: stretch;
+    }}
+    .hero-metrics {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }}
+    .kpi-card {{
+      min-height: 106px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: linear-gradient(180deg, #fff, #f9fbfd);
+    }}
+    .kpi-card span {{
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .kpi-card strong {{
+      display: block;
+      margin-top: 8px;
+      font-size: 28px;
+      line-height: 1.05;
+    }}
+    .kpi-card small {{
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+    }}
+    .chart-grid {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+    }}
+    .chart-card {{
+      min-height: 278px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 14px;
+    }}
+    .chart-head {{
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }}
+    .chart-head h3 {{
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.2;
+    }}
+    .chart-head span {{
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }}
+    .chart-box {{
+      height: 212px;
+    }}
+    .chart-box svg {{
+      width: 100%;
+      height: 100%;
+      display: block;
+    }}
+    .chart-empty {{
+      display: grid;
+      place-items: center;
+      height: 100%;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      font-size: 13px;
+    }}
+    .attention-panel {{
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }}
+    .attention-list {{
+      display: grid;
+      gap: 8px;
+      max-height: 302px;
+      overflow: auto;
+    }}
+    .attention-item {{
+      display: grid;
+      gap: 5px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .72);
+      font-size: 13px;
+    }}
+    .attention-item.high {{
+      border-color: rgba(180, 35, 24, .28);
+      background: #fff8f7;
+    }}
+    .attention-item.medium {{
+      border-color: #f3d2a1;
+      background: #fffaf1;
+    }}
+    .attention-item strong {{
+      font-size: 14px;
+    }}
+    .mini-bars {{
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }}
+    .mini-bar {{
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 750;
+    }}
+    .mini-track {{
+      height: 8px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #edf1f6;
+    }}
+    .mini-fill {{
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--primary);
+    }}
+    .student-card-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }}
+    .student-card {{
+      min-height: 214px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }}
+    .student-card-head {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+      margin-bottom: 10px;
+    }}
+    .ring {{
+      width: 54px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: conic-gradient(var(--primary) calc(var(--pct) * 1%), #e8edf5 0);
+    }}
+    .ring span {{
+      width: 40px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #fff;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 850;
+    }}
+    .sparkline {{
+      height: 56px;
+      margin-top: 8px;
+    }}
+    .sparkline svg {{
+      width: 100%;
+      height: 100%;
+      display: block;
     }}
     .cell-title {{
       color: var(--text);
@@ -1242,6 +1539,15 @@ def _render_shell(status: dict[str, Any]) -> str:
       .grid {{
         grid-template-columns: 1fr;
       }}
+      .performance-controls {{
+        grid-template-columns: 1fr 1fr;
+      }}
+      .dashboard-grid, .chart-grid {{
+        grid-template-columns: 1fr;
+      }}
+      .hero-metrics {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
       aside {{
         position: static;
       }}
@@ -1252,8 +1558,13 @@ def _render_shell(status: dict[str, Any]) -> str:
         flex-direction: column;
         padding: 16px 18px;
       }}
-      .status-strip, .grid, .actions, .control-grid {{
+      .status-strip, .grid, .actions, .control-grid, .performance-controls, .hero-metrics {{
         grid-template-columns: 1fr;
+      }}
+      .tabbar {{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
       }}
       main {{
         width: min(100vw - 20px, 720px);
@@ -1302,6 +1613,12 @@ def _render_shell(status: dict[str, Any]) -> str:
       <div class="metric alert"><span>발송 실패</span><strong id="failedCount">0</strong></div>
     </section>
 
+    <nav class="tabbar" aria-label="대시보드 탭">
+      <button data-tab="operations" class="active">운영</button>
+      <button data-tab="performance">성과 대시보드</button>
+    </nav>
+
+    <section id="tab-operations" class="tab-view active">
     <section class="grid">
       <div>
         <div class="panel hero-panel">
@@ -1405,6 +1722,99 @@ def _render_shell(status: dict[str, Any]) -> str:
         </div>
       </aside>
     </section>
+    </section>
+
+    <section id="tab-performance" class="tab-view">
+      <div class="panel hero-panel">
+        <div class="panel-head">
+          <div>
+            <h2>성과 대시보드</h2>
+            <p id="performanceScope">전체 코스</p>
+          </div>
+          <span class="section-subtitle" id="performancePeriod">최근 90일</span>
+        </div>
+        <div class="performance-controls">
+          <div class="segmented" id="dashboardMode">
+            <button data-mode="course" class="active">코스</button>
+            <button data-mode="student">학생</button>
+          </div>
+          <label class="mode-field" data-mode-field="course-search">코스 검색<input id="courseSearch" type="search" placeholder="코스명 또는 ID"></label>
+          <label class="mode-field" data-mode-field="course-select">코스 선택<select id="courseSelect"></select></label>
+          <label class="mode-field hidden" data-mode-field="student-search">학생 검색<input id="studentSearch" type="search" placeholder="학생명 또는 ID"></label>
+          <label class="mode-field hidden" data-mode-field="student-select">학생 선택<select id="studentSelect"></select></label>
+          <label>기간<select id="dashboardDays">
+            <option value="30">30일</option>
+            <option value="60">60일</option>
+            <option value="90" selected>90일</option>
+            <option value="180">180일</option>
+            <option value="365">365일</option>
+          </select></label>
+          <button data-action="refreshDashboard">대시보드 갱신</button>
+        </div>
+
+        <div class="dashboard-grid">
+          <div>
+            <div class="hero-metrics">
+              <div class="kpi-card">
+                <span>학생</span>
+                <strong id="perfStudentCount">0</strong>
+                <small id="perfLessonCount">수업 0건</small>
+              </div>
+              <div class="kpi-card">
+                <span>출석율</span>
+                <strong id="perfAttendanceRate">-</strong>
+                <small id="perfAttendanceHint">출석+지각 기준</small>
+              </div>
+              <div class="kpi-card">
+                <span>평균 성적</span>
+                <strong id="perfScoreAvg">-</strong>
+                <small id="perfScoreDelta">추이 없음</small>
+              </div>
+              <div class="kpi-card">
+                <span>관리 필요</span>
+                <strong id="perfRiskCount">0</strong>
+                <small id="perfMissingCount">미제출 0건</small>
+              </div>
+            </div>
+            <div class="chart-grid">
+              <div class="chart-card">
+                <div class="chart-head">
+                  <h3>성적 추이</h3>
+                  <span id="scoreTrendMeta">-</span>
+                </div>
+                <div id="scoreTrendChart" class="chart-box"></div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-head">
+                  <h3>출석율 추이</h3>
+                  <span id="attendanceTrendMeta">-</span>
+                </div>
+                <div id="attendanceTrendChart" class="chart-box"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="attention-panel">
+            <div class="chart-card">
+              <div class="chart-head">
+                <h3>집중 관리</h3>
+                <span id="attentionMeta">0명</span>
+              </div>
+              <div id="attentionList" class="attention-list"></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head">
+                <h3>상승 학생</h3>
+                <span id="moverMeta">0명</span>
+              </div>
+              <div id="moverList" class="attention-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="studentCards" class="student-card-grid"></div>
+      </div>
+    </section>
   </main>
 
   <script id="initial-status" type="application/json">{status_json}</script>
@@ -1414,6 +1824,10 @@ def _render_shell(status: dict[str, Any]) -> str:
     let status = JSON.parse(statusNode.textContent);
     let missingState = {{ summary: {{}}, items: [] }};
     let activeMissingFilter = "all";
+    let dashboardMode = "course";
+    let courseOptions = [];
+    let studentOptions = [];
+    let optionSearchTimer = null;
 
     function writeLog(message, data) {{
       const now = new Date().toLocaleTimeString();
@@ -1551,6 +1965,266 @@ def _render_shell(status: dict[str, Any]) -> str:
         throw new Error(notifyData.detail || "notification load failed");
       }}
       renderNotifications(notifyData);
+    }}
+
+    async function loadDashboardOptions(kind, query) {{
+      const path = kind === "student" ? "/api/course-dashboard/students" : "/api/course-dashboard/courses";
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      params.set("limit", "40");
+      const response = await fetch(`${{path}}?${{params.toString()}}`);
+      const data = await response.json();
+      if (!response.ok || data.ok === false) {{
+        throw new Error(data.detail || "dashboard options load failed");
+      }}
+      if (kind === "student") {{
+        studentOptions = data.items || [];
+        renderStudentSelect();
+      }} else {{
+        courseOptions = data.items || [];
+        renderCourseSelect();
+      }}
+      return data;
+    }}
+
+    function renderCourseSelect(selected) {{
+      const select = document.querySelector("#courseSelect");
+      const current = selected ?? select.value;
+      const rows = [
+        '<option value="">전체 코스</option>',
+        ...courseOptions.map((item) => `<option value="${{escapeHtml(item.course_id)}}">${{escapeHtml(item.label || item.course_id)}}</option>`),
+      ];
+      select.innerHTML = rows.join("");
+      select.value = [...select.options].some((option) => option.value === current) ? current : "";
+    }}
+
+    function renderStudentSelect(selected) {{
+      const select = document.querySelector("#studentSelect");
+      const current = selected ?? select.value;
+      const rows = [
+        '<option value="">학생 선택</option>',
+        ...studentOptions.map((item) => `<option value="${{escapeHtml(item.student_classin_id)}}">${{escapeHtml(item.label || item.student_name)}}</option>`),
+      ];
+      select.innerHTML = rows.join("");
+      select.value = [...select.options].some((option) => option.value === current) ? current : "";
+    }}
+
+    function syncDashboardMode() {{
+      document.querySelectorAll("#dashboardMode button").forEach((button) => {{
+        button.classList.toggle("active", button.dataset.mode === dashboardMode);
+      }});
+      document.querySelectorAll("[data-mode-field]").forEach((field) => {{
+        const isStudentField = field.dataset.modeField.startsWith("student");
+        field.classList.toggle("hidden", dashboardMode === "course" ? isStudentField : !isStudentField);
+      }});
+    }}
+
+    async function loadDashboard() {{
+      if (!status.ok) {{
+        renderDashboard({{ summary: {{}}, students: [], score_trend: [], attendance_trend: [], needs_attention: [], top_movers: [] }});
+        return;
+      }}
+      const params = new URLSearchParams();
+      params.set("days", document.querySelector("#dashboardDays").value || "90");
+      if (dashboardMode === "student") {{
+        const studentId = document.querySelector("#studentSelect").value;
+        if (studentId) params.set("student_id", studentId);
+      }} else {{
+        const courseId = document.querySelector("#courseSelect").value;
+        if (courseId) params.set("course_id", courseId);
+      }}
+      const response = await fetch(`/api/course-dashboard?${{params.toString()}}`);
+      const data = await response.json();
+      if (!response.ok || data.ok === false) {{
+        throw new Error(data.detail || "dashboard load failed");
+      }}
+      courseOptions = data.course_options || courseOptions;
+      studentOptions = data.student_options || studentOptions;
+      renderCourseSelect(data.filters?.course_id || document.querySelector("#courseSelect").value);
+      renderStudentSelect(data.filters?.student_id || document.querySelector("#studentSelect").value);
+      renderDashboard(data);
+      return data;
+    }}
+
+    function renderDashboard(data) {{
+      const summary = data.summary || {{}};
+      document.querySelector("#performanceScope").textContent = summary.scope_label || "전체 코스";
+      document.querySelector("#performancePeriod").textContent = `최근 ${{data.filters?.days || document.querySelector("#dashboardDays").value || 90}}일`;
+      document.querySelector("#perfStudentCount").textContent = summary.student_count || 0;
+      document.querySelector("#perfLessonCount").textContent = `수업 ${{summary.lesson_count || 0}}건`;
+      document.querySelector("#perfAttendanceRate").textContent = percent(summary.attendance_rate);
+      document.querySelector("#perfScoreAvg").textContent = scoreText(summary.avg_score);
+      document.querySelector("#perfScoreDelta").textContent = deltaText(summary.score_delta);
+      document.querySelector("#perfRiskCount").textContent = summary.risk_count || 0;
+      document.querySelector("#perfMissingCount").textContent = `미제출 ${{summary.homework_missing || 0}}건`;
+
+      const scoreTrend = data.score_trend || [];
+      const attendanceTrend = data.attendance_trend || [];
+      document.querySelector("#scoreTrendMeta").textContent = scoreTrend.length ? `${{scoreTrend.length}}주` : "-";
+      document.querySelector("#attendanceTrendMeta").textContent = attendanceTrend.length ? `${{attendanceTrend.length}}주` : "-";
+      document.querySelector("#scoreTrendChart").innerHTML = lineChart(scoreTrend, "avg_score", {{ suffix: "점", stroke: "#2f6f64", fill: "rgba(47,111,100,.12)", min: 0, max: 100 }});
+      document.querySelector("#attendanceTrendChart").innerHTML = attendanceChart(attendanceTrend);
+      renderAttentionList("#attentionList", data.needs_attention || [], false);
+      renderAttentionList("#moverList", data.top_movers || [], true);
+      document.querySelector("#attentionMeta").textContent = `${{(data.needs_attention || []).length}}명`;
+      document.querySelector("#moverMeta").textContent = `${{(data.top_movers || []).length}}명`;
+      renderStudentCards(data.students || []);
+    }}
+
+    function renderAttentionList(selector, items, movers) {{
+      const target = document.querySelector(selector);
+      if (!items.length) {{
+        target.innerHTML = `<div class="empty">${{movers ? "상승 추이가 잡힌 학생이 없습니다." : "집중 관리 학생이 없습니다."}}</div>`;
+        return;
+      }}
+      target.innerHTML = items.map((item) => `
+        <div class="attention-item ${{escapeHtml(item.risk_level || "good")}}">
+          <strong>${{escapeHtml(item.student_name || "미등록")}}</strong>
+          <span class="cell-sub">${{escapeHtml(item.class_name || "-")}} · ${{escapeHtml(item.student_classin_id || "-")}}</span>
+          <div class="mini-bars">
+            <span class="mini-bar">출석 <span class="mini-track"><span class="mini-fill" style="width:${{rateWidth(item.attendance_rate)}}"></span></span></span>
+            <span class="mini-bar">성적 <span class="mini-track"><span class="mini-fill" style="width:${{scoreWidth(item.score_avg)}}"></span></span></span>
+            <span class="mini-bar">미제출 <span class="mini-track"><span class="mini-fill" style="width:${{Math.min((item.homework_missing || 0) * 24, 100)}}%; background: var(--accent)"></span></span></span>
+          </div>
+          <span class="cell-sub">${{movers ? deltaText(item.score_delta) : riskText(item)}}</span>
+        </div>
+      `).join("");
+    }}
+
+    function renderStudentCards(items) {{
+      const target = document.querySelector("#studentCards");
+      if (!items.length) {{
+        target.innerHTML = `<div class="empty">표시할 학생 데이터가 없습니다.</div>`;
+        return;
+      }}
+      target.innerHTML = items.map((item) => `
+        <div class="student-card">
+          <div class="student-card-head">
+            <div>
+              <div class="cell-title">${{escapeHtml(item.student_name || "미등록")}}</div>
+              <div class="cell-sub">${{escapeHtml(item.class_name || "-")}} · ${{escapeHtml(item.student_classin_id || "-")}}</div>
+              <div class="meta-row">
+                <span class="status-pill ${{item.risk_level === "high" ? "failed" : item.risk_level === "medium" ? "pending" : "sent"}}">${{riskLabel(item.risk_level)}}</span>
+                <span class="badge">수업 ${{item.lesson_count || 0}}건</span>
+              </div>
+            </div>
+            <div class="ring" style="--pct:${{Math.round((item.attendance_rate || 0) * 100)}}"><span>${{percent(item.attendance_rate)}}</span></div>
+          </div>
+          <div class="mini-bars">
+            <span class="mini-bar">성적 ${{scoreText(item.score_avg)}}<span class="mini-track"><span class="mini-fill" style="width:${{scoreWidth(item.score_avg)}}"></span></span></span>
+            <span class="mini-bar">지각 ${{item.late_count || 0}}<span class="mini-track"><span class="mini-fill" style="width:${{Math.min((item.late_count || 0) * 20, 100)}}%; background: var(--blue)"></span></span></span>
+            <span class="mini-bar">미제출 ${{item.homework_missing || 0}}<span class="mini-track"><span class="mini-fill" style="width:${{Math.min((item.homework_missing || 0) * 24, 100)}}%; background: var(--accent)"></span></span></span>
+          </div>
+          <div class="sparkline">${{sparkline(item.score_points || [])}}</div>
+          <span class="cell-sub">${{deltaText(item.score_delta)}}</span>
+        </div>
+      `).join("");
+    }}
+
+    function lineChart(points, key, options) {{
+      const usable = points.filter((point) => point[key] !== null && point[key] !== undefined);
+      if (!usable.length) return chartEmpty("성적 데이터 없음");
+      const width = 640;
+      const height = 210;
+      const pad = 28;
+      const min = options.min ?? Math.min(...usable.map((point) => Number(point[key])));
+      const max = options.max ?? Math.max(...usable.map((point) => Number(point[key])));
+      const span = Math.max(1, max - min);
+      const coords = usable.map((point, index) => {{
+        const x = pad + (usable.length === 1 ? 0 : index * (width - pad * 2) / (usable.length - 1));
+        const y = height - pad - ((Number(point[key]) - min) / span) * (height - pad * 2);
+        return {{ x, y, point }};
+      }});
+      const d = coords.map((coord, index) => `${{index ? "L" : "M"}} ${{coord.x.toFixed(1)}} ${{coord.y.toFixed(1)}}`).join(" ");
+      const area = `${{d}} L ${{coords.at(-1).x.toFixed(1)}} ${{height - pad}} L ${{coords[0].x.toFixed(1)}} ${{height - pad}} Z`;
+      return `
+        <svg viewBox="0 0 ${{width}} ${{height}}" role="img" aria-label="성적 추이">
+          <defs>
+            <linearGradient id="scoreFill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="${{options.fill || "rgba(47,111,100,.18)"}}"/>
+              <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+            </linearGradient>
+          </defs>
+          <path d="${{area}}" fill="url(#scoreFill)"></path>
+          <path d="${{d}}" fill="none" stroke="${{options.stroke || "#2f6f64"}}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+          ${{coords.map((coord) => `<circle cx="${{coord.x.toFixed(1)}}" cy="${{coord.y.toFixed(1)}}" r="4.5" fill="#fff" stroke="${{options.stroke || "#2f6f64"}}" stroke-width="3"><title>${{escapeHtml(coord.point.label || coord.point.date)}} · ${{escapeHtml(coord.point[key])}}${{options.suffix || ""}}</title></circle>`).join("")}}
+          ${{coords.map((coord, index) => index % Math.max(1, Math.ceil(coords.length / 5)) === 0 ? `<text x="${{coord.x.toFixed(1)}}" y="${{height - 6}}" text-anchor="middle" font-size="12" fill="#667085">${{escapeHtml(coord.point.label || "")}}</text>` : "").join("")}}
+        </svg>
+      `;
+    }}
+
+    function attendanceChart(points) {{
+      if (!points.length) return chartEmpty("출석 데이터 없음");
+      const width = 640;
+      const height = 210;
+      const pad = 28;
+      const barWidth = Math.max(12, (width - pad * 2) / Math.max(points.length, 1) * .54);
+      const coords = points.map((point, index) => {{
+        const x = pad + (points.length === 1 ? 0 : index * (width - pad * 2) / (points.length - 1));
+        const y = height - pad - (Number(point.attendance_rate || 0) * (height - pad * 2));
+        return {{ x, y, point }};
+      }});
+      const d = coords.map((coord, index) => `${{index ? "L" : "M"}} ${{coord.x.toFixed(1)}} ${{coord.y.toFixed(1)}}`).join(" ");
+      return `
+        <svg viewBox="0 0 ${{width}} ${{height}}" role="img" aria-label="출석율 추이">
+          ${{coords.map((coord) => `
+            <rect x="${{(coord.x - barWidth / 2).toFixed(1)}}" y="${{coord.y.toFixed(1)}}" width="${{barWidth.toFixed(1)}}" height="${{(height - pad - coord.y).toFixed(1)}}" rx="6" fill="rgba(47,111,100,.18)"></rect>
+            <circle cx="${{coord.x.toFixed(1)}}" cy="${{coord.y.toFixed(1)}}" r="4" fill="#2f6f64"><title>${{escapeHtml(coord.point.label)}} · ${{percent(coord.point.attendance_rate)}}</title></circle>
+          `).join("")}}
+          <path d="${{d}}" fill="none" stroke="#2f6f64" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          ${{coords.map((coord, index) => index % Math.max(1, Math.ceil(coords.length / 5)) === 0 ? `<text x="${{coord.x.toFixed(1)}}" y="${{height - 6}}" text-anchor="middle" font-size="12" fill="#667085">${{escapeHtml(coord.point.label || "")}}</text>` : "").join("")}}
+        </svg>
+      `;
+    }}
+
+    function sparkline(points) {{
+      const usable = points.filter((point) => point.value !== null && point.value !== undefined);
+      if (!usable.length) return chartEmpty("성적 없음");
+      const width = 240;
+      const height = 56;
+      const min = Math.min(0, ...usable.map((point) => Number(point.value)));
+      const max = Math.max(100, ...usable.map((point) => Number(point.value)));
+      const span = Math.max(1, max - min);
+      const d = usable.map((point, index) => {{
+        const x = usable.length === 1 ? 0 : index * width / (usable.length - 1);
+        const y = height - ((Number(point.value) - min) / span) * height;
+        return `${{index ? "L" : "M"}} ${{x.toFixed(1)}} ${{y.toFixed(1)}}`;
+      }}).join(" ");
+      return `<svg viewBox="0 0 ${{width}} ${{height}}" aria-hidden="true"><path d="${{d}}" fill="none" stroke="#2f6f64" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+    }}
+
+    function chartEmpty(message) {{
+      return `<div class="chart-empty">${{escapeHtml(message)}}</div>`;
+    }}
+
+    function percent(value) {{
+      return value === null || value === undefined ? "-" : `${{Math.round(Number(value) * 100)}}%`;
+    }}
+
+    function scoreText(value) {{
+      return value === null || value === undefined ? "-" : `${{Number(value).toFixed(1)}}`;
+    }}
+
+    function deltaText(value) {{
+      if (value === null || value === undefined) return "추이 없음";
+      const sign = Number(value) > 0 ? "+" : "";
+      return `최근 변화 ${{sign}}${{Number(value).toFixed(1)}}점`;
+    }}
+
+    function riskLabel(value) {{
+      return value === "high" ? "위험" : value === "medium" ? "주의" : "안정";
+    }}
+
+    function riskText(item) {{
+      return `출석 ${{percent(item.attendance_rate)}} · 성적 ${{scoreText(item.score_avg)}} · 미제출 ${{item.homework_missing || 0}}건`;
+    }}
+
+    function rateWidth(value) {{
+      return `${{Math.max(0, Math.min(100, Math.round((value || 0) * 100)))}}%`;
+    }}
+
+    function scoreWidth(value) {{
+      return `${{Math.max(0, Math.min(100, Math.round(value || 0)))}}%`;
     }}
 
     function examFormPayload() {{
@@ -1842,6 +2516,10 @@ def _render_shell(status: dict[str, Any]) -> str:
         await loadSituation();
         writeLog("미제출/알림 상황을 갱신했습니다.");
       }},
+      async refreshDashboard() {{
+        const data = await loadDashboard();
+        writeLog("성과 대시보드를 갱신했습니다.", data.summary);
+      }},
       async writeMemo() {{
         const data = await callApi("/api/write-memo", {{
           classin_id: document.querySelector("#memoClassinId").value,
@@ -1866,6 +2544,30 @@ def _render_shell(status: dict[str, Any]) -> str:
     document.addEventListener("click", async (event) => {{
       const button = event.target.closest("button[data-action]");
       const filterButton = event.target.closest("button[data-filter]");
+      const tabButton = event.target.closest("button[data-tab]");
+      const modeButton = event.target.closest("button[data-mode]");
+      if (tabButton) {{
+        document.querySelectorAll("[data-tab]").forEach((item) => item.classList.toggle("active", item === tabButton));
+        document.querySelectorAll(".tab-view").forEach((view) => view.classList.toggle("active", view.id === `tab-${{tabButton.dataset.tab}}`));
+        if (tabButton.dataset.tab === "performance") {{
+          try {{
+            await loadDashboard();
+          }} catch (error) {{
+            writeLog(error.message);
+          }}
+        }}
+        return;
+      }}
+      if (modeButton) {{
+        dashboardMode = modeButton.dataset.mode || "course";
+        syncDashboardMode();
+        try {{
+          await loadDashboard();
+        }} catch (error) {{
+          writeLog(error.message);
+        }}
+        return;
+      }}
       if (filterButton) {{
         activeMissingFilter = filterButton.dataset.filter || "all";
         renderMissing(missingState);
@@ -1884,7 +2586,38 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
     }});
 
+    document.querySelector("#courseSearch").addEventListener("input", (event) => {{
+      clearTimeout(optionSearchTimer);
+      optionSearchTimer = setTimeout(() => {{
+        loadDashboardOptions("course", event.target.value).catch((error) => writeLog(error.message));
+      }}, 220);
+    }});
+
+    document.querySelector("#studentSearch").addEventListener("input", (event) => {{
+      clearTimeout(optionSearchTimer);
+      optionSearchTimer = setTimeout(() => {{
+        loadDashboardOptions("student", event.target.value).catch((error) => writeLog(error.message));
+      }}, 220);
+    }});
+
+    document.querySelector("#courseSelect").addEventListener("change", () => {{
+      if (dashboardMode === "course") loadDashboard().catch((error) => writeLog(error.message));
+    }});
+
+    document.querySelector("#studentSelect").addEventListener("change", () => {{
+      if (dashboardMode === "student") loadDashboard().catch((error) => writeLog(error.message));
+    }});
+
+    document.querySelector("#dashboardDays").addEventListener("change", () => {{
+      loadDashboard().catch((error) => writeLog(error.message));
+    }});
+
     renderStatus(status);
+    syncDashboardMode();
+    Promise.all([
+      loadDashboardOptions("course", ""),
+      loadDashboardOptions("student", ""),
+    ]).then(() => loadDashboard()).catch((error) => writeLog(error.message));
     loadSituation().catch((error) => writeLog(error.message));
   </script>
 </body>

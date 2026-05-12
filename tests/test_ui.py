@@ -42,6 +42,7 @@ def test_ui_home_renders_with_config(tmp_path):
     assert "ClassIn Toolkit UI" in res.text
     assert "테스트학원" in res.text
     assert "다음 액션" in res.text
+    assert "성과 대시보드" in res.text
 
 
 def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
@@ -56,6 +57,8 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
     status = client.get("/api/status").json()
     missing = client.get("/api/missing-homework").json()
     notifications = client.get("/api/notifications").json()
+    courses = client.get("/api/course-dashboard/courses?q=C-").json()
+    dashboard = client.get("/api/course-dashboard?days=90").json()
     sweep = client.post("/api/sweep-missing-homework", json={}).json()
     exam_import = client.post("/api/import-exam-results", json={}).json()
     exam_preview = client.get(
@@ -72,6 +75,9 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
     assert missing["data_context"]["summary"]["students_with_context"] > 0
     assert any(item["report_context"]["has_context"] for item in missing["items"])
     assert notifications["summary"]["total"] > 0
+    assert courses["items"]
+    assert dashboard["summary"]["student_count"] > 0
+    assert dashboard["score_trend"]
     assert sweep["demo"] is True
     assert exam_import["demo"] is True
     assert exam_preview["demo"] is True
