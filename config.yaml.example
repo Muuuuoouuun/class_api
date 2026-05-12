@@ -50,5 +50,3 @@ webhook:
 
 reports:
   output_dir: "./reports_out"
-  weekly_cron_day: "fri"
-  weekly_cron_hour: 17

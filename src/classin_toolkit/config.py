@@ -82,8 +82,6 @@ class WebhookConfig(BaseModel):
 
 class ReportsConfig(BaseModel):
     output_dir: str = "./reports_out"
-    weekly_cron_day: str = "fri"
-    weekly_cron_hour: int = 17
 
 
 class AppConfig(BaseModel):

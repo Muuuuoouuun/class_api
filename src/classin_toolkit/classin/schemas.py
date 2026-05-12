@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -49,9 +48,3 @@ class Homework(BaseModel):
     description: str = ""
     due_at: datetime | None = None
     attachments: list[str] = Field(default_factory=list)
-
-
-class AttendanceStatus(BaseModel):
-    status: Literal["present", "late", "absent"] = "absent"
-    joined_at: datetime | None = None
-    left_at: datetime | None = None
