@@ -794,7 +794,9 @@ def _render_shell(status: dict[str, Any]) -> str:
     status_json = _json_for_script(status)
     today = date_cls.today().isoformat()
     week_start = _week_start(date_cls.today()).isoformat()
-    title = html.escape(status.get("academy") or "ClassIn Toolkit")
+    title = html.escape(status.get("academy") or "Classin++")
+    initial_source = (status.get("academy") or "Classin++").strip()
+    title_initial = html.escape(initial_source[:1] if initial_source else "C")
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -804,89 +806,390 @@ def _render_shell(status: dict[str, Any]) -> str:
   <style>
     :root {{
       color-scheme: light;
-      --bg: #f6f8fb;
+      --bg: #f7faf6;
+      --bg-grad: var(--bg);
       --panel: #ffffff;
-      --panel-soft: #f8fafc;
-      --line: #d8dee8;
-      --line-strong: #b8c2d1;
-      --text: #182033;
-      --muted: #667085;
-      --primary: #2f6f64;
-      --primary-strong: #21574f;
-      --accent: #a85c19;
-      --danger: #a83a2f;
-      --ok: #21744f;
-      --blue: #1d5f8f;
-      --shadow: 0 8px 24px rgba(15, 23, 42, .06);
-      --shadow-soft: 0 4px 12px rgba(15, 23, 42, .08);
+      --panel-soft: #fafdf9;
+      --line: #e8eee6;
+      --line-2: #eef2eb;
+      --line-strong: #d6dfd1;
+      --text: #0e1a14;
+      --text-2: #33433b;
+      --muted: #6b7a72;
+      --muted-2: #9ba89f;
+      --primary: #16a34a;
+      --primary-strong: #15803d;
+      --primary-soft: #dcf2e3;
+      --primary-softer: #f0faf2;
+      --primary-ink: #0b3d20;
+      --primary-ring: rgba(22, 163, 74, .18);
+      --accent: #d97706;
+      --accent-soft: #fef6e7;
+      --accent-ink: #92520a;
+      --danger: #dc2626;
+      --danger-soft: #fdecec;
+      --danger-ink: #991b1b;
+      --ok: #15803d;
+      --ok-soft: #dcf2e3;
+      --blue: #3730a3;
+      --blue-soft: #e0e7ff;
+      --shadow: 0 1px 0 rgba(15, 23, 17, .04), 0 8px 24px -16px rgba(15, 23, 17, .12);
+      --shadow-soft: 0 1px 0 rgba(15, 23, 17, .04), 0 12px 28px -16px rgba(15, 23, 17, .18);
+      --shadow-pop: 0 30px 80px -20px rgba(15, 23, 17, .35);
+      --radius-sm: 8px;
+      --radius: 10px;
+      --radius-lg: 14px;
     }}
     * {{ box-sizing: border-box; }}
+    *:focus-visible {{
+      outline: 3px solid var(--primary-ring);
+      outline-offset: 2px;
+      border-radius: 6px;
+    }}
     body {{
       margin: 0;
       min-width: 320px;
       background: var(--bg);
       color: var(--text);
-      font-family: "Pretendard Variable", Pretendard, "Noto Sans KR", "Segoe UI", system-ui, sans-serif;
-      letter-spacing: 0;
+      font-family: "Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-feature-settings: "ss01", "ss03";
+      letter-spacing: -0.01em;
+      -webkit-font-smoothing: antialiased;
     }}
-    header {{
+    ::selection {{ background: #bef0c9; color: #062812; }}
+    .layout {{
+      display: flex;
+      min-height: 100vh;
+    }}
+    aside.sidebar {{
+      width: 248px;
+      flex: 0 0 248px;
+      background: #fff;
+      border-right: 1px solid var(--line);
       position: sticky;
       top: 0;
-      z-index: 10;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }}
+    .sidebar-brand {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 22px 20px;
+      border-bottom: 1px solid var(--line-2);
+    }}
+    .brand-mark {{
+      width: 32px;
+      height: 32px;
+      flex: 0 0 auto;
+      border-radius: 8px;
+      background: var(--primary);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      box-shadow: inset 0 -1px 0 rgba(0,0,0,.12);
+      position: relative;
+    }}
+    .brand-mark svg {{ display: block; }}
+    .brand-wordmark {{
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      color: var(--text);
+    }}
+    .brand-wordmark .accent {{ color: var(--primary); }}
+    .brand-tagline {{
+      font-size: 10.5px;
+      color: var(--muted);
+      margin-top: 3px;
+    }}
+    nav.sidenav {{
+      padding: 12px 10px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }}
+    .sidenav button {{
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 14px;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-2);
+      font-size: 14px;
+      font-weight: 500;
+      transition: background .12s ease, color .12s ease;
+      position: relative;
+      border: 0;
+      cursor: pointer;
+      text-align: left;
+      min-height: auto;
+    }}
+    .sidenav button .nav-icon {{
+      display: inline-flex;
+      width: 18px;
+      height: 18px;
+      color: var(--muted);
+      flex: 0 0 auto;
+    }}
+    .sidenav button .nav-label {{ flex: 1; }}
+    .sidenav button .nav-badge {{
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 999px;
+      min-width: 20px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }}
+    .sidenav button:hover {{
+      background: #f5f8f3;
+      transform: none;
+      box-shadow: none;
+    }}
+    .sidenav button.active {{
+      background: var(--primary-softer);
+      color: var(--primary-strong);
+      font-weight: 700;
+    }}
+    .sidenav button.active .nav-icon {{ color: var(--primary); }}
+    .sidenav button.active::before {{
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 8px;
+      bottom: 8px;
+      width: 3px;
+      border-radius: 3px;
+      background: var(--primary);
+    }}
+    .sidebar-profile {{
+      padding: 12px 14px;
+      border-top: 1px solid var(--line-2);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }}
+    .profile-avatar {{
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--primary-soft);
+      color: var(--primary-ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13.4px;
+      flex: 0 0 auto;
+    }}
+    .profile-meta {{ flex: 1; min-width: 0; }}
+    .profile-name {{
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }}
+    .profile-sub {{
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .app-main {{ flex: 1; min-width: 0; }}
+    .topbar {{
+      position: sticky;
+      top: 0;
+      z-index: 20;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 16px max(24px, calc((100vw - 1640px) / 2 + 20px));
-      border-bottom: 1px solid var(--line);
-      background: rgba(255, 255, 255, .9);
-      backdrop-filter: blur(18px);
+      padding: 14px 32px;
+      background: rgba(247, 250, 246, .85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line-2);
+    }}
+    .crumb {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .crumb .crumb-home {{ color: var(--muted); font-weight: 500; }}
+    .crumb .crumb-current {{ color: var(--text); font-weight: 600; }}
+    .crumb svg {{ flex: 0 0 auto; }}
+    .topbar-actions {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }}
+    .topbar-search {{
+      position: relative;
+    }}
+    .topbar-search input {{
+      padding: 8px 14px 8px 36px;
+      width: 280px;
+      min-height: 36px;
+      font-size: 13px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }}
+    .topbar-search svg {{
+      position: absolute;
+      left: 11px;
+      top: 10px;
+      color: var(--muted-2);
+    }}
+    .topbar-bell {{
+      position: relative;
+      width: 36px;
+      height: 36px;
+      min-height: 36px;
+      border-radius: 10px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: var(--text-2);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }}
+    .topbar-bell:hover {{ background: var(--panel-soft); border-color: var(--line-strong); color: var(--text); }}
+    .topbar-bell .dot {{
+      position: absolute;
+      top: 6px;
+      right: 7px;
+      width: 7px;
+      height: 7px;
+      background: var(--accent);
+      border-radius: 50%;
+      border: 2px solid #fff;
     }}
     h1 {{
       margin: 0;
-      font-size: 24px;
+      font-size: 19px;
       line-height: 1.2;
-      font-weight: 800;
-      letter-spacing: 0;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }}
-    main {{
-      width: min(1640px, calc(100vw - 40px));
-      margin: 18px auto 40px;
+    main.app-body {{
+      padding: 28px 32px 80px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }}
+    .page-head {{
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 22px;
+    }}
+    .page-eyebrow {{
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }}
+    .page-title {{
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: var(--text);
+      margin: 0;
+    }}
+    .page-sub {{
+      font-size: 14px;
+      color: var(--muted-2);
+      margin-top: 6px;
     }}
     .status-strip {{
       display: grid;
-      grid-template-columns: repeat(6, minmax(136px, 1fr));
-      gap: 10px;
-      margin-bottom: 16px;
+      grid-template-columns: minmax(180px, .9fr) minmax(320px, 1.6fr) minmax(420px, 2.1fr);
+      gap: 12px;
+      margin-bottom: 18px;
     }}
-    .metric, .panel {{
-      background: var(--panel);
+    .status-group {{
+      display: grid;
+      grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr));
+      gap: 10px;
+      padding: 14px;
+      background: #fff;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-lg);
+      position: relative;
       box-shadow: var(--shadow);
     }}
+    .status-group::before {{
+      content: attr(data-label);
+      position: absolute;
+      top: -8px;
+      left: 14px;
+      padding: 0 6px;
+      background: var(--bg);
+      color: var(--muted);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }}
+    .panel {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      transition: box-shadow .15s ease;
+    }}
+    .panel:hover {{ box-shadow: var(--shadow-soft); }}
     .metric {{
       position: relative;
       overflow: hidden;
       padding: 12px 14px;
-      min-height: 78px;
+      min-height: 76px;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      transition: none;
     }}
+    .metric + .metric {{ border-left: 1px solid var(--line-2); }}
+    .status-group > .metric + .metric {{ border-left: 0; }}
     .metric span {{
-      display: block;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       color: var(--muted);
-      font-size: 13px;
-      line-height: 1.4;
-      font-weight: 650;
+      font-size: 12.5px;
+      line-height: 1.35;
+      font-weight: 600;
     }}
     .metric strong {{
       display: block;
-      margin-top: 6px;
-      font-size: 30px;
+      margin-top: 8px;
+      font-size: 28px;
       line-height: 1.1;
-      letter-spacing: 0;
+      letter-spacing: -0.025em;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      color: var(--text);
     }}
     .metric.warn strong {{ color: var(--accent); }}
     .metric.alert strong {{ color: var(--danger); }}
+    .metric.ok strong {{ color: var(--primary-strong); }}
     .grid {{
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
@@ -895,48 +1198,54 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
     .tabbar {{
       display: inline-flex;
-      gap: 4px;
+      gap: 2px;
       padding: 4px;
-      margin: 0 0 16px;
+      margin: 0 0 18px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 999px;
       background: rgba(255, 255, 255, .72);
       box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
     }}
     .tabbar button {{
-      min-height: 34px;
-      border-color: transparent;
+      min-height: 32px;
+      border: 1px solid transparent;
       background: transparent;
       color: var(--muted);
-      padding: 6px 14px;
+      padding: 6px 16px;
       box-shadow: none;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 13.5px;
+      transition: color .15s ease, background .15s ease, box-shadow .15s ease;
     }}
     .tabbar button:hover {{
-      background: #fff;
+      background: rgba(255, 255, 255, .8);
       color: var(--text);
       transform: none;
       box-shadow: none;
     }}
     .tabbar button.active {{
-      border-color: rgba(47, 111, 100, .32);
-      background: #e6f1ee;
-      color: var(--primary-strong);
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, .1);
     }}
     .tab-view {{ display: none; }}
-    .tab-view.active {{ display: block; }}
+    .tab-view.active {{ display: block; animation: fadeIn .22s ease; }}
+    @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(4px); }} to {{ opacity: 1; transform: none; }} }}
     aside {{
       position: sticky;
-      top: 96px;
+      top: 92px;
       align-self: start;
     }}
     .panel {{
-      padding: 18px;
+      padding: 18px 18px 16px;
     }}
     .panel + .panel {{
       margin-top: 14px;
     }}
     .hero-panel {{
-      padding: 18px;
+      padding: 20px 20px 18px;
     }}
     .panel-head {{
       display: flex;
@@ -946,23 +1255,75 @@ def _render_shell(status: dict[str, Any]) -> str:
       margin-bottom: 14px;
     }}
     .panel-head p {{
-      margin: 6px 0 0;
+      margin: 4px 0 0;
       color: var(--muted);
       font-size: 13px;
-      line-height: 1.35;
+      line-height: 1.45;
     }}
     h2 {{
       margin: 0;
-      font-size: 20px;
-      line-height: 1.2;
-      letter-spacing: 0;
+      font-size: 17px;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+      font-weight: 700;
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    h2 .h2-dot {{
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--primary);
     }}
     .section-subtitle {{
       color: var(--muted);
-      font-size: 13px;
-      font-weight: 650;
+      font-size: 12px;
+      font-weight: 600;
       white-space: nowrap;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel-soft);
     }}
+    .subtabs {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-soft);
+      margin-bottom: 14px;
+    }}
+    .subtabs button {{
+      flex: 1;
+      min-width: 84px;
+      min-height: 32px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      padding: 6px 12px;
+      box-shadow: none;
+      border-radius: 7px;
+      font-weight: 600;
+      font-size: 13px;
+    }}
+    .subtabs button:hover {{
+      background: #fff;
+      color: var(--text);
+      transform: none;
+      box-shadow: none;
+    }}
+    .subtabs button.active {{
+      background: #fff;
+      color: var(--primary-strong);
+      box-shadow: var(--shadow-soft);
+      border-color: var(--line);
+    }}
+    .subtab-view {{ display: none; }}
+    .subtab-view.active {{ display: block; animation: fadeIn .18s ease; }}
     .actions {{
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -979,48 +1340,77 @@ def _render_shell(status: dict[str, Any]) -> str:
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      margin: 0 0 12px;
+      margin: 0 0 14px;
     }}
     .toolbar button {{
-      min-height: 34px;
+      min-height: 32px;
       border-color: var(--line);
       background: rgba(255, 255, 255, .72);
+      color: var(--text-2);
+      padding: 4px 12px;
+      font-size: 12.5px;
+      font-weight: 600;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }}
+    .toolbar button:hover {{
+      background: #fff;
       color: var(--text);
-      padding: 6px 10px;
-      font-size: 13px;
-      font-weight: 750;
     }}
     .toolbar button.active {{
       border-color: var(--primary);
-      background: #e6f1ee;
+      background: var(--primary-soft);
       color: var(--primary-strong);
-      box-shadow: inset 0 0 0 1px rgba(47, 111, 100, .18);
+      box-shadow: inset 0 0 0 1px rgba(46, 111, 99, .18);
+    }}
+    .toolbar button .chip-count {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      border-radius: 999px;
+      background: #eef1f6;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }}
+    .toolbar button.active .chip-count {{
+      background: #fff;
+      color: var(--primary-strong);
     }}
     label {{
       display: grid;
       gap: 6px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
       line-height: 1.3;
-      font-weight: 650;
+      font-weight: 600;
     }}
     input, textarea, select {{
       width: 100%;
       min-height: 38px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       padding: 8px 10px;
       color: var(--text);
-      background: rgba(255, 255, 255, .76);
+      background: #fff;
       font: inherit;
       font-size: 14px;
       outline: none;
-      transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }}
+    input:hover, textarea:hover, select:hover {{
+      border-color: var(--line-strong);
     }}
     input:focus, textarea:focus, select:focus {{
-      border-color: rgba(47, 111, 100, .72);
-      box-shadow: 0 0 0 4px rgba(47, 111, 100, .12);
-      background: #fff;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-ring);
     }}
     textarea {{
       min-height: 92px;
@@ -1029,31 +1419,49 @@ def _render_shell(status: dict[str, Any]) -> str:
     button {{
       min-height: 38px;
       border: 1px solid var(--primary);
-      border-radius: 8px;
-      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
       background: var(--primary);
       color: #fff;
       font: inherit;
-      font-weight: 800;
+      font-size: 13.5px;
+      font-weight: 600;
       cursor: pointer;
-      transition: transform .14s ease, background .14s ease, box-shadow .14s ease;
+      transition: transform .14s ease, background .14s ease, box-shadow .14s ease, border-color .14s ease;
+      white-space: nowrap;
     }}
     button.secondary {{
       border-color: var(--line);
-      background: rgba(255, 255, 255, .78);
+      background: #fff;
       color: var(--text);
+    }}
+    button.ghost {{
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      box-shadow: none;
     }}
     button:hover {{
       background: var(--primary-strong);
-      transform: translateY(-1px);
+      border-color: var(--primary-strong);
       box-shadow: var(--shadow-soft);
     }}
     button.secondary:hover {{
-      background: #fff;
+      background: var(--panel-soft);
+      border-color: var(--line-strong);
+      color: var(--text);
+    }}
+    button.ghost:hover {{
+      background: var(--panel-soft);
+      color: var(--text);
+    }}
+    button:active {{
+      transform: translateY(1px);
+      box-shadow: none;
     }}
     button:disabled {{
       cursor: wait;
-      opacity: .62;
+      opacity: .55;
       transform: none;
       box-shadow: none;
     }}
@@ -1068,21 +1476,21 @@ def _render_shell(status: dict[str, Any]) -> str:
       gap: 10px;
     }}
     .log {{
-      min-height: 180px;
-      max-height: 360px;
+      min-height: 160px;
+      max-height: 320px;
       overflow: auto;
-      border-radius: 8px;
-      border: 1px solid #233047;
-      background: #121826;
-      color: #dbe4f0;
+      border-radius: var(--radius-sm);
+      border: 1px solid #1f2a3d;
+      background: #0e1422;
+      color: #d6dfee;
       padding: 12px;
-      font: 12px/1.55 Consolas, "Cascadia Mono", monospace;
+      font: 12px/1.55 ui-monospace, "SF Mono", Consolas, "Cascadia Mono", monospace;
       white-space: pre-wrap;
     }}
     .table-wrap {{
       overflow: auto;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius);
       background: #fff;
     }}
     table {{
@@ -1093,7 +1501,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-size: 13px;
     }}
     th, td {{
-      padding: 9px 12px;
+      padding: 11px 14px;
       border-bottom: 1px solid var(--line);
       text-align: left;
       vertical-align: top;
@@ -1102,17 +1510,20 @@ def _render_shell(status: dict[str, Any]) -> str:
       position: sticky;
       top: 0;
       z-index: 1;
-      background: #f8fafc;
+      background: linear-gradient(180deg, #fafbfd, #f4f6fa);
       color: var(--muted);
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
       white-space: nowrap;
     }}
+    tr {{ transition: background .12s ease; }}
     tr:hover td {{
-      background: rgba(47, 111, 100, .035);
+      background: rgba(46, 111, 99, .04);
     }}
     tr:last-child td {{ border-bottom: 0; }}
+    td {{ font-variant-numeric: tabular-nums; }}
     .missing-table .col-student {{ width: 17%; }}
     .missing-table .col-lesson {{ width: 28%; }}
     .missing-table .col-phone {{ width: 15%; }}
@@ -1445,12 +1856,26 @@ def _render_shell(status: dict[str, Any]) -> str:
       line-height: 1.32;
     }}
     .empty {{
-      padding: 18px;
+      display: grid;
+      gap: 6px;
+      justify-items: center;
+      padding: 28px 18px;
       color: var(--muted);
       text-align: center;
-      border: 1px dashed var(--line);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, .55);
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.7), var(--panel-soft));
+      font-size: 13.5px;
+    }}
+    .empty::before {{
+      content: "";
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 50% 50%, var(--panel-soft) 0 36%, transparent 38%),
+        conic-gradient(from 0deg, var(--line-strong), var(--line) 50%, var(--line-strong));
+      opacity: .8;
     }}
     .status-pill {{
       display: inline-flex;
@@ -1473,20 +1898,41 @@ def _render_shell(status: dict[str, Any]) -> str:
       gap: 8px;
     }}
     .action-item {{
+      position: relative;
       display: grid;
       gap: 4px;
-      padding: 10px;
+      padding: 12px 12px 12px 16px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, .62);
+      border-radius: var(--radius);
+      background: #fff;
       font-size: 13px;
-      line-height: 1.34;
+      line-height: 1.45;
+      transition: transform .14s ease, box-shadow .14s ease;
     }}
-    .action-item strong {{ font-size: 14px; }}
+    .action-item::before {{
+      content: "";
+      position: absolute;
+      top: 12px;
+      bottom: 12px;
+      left: 6px;
+      width: 3px;
+      border-radius: 999px;
+      background: var(--line-strong);
+    }}
+    .action-item:hover {{
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-soft);
+    }}
+    .action-item strong {{ font-size: 13.5px; font-weight: 700; }}
     .action-item span {{ color: var(--muted); }}
-    .action-item.needs_phone {{ border-color: rgba(180, 35, 24, .35); background: #fff8f7; }}
-    .action-item.needs_message {{ border-color: #f3d2a1; background: #fffaf1; }}
-    .action-item.needs_review {{ border-color: #b7dcf3; background: #f3faff; }}
+    .action-item.needs_phone {{ border-color: rgba(180, 35, 26, .25); background: var(--danger-soft); }}
+    .action-item.needs_phone::before {{ background: var(--danger); }}
+    .action-item.needs_message {{ border-color: #f3d2a1; background: var(--accent-soft); }}
+    .action-item.needs_message::before {{ background: var(--accent); }}
+    .action-item.needs_review {{ border-color: #b7dcf3; background: var(--blue-soft); }}
+    .action-item.needs_review::before {{ background: var(--blue); }}
+    .action-item.needs_retry {{ border-color: rgba(180, 35, 26, .25); background: var(--danger-soft); }}
+    .action-item.needs_retry::before {{ background: var(--danger); }}
     .repeat-mark {{
       color: var(--accent);
       font-weight: 700;
@@ -1529,12 +1975,43 @@ def _render_shell(status: dict[str, Any]) -> str:
       margin: 0;
       overflow-wrap: anywhere;
     }}
-    @media (max-width: 1280px) {{
-      main {{
-        width: min(100vw - 32px, 1120px);
+    @media (max-width: 1100px) {{
+      .layout {{ flex-direction: column; }}
+      aside.sidebar {{
+        position: static;
+        width: 100%;
+        height: auto;
+        flex: 0 0 auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
       }}
+      .sidebar-brand {{ padding: 0; border: 0; }}
+      .brand-tagline {{ display: none; }}
+      nav.sidenav {{
+        flex-direction: row;
+        padding: 0;
+        gap: 6px;
+        flex: 1;
+        justify-content: flex-end;
+      }}
+      .sidenav button {{ width: auto; padding: 8px 12px; }}
+      .sidenav button.active::before {{ display: none; }}
+      .sidebar-profile {{
+        padding: 0;
+        border: 0;
+      }}
+      .profile-meta {{ display: none; }}
+      .topbar {{ padding: 12px 20px; }}
+      .topbar-search input {{ width: 200px; }}
+      main.app-body {{ padding: 22px 20px 60px; }}
+    }}
+    @media (max-width: 1280px) {{
       .status-strip {{
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: 1fr;
       }}
       .grid {{
         grid-template-columns: 1fr;
@@ -1556,7 +2033,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       header {{
         align-items: flex-start;
         flex-direction: column;
-        padding: 16px 18px;
+        padding: 14px 18px;
       }}
       .status-strip, .grid, .actions, .control-grid, .performance-controls, .hero-metrics {{
         grid-template-columns: 1fr;
@@ -1565,14 +2042,15 @@ def _render_shell(status: dict[str, Any]) -> str:
         display: grid;
         grid-template-columns: 1fr 1fr;
         width: 100%;
+        border-radius: var(--radius);
       }}
-      main {{
-        width: min(100vw - 20px, 720px);
-        margin-top: 12px;
+      .tabbar button {{ border-radius: 7px; }}
+      main.app-body {{
+        padding: 16px;
       }}
       .panel, .hero-panel {{
         padding: 14px;
-        border-radius: 8px;
+        border-radius: var(--radius);
       }}
       .panel-head {{
         display: grid;
@@ -1582,7 +2060,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         min-width: 820px;
       }}
       th, td {{
-        padding: 9px;
+        padding: 10px;
       }}
       .exam-preview-head, .exam-preview-item {{
         align-items: start;
@@ -1596,27 +2074,82 @@ def _render_shell(status: dict[str, Any]) -> str:
         gap: 3px;
       }}
     }}
+    @media (prefers-reduced-motion: reduce) {{
+      *, *::before, *::after {{
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }}
+    }}
   </style>
 </head>
 <body>
-  <header>
-    <h1>{title}</h1>
-    <span id="configBadge" class="badge">config</span>
-  </header>
-  <main>
+  <div class="layout">
+    <aside class="sidebar" aria-label="기본 메뉴">
+      <div class="sidebar-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+            <path d="M9 11.5C9 9.6 10.6 8 12.5 8h7A3.5 3.5 0 0123 11.5v6c0 1.4-1.1 2.5-2.5 2.5h-2L15 24v-4h-2.5A3.5 3.5 0 019 17.5v-6z" fill="#fff"/>
+            <path d="M13.5 14h5M13.5 17h3" stroke="#16a34a" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <div class="brand-wordmark">Classin<span class="accent">++</span></div>
+          <div class="brand-tagline">API로 더 쾌적한 운영</div>
+        </div>
+      </div>
+      <nav class="sidenav" aria-label="대시보드 탭">
+        <button data-tab="operations" class="active" aria-current="page">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg></span>
+          <span class="nav-label">홈</span>
+          <span class="nav-badge" id="sideBadgeMissing" hidden>0</span>
+        </button>
+        <button data-tab="performance">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V8M10 20V4M16 20v-8M22 20H2"/></svg></span>
+          <span class="nav-label">성과 대시보드</span>
+        </button>
+      </nav>
+      <div class="sidebar-profile">
+        <span class="profile-avatar" aria-hidden="true">{title_initial}</span>
+        <div class="profile-meta">
+          <div class="profile-name">{title}</div>
+          <div class="profile-sub" id="profileSub">classin-toolkit</div>
+        </div>
+        <span id="configBadge" class="badge">config</span>
+      </div>
+    </aside>
+    <section class="app-main">
+      <div class="topbar" role="banner">
+        <div class="crumb">
+          <button class="crumb-home" data-tab="operations">홈</button>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          <span class="crumb-current" id="crumbCurrent">운영</span>
+        </div>
+        <div class="topbar-actions">
+          <div class="topbar-search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input placeholder="학생, 클래스, 활동 검색..." aria-label="검색">
+          </div>
+          <button class="topbar-bell" aria-label="알림">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1112 0c0 7 3 7 3 9H3c0-2 3-2 3-9z"/><path d="M10 21a2 2 0 004 0"/></svg>
+            <span class="dot"></span>
+          </button>
+        </div>
+      </div>
+      <main class="app-body">
     <section class="status-strip">
-      <div class="metric"><span>Webhook 원본</span><strong id="incomingCount">0</strong></div>
-      <div class="metric warn"><span>숙제 미제출</span><strong id="missingCount">0</strong></div>
-      <div class="metric alert"><span>연락처 없음</span><strong id="noPhoneCount">0</strong></div>
-      <div class="metric"><span>문구 생성</span><strong id="dryRunCount">0</strong></div>
-      <div class="metric"><span>발송 완료</span><strong id="sentCount">0</strong></div>
-      <div class="metric alert"><span>발송 실패</span><strong id="failedCount">0</strong></div>
+      <div class="status-group" data-label="인입" style="--cols:1">
+        <div class="metric"><span>Webhook 원본</span><strong id="incomingCount">0</strong></div>
+      </div>
+      <div class="status-group" data-label="필요 조치" style="--cols:2">
+        <div class="metric warn"><span>숙제 미제출</span><strong id="missingCount">0</strong></div>
+        <div class="metric alert"><span>연락처 없음</span><strong id="noPhoneCount">0</strong></div>
+      </div>
+      <div class="status-group" data-label="처리 결과" style="--cols:3">
+        <div class="metric"><span>문구 생성</span><strong id="dryRunCount">0</strong></div>
+        <div class="metric ok"><span>발송 완료</span><strong id="sentCount">0</strong></div>
+        <div class="metric alert"><span>발송 실패</span><strong id="failedCount">0</strong></div>
+      </div>
     </section>
-
-    <nav class="tabbar" aria-label="대시보드 탭">
-      <button data-tab="operations" class="active">운영</button>
-      <button data-tab="performance">성과 대시보드</button>
-    </nav>
 
     <section id="tab-operations" class="tab-view active">
     <section class="grid">
@@ -1624,100 +2157,120 @@ def _render_shell(status: dict[str, Any]) -> str:
         <div class="panel hero-panel">
           <div class="panel-head">
             <div>
-              <h2>오늘 미제출 상황</h2>
+              <h2><span class="h2-dot"></span>오늘 미제출 상황</h2>
               <p>반복 누락, 연락처 보완, 발송 실패를 먼저 볼 수 있게 정리했습니다.</p>
             </div>
             <span class="section-subtitle">운영 큐</span>
           </div>
           <div class="control-grid">
             <label>조회 시간<input id="windowHours" type="number" min="1" step="1" value="24"></label>
-            <label>수업 ID<input id="lessonId" type="text"></label>
+            <label>수업 ID<input id="lessonId" type="text" placeholder="예: LSN-2026-04-21-1"></label>
             <button data-action="refreshMissing" class="secondary">목록 새로고침</button>
             <button data-action="sweepMissing">미제출 sweep</button>
           </div>
-          <div class="toolbar" id="missingFilters">
-            <button data-filter="all" class="active">전체</button>
-            <button data-filter="needs_message">문구 필요</button>
-            <button data-filter="needs_review">검토 필요</button>
-            <button data-filter="needs_phone">연락처 없음</button>
-            <button data-filter="needs_retry">실패</button>
-            <button data-filter="repeat">반복</button>
-            <button data-filter="done">완료</button>
+          <div class="toolbar" id="missingFilters" role="tablist" aria-label="미제출 필터">
+            <button data-filter="all" class="active">전체<span class="chip-count" data-count="all">0</span></button>
+            <button data-filter="needs_message">문구 필요<span class="chip-count" data-count="needs_message">0</span></button>
+            <button data-filter="needs_review">검토 필요<span class="chip-count" data-count="needs_review">0</span></button>
+            <button data-filter="needs_phone">연락처 없음<span class="chip-count" data-count="needs_phone">0</span></button>
+            <button data-filter="needs_retry">실패<span class="chip-count" data-count="needs_retry">0</span></button>
+            <button data-filter="repeat">반복<span class="chip-count" data-count="repeat">0</span></button>
+            <button data-filter="done">완료<span class="chip-count" data-count="done">0</span></button>
           </div>
           <div id="missingTable" style="margin-top:8px"></div>
         </div>
 
         <div class="panel">
-          <h2>알림 발송 현황</h2>
+          <div class="panel-head">
+            <h2><span class="h2-dot" style="background:var(--blue)"></span>알림 발송 현황</h2>
+            <span class="section-subtitle">최근 80건</span>
+          </div>
           <div id="notificationTable"></div>
         </div>
 
         <div class="panel">
-          <h2>리포트</h2>
-          <div class="actions">
-            <div class="row">
-              <label>일자<input id="dailyDate" type="date" value="{today}"></label>
-              <button data-action="renderDaily">생성</button>
+          <div class="panel-head">
+            <div>
+              <h2><span class="h2-dot" style="background:var(--accent)"></span>도구</h2>
+              <p>일일/주간 리포트, 시험 처리, 메모, AI 질문을 한 곳에서.</p>
             </div>
-            <div class="row">
-              <label>주 시작일<input id="weekDate" type="date" value="{week_start}"></label>
-              <button data-action="approveWeekly" class="secondary">승인</button>
-            </div>
-            <button data-action="generateWeekly">주간 드래프트 생성</button>
-            <button data-action="refreshStatus" class="secondary">상태 새로고침</button>
           </div>
-        </div>
+          <nav class="subtabs" aria-label="도구 탭">
+            <button data-subtab="report" class="active">리포트</button>
+            <button data-subtab="exam">시험</button>
+            <button data-subtab="memo">메모</button>
+            <button data-subtab="agent">AI 질문</button>
+          </nav>
 
-        <div class="panel">
-          <h2>시험</h2>
-          <div class="stack">
+          <div data-subtabview="report" class="subtab-view active">
             <div class="actions">
-              <label>CSV/JSON path<input id="examPath" type="text" placeholder="samples/exam_results_sample.csv"></label>
-              <label>시험명<input id="examName" type="text" placeholder="4월 월말평가"></label>
-              <label>시험일<input id="examDate" type="date" value="{today}"></label>
-              <label>반<input id="examClassName" type="text"></label>
-              <label>출처<input id="examSource" type="text" value="academy-db"></label>
-              <label><input id="examDryRun" type="checkbox" checked> dry-run</label>
-              <button data-action="importExam" class="secondary">시험 import</button>
-              <button data-action="previewMissingExam" class="secondary">미응시 확인</button>
-              <button data-action="sweepMissingExam">미응시 sweep</button>
+              <div class="row">
+                <label>일자<input id="dailyDate" type="date" value="{today}"></label>
+                <button data-action="renderDaily">일일 리포트 생성</button>
+              </div>
+              <div class="row">
+                <label>주 시작일<input id="weekDate" type="date" value="{week_start}"></label>
+                <button data-action="approveWeekly" class="secondary">주간 승인</button>
+              </div>
+              <button data-action="generateWeekly">주간 드래프트 생성</button>
+              <button data-action="refreshStatus" class="secondary">상태 새로고침</button>
             </div>
-            <div id="examPreview" class="exam-preview empty">미응시 확인 결과 없음</div>
           </div>
-        </div>
 
-        <div class="panel">
-          <h2>메모</h2>
-          <div class="stack">
-            <div class="actions">
-              <label>ClassIn ID<input id="memoClassinId" type="text"></label>
-              <label>태그<input id="memoTag" type="text"></label>
+          <div data-subtabview="exam" class="subtab-view">
+            <div class="stack">
+              <div class="actions">
+                <label>CSV/JSON path<input id="examPath" type="text" placeholder="samples/exam_results_sample.csv"></label>
+                <label>시험명<input id="examName" type="text" placeholder="4월 월말평가"></label>
+                <label>시험일<input id="examDate" type="date" value="{today}"></label>
+                <label>반<input id="examClassName" type="text"></label>
+                <label>출처<input id="examSource" type="text" value="academy-db"></label>
+                <label style="align-self:end; flex-direction:row; display:flex; align-items:center; gap:8px; color:var(--text-2); font-weight:600;"><input id="examDryRun" type="checkbox" checked style="width:auto; min-height:0;"> dry-run 모드</label>
+                <button data-action="importExam" class="secondary">시험 import</button>
+                <button data-action="previewMissingExam" class="secondary">미응시 확인</button>
+                <button data-action="sweepMissingExam">미응시 sweep</button>
+              </div>
+              <div id="examPreview" class="exam-preview empty">미응시 확인 결과 없음</div>
             </div>
-            <label>내용<textarea id="memoText"></textarea></label>
-            <button data-action="writeMemo">메모 저장</button>
           </div>
-        </div>
 
-        <div class="panel">
-          <h2>AI 질문</h2>
-          <div class="stack">
-            <label>질문<textarea id="agentQuestion"></textarea></label>
-            <button data-action="askAgent">질문 보내기</button>
+          <div data-subtabview="memo" class="subtab-view">
+            <div class="stack">
+              <div class="actions">
+                <label>ClassIn ID<input id="memoClassinId" type="text"></label>
+                <label>태그<input id="memoTag" type="text" placeholder="예: 상담"></label>
+              </div>
+              <label>내용<textarea id="memoText" placeholder="학생/학부모 관련 메모를 입력하세요"></textarea></label>
+              <button data-action="writeMemo">메모 저장</button>
+            </div>
+          </div>
+
+          <div data-subtabview="agent" class="subtab-view">
+            <div class="stack">
+              <label>질문<textarea id="agentQuestion" placeholder="예: 이번 주 미제출이 가장 많은 반은?"></textarea></label>
+              <button data-action="askAgent">질문 보내기</button>
+            </div>
           </div>
         </div>
       </div>
 
       <aside>
         <div class="panel">
-          <h2>다음 액션</h2>
+          <div class="panel-head" style="margin-bottom:10px">
+            <h2><span class="h2-dot" style="background:var(--danger)"></span>다음 액션</h2>
+            <span class="section-subtitle" id="actionQueueMeta">우선순위 순</span>
+          </div>
           <div id="actionQueue" class="action-list"></div>
         </div>
         <div class="panel">
-          <h2>설정</h2>
+          <h2 style="margin-bottom:10px">설정</h2>
           <dl id="settings"></dl>
         </div>
         <div class="panel">
-          <h2>실행 로그</h2>
+          <div class="panel-head" style="margin-bottom:10px">
+            <h2>실행 로그</h2>
+            <span class="section-subtitle">최근 활동</span>
+          </div>
           <div id="log" class="log"></div>
         </div>
       </aside>
@@ -1815,7 +2368,9 @@ def _render_shell(status: dict[str, Any]) -> str:
         <div id="studentCards" class="student-card-grid"></div>
       </div>
     </section>
-  </main>
+      </main>
+    </section>
+  </div>
 
   <script id="initial-status" type="application/json">{status_json}</script>
   <script>
@@ -2290,12 +2845,19 @@ def _render_shell(status: dict[str, Any]) -> str:
       missingState = data;
       const summary = data.summary || {{}};
       document.querySelector("#missingCount").textContent = summary.total_missing || 0;
+      const sideBadge = document.querySelector("#sideBadgeMissing");
+      if (sideBadge) {{
+        const total = summary.total_missing || 0;
+        sideBadge.textContent = total;
+        sideBadge.hidden = total === 0;
+      }}
       document.querySelector("#noPhoneCount").textContent = summary.no_parent_phone || 0;
       document.querySelector("#dryRunCount").textContent = summary.dry_run || 0;
       document.querySelector("#sentCount").textContent = summary.sent || 0;
       document.querySelector("#failedCount").textContent = summary.failed || 0;
 
       renderActionQueue(data.items || []);
+      updateFilterCounts(data.items || []);
       syncFilterButtons();
 
       const items = (data.items || []).filter(itemMatchesFilter);
@@ -2374,12 +2936,36 @@ def _render_shell(status: dict[str, Any]) -> str:
       }});
     }}
 
+    function updateFilterCounts(items) {{
+      const counts = {{
+        all: items.length,
+        needs_message: 0,
+        needs_review: 0,
+        needs_phone: 0,
+        needs_retry: 0,
+        repeat: 0,
+        done: 0,
+      }};
+      items.forEach((item) => {{
+        const key = item.action_required;
+        if (key && counts[key] !== undefined) counts[key] += 1;
+        if (item.is_repeat) counts.repeat += 1;
+      }});
+      document.querySelectorAll("#missingFilters .chip-count").forEach((node) => {{
+        const key = node.dataset.count;
+        node.textContent = counts[key] ?? 0;
+      }});
+    }}
+
     function renderActionQueue(items) {{
       const target = document.querySelector("#actionQueue");
+      const meta = document.querySelector("#actionQueueMeta");
       const queue = items
         .filter((item) => item.action_required !== "done")
         .sort((a, b) => actionRank(a) - actionRank(b))
         .slice(0, 6);
+      const pending = items.filter((item) => item.action_required !== "done").length;
+      if (meta) meta.textContent = pending ? `처리 대기 ${{pending}}건` : "처리 완료";
       if (!queue.length) {{
         target.innerHTML = `<div class="empty">지금 바로 처리할 학생이 없습니다.</div>`;
         return;
@@ -2546,10 +3132,25 @@ def _render_shell(status: dict[str, Any]) -> str:
       const filterButton = event.target.closest("button[data-filter]");
       const tabButton = event.target.closest("button[data-tab]");
       const modeButton = event.target.closest("button[data-mode]");
+      const subtabButton = event.target.closest("button[data-subtab]");
+      if (subtabButton) {{
+        const target = subtabButton.dataset.subtab;
+        const scope = subtabButton.closest(".panel");
+        if (scope) {{
+          scope.querySelectorAll("button[data-subtab]").forEach((btn) => btn.classList.toggle("active", btn === subtabButton));
+          scope.querySelectorAll("[data-subtabview]").forEach((view) => view.classList.toggle("active", view.dataset.subtabview === target));
+        }}
+        return;
+      }}
       if (tabButton) {{
-        document.querySelectorAll("[data-tab]").forEach((item) => item.classList.toggle("active", item === tabButton));
-        document.querySelectorAll(".tab-view").forEach((view) => view.classList.toggle("active", view.id === `tab-${{tabButton.dataset.tab}}`));
-        if (tabButton.dataset.tab === "performance") {{
+        const targetTab = tabButton.dataset.tab;
+        document.querySelectorAll(".sidenav button[data-tab]").forEach((item) => {{
+          item.classList.toggle("active", item.dataset.tab === targetTab);
+        }});
+        document.querySelectorAll(".tab-view").forEach((view) => view.classList.toggle("active", view.id === `tab-${{targetTab}}`));
+        const crumb = document.querySelector("#crumbCurrent");
+        if (crumb) crumb.textContent = targetTab === "performance" ? "성과 대시보드" : "운영";
+        if (targetTab === "performance") {{
           try {{
             await loadDashboard();
           }} catch (error) {{

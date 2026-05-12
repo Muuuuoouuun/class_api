@@ -5,28 +5,97 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }} — {{ academy }}</title>
 <style>
+  :root {
+    --bg: #f3f5f9;
+    --panel: #ffffff;
+    --line: #e3e7ee;
+    --text: #0f172a;
+    --muted: #667085;
+    --primary: #2e6f63;
+    --primary-soft: #e6f1ee;
+    --accent: #b45c19;
+    --accent-soft: #fff4e6;
+    --danger: #b4231a;
+    --danger-soft: #fdecea;
+    --ok: #1f7a52;
+    --ok-soft: #e6f6ed;
+  }
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-         margin: 0; padding: 16px; background: #fafafa; color: #111; line-height: 1.55; }
-  .wrap { max-width: 720px; margin: 0 auto; background: #fff; border-radius: 10px;
-          padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  .meta { color: #666; font-size: 13px; margin-bottom: 18px; }
-  h2 { font-size: 15px; margin: 22px 0 8px; border-left: 3px solid #2b6cb0; padding-left: 8px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; }
-  th { background: #f5f7fa; font-weight: 600; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; }
-  .badge-ok { background: #e6fffa; color: #065f5b; }
-  .badge-warn { background: #fff5e6; color: #8a4a00; }
-  .badge-bad { background: #ffe5e5; color: #8a1f1f; }
-  .kpi { display: flex; gap: 12px; margin: 10px 0 18px; }
-  .kpi > div { flex: 1; background: #f8fafc; padding: 12px; border-radius: 8px; }
-  .kpi small { color: #888; display: block; }
-  .kpi strong { font-size: 20px; }
-  .muted { color: #888; }
-  pre, code { font-family: "SF Mono", Consolas, monospace; font-size: 12px; }
+  body {
+    font-family: "Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+    margin: 0; padding: 20px; background: var(--bg); color: var(--text);
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 760px; margin: 0 auto; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 14px; padding: 28px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px rgba(15, 23, 42, .04);
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.01em; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  h2 {
+    font-size: 15px; margin: 24px 0 10px; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  h2::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--primary);
+  }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  }
+  th, td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; }
+  th {
+    background: linear-gradient(180deg, #fafbfd, #f4f6fa);
+    color: var(--muted); font-size: 11px; font-weight: 700;
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+  tr:last-child td { border-bottom: 0; }
+  tr:nth-child(even) td { background: #fafbfd; }
+  .badge {
+    display: inline-flex; align-items: center; padding: 2px 9px;
+    border-radius: 999px; font-size: 11px; font-weight: 600;
+    border: 1px solid var(--line);
+  }
+  .badge-ok { background: var(--ok-soft); color: var(--ok); border-color: rgba(31, 122, 82, .25); }
+  .badge-warn { background: var(--accent-soft); color: var(--accent); border-color: rgba(180, 92, 25, .25); }
+  .badge-bad { background: var(--danger-soft); color: var(--danger); border-color: rgba(180, 35, 26, .25); }
+  .kpi {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px; margin: 14px 0 22px;
+  }
+  .kpi > div {
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 14px; border-radius: 10px;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .kpi > div:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, .06);
+  }
+  .kpi small { color: var(--muted); display: block; font-size: 12px; font-weight: 600; }
+  .kpi strong {
+    display: block; margin-top: 6px; font-size: 26px;
+    line-height: 1.1; letter-spacing: -0.01em; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .muted { color: var(--muted); }
+  pre, code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; }
   ul { margin: 8px 0 8px 18px; padding: 0; }
+  ul li { margin: 6px 0; line-height: 1.5; }
+  .footer {
+    margin-top: 28px; padding-top: 14px;
+    border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 12px;
+  }
+  @media (max-width: 600px) {
+    body { padding: 12px; }
+    .wrap { padding: 18px; border-radius: 10px; }
+    .kpi { grid-template-columns: 1fr; }
+    table { font-size: 12px; min-width: 0; }
+    th, td { padding: 8px; }
+  }
 </style>
 </head>
 <body>
@@ -34,7 +103,7 @@
     <h1>{{ title }}</h1>
     <div class="meta">{{ academy }} · {{ meta_line }}</div>
     {% block content %}{% endblock %}
-    <div class="meta" style="margin-top:24px;border-top:1px solid #eee;padding-top:10px">
+    <div class="footer">
       생성: {{ generated_at }} · classin-toolkit
     </div>
   </div>
