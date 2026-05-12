@@ -13,6 +13,7 @@ from ..config import AppConfig, load_config
 from ..pipelines.core_engine import run_core_engine
 from ..pipelines.daily import render_daily
 from ..pipelines.demo_seed import seed_demo_data
+from ..pipelines.exams import import_exam_results, sweep_missing_exam
 from ..pipelines.missing_homework import sweep_missing_homework
 from ..pipelines.weekly import approve_all, generate_drafts, run_weekly_reports
 from ..readiness import ReadinessItem, check_readiness
@@ -90,6 +91,60 @@ def sweep_missing(
 ) -> None:
     cfg = load_config(config)
     n = sweep_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id)
+    console.print(f"[green]dispatched {n} messages[/green]")
+
+
+@app.command("import-exam-results")
+def import_exam_results_cmd(
+    path: Path = typer.Argument(..., exists=True, readable=True),
+    exam_name: str | None = typer.Option(None, "--exam-name"),
+    exam_date: str | None = typer.Option(None, "--exam-date", help="YYYY-MM-DD"),
+    class_name: str | None = typer.Option(None, "--class-name"),
+    source: str | None = typer.Option("academy-db", "--source"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Match only; do not write to Notion"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """Import exam CSV/JSON rows into the Notion exams database."""
+    cfg = load_config(config)
+    result = import_exam_results(
+        cfg,
+        path=path,
+        exam_name=exam_name,
+        exam_date=exam_date,
+        class_name=class_name,
+        source=source,
+        dry_run=dry_run,
+    )
+    verb = "would merge" if result.dry_run else "merged"
+    console.print(
+        "[green]{verb} {merged} / {total} rows[/green] "
+        "(unresolved={unresolved}, skipped={skipped})".format(
+            verb=verb,
+            merged=result.merged_rows,
+            total=result.total_rows,
+            unresolved=result.unresolved_rows,
+            skipped=result.skipped_rows,
+        )
+    )
+    for error in result.errors[:20]:
+        console.print(f"[yellow]- {error}[/yellow]")
+
+
+@app.command("sweep-missing-exam")
+def sweep_missing_exam_cmd(
+    exam_name: str = typer.Option(..., "--exam-name"),
+    exam_date: str = typer.Option(..., "--exam-date", help="YYYY-MM-DD"),
+    class_name: str | None = typer.Option(None, "--class-name"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """Send dry-run/live notifications for students missing a specific exam."""
+    cfg = load_config(config)
+    n = sweep_missing_exam(
+        cfg,
+        exam_name=exam_name,
+        exam_date=exam_date,
+        class_name=class_name,
+    )
     console.print(f"[green]dispatched {n} messages[/green]")
 
 
@@ -284,7 +339,7 @@ def setup_notion_cmd(
     parent_page_id: str = typer.Option(
         ...,
         "--parent-page-id",
-        help="DB 4개를 만들 Notion 부모 페이지 ID",
+        help="DB 5개를 만들 Notion 부모 페이지 ID",
     ),
     prefix: str = typer.Option("ClassIn Toolkit", "--prefix"),
     token: str | None = typer.Option(
@@ -295,7 +350,7 @@ def setup_notion_cmd(
     write: bool = typer.Option(False, "--write/--dry-run"),
     config: Path = typer.Option(Path("config.yaml"), "--config"),
 ) -> None:
-    """Notion 테스트 DB 4개를 자동 생성하고 config.yaml용 ID를 출력한다."""
+    """Notion 테스트 DB 5개를 자동 생성하고 config.yaml용 ID를 출력한다."""
     if not write:
         table = Table(title="Notion schema dry-run")
         table.add_column("DB")
@@ -321,14 +376,16 @@ def ui_cmd(
     config: Path = typer.Option(Path("config.yaml"), "--config"),
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8790, "--port"),
+    demo: bool = typer.Option(False, "--demo", help="config/Notion 없이 데모 상황판 실행"),
 ) -> None:
     """로컬 브라우저 운영 UI 실행."""
     import uvicorn
 
     from ..ui import create_app
 
-    console.print(f"[green]ClassIn Toolkit UI[/green] http://{host}:{port}")
-    uvicorn.run(create_app(config_path=config), host=host, port=port, reload=False)
+    suffix = " (demo)" if demo else ""
+    console.print(f"[green]ClassIn Toolkit UI{suffix}[/green] http://{host}:{port}")
+    uvicorn.run(create_app(config_path=config, demo=demo), host=host, port=port, reload=False)
 
 
 def _status_label(item: ReadinessItem) -> str:

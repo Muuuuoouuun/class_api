@@ -113,6 +113,21 @@ def _local_demo_items(cfg: AppConfig, project_root: Path) -> list[ReadinessItem]
         _path_value("local-demo", "Webhook 원본 덤프 경로", cfg.webhook.dump_dir),
     ]
 
+    if _is_missing(cfg.notion.databases.exams):
+        items.append(
+            ReadinessItem(
+                "local-demo",
+                "시험 DB ID",
+                "warn",
+                "exam import/sweep 기능은 notion.databases.exams 설정 후 사용할 수 있습니다.",
+                "시험 기능을 쓸 계획이면 setup-notion 결과의 exams DB ID를 채우세요.",
+            )
+        )
+    else:
+        items.append(
+            ReadinessItem("local-demo", "시험 DB ID", "ok", _mask(cfg.notion.databases.exams))
+        )
+
     if cfg.output.memo.mode == "notion":
         items.append(
             _required(

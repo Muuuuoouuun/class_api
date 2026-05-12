@@ -20,6 +20,7 @@ def _cfg(tmp_path) -> AppConfig:
                     "lessons": "lessons",
                     "reports": "reports",
                     "memos": "memos",
+                    "exams": "exams",
                 },
             },
             "anthropic": {"api_key": "sk-ant-test"},
@@ -41,6 +42,156 @@ def test_ui_home_renders_with_config(tmp_path):
     assert "ClassIn Toolkit UI" in res.text
     assert "테스트학원" in res.text
     assert "다음 액션" in res.text
+    assert "성과 대시보드" in res.text
+
+
+def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
+    def fail_query(*args, **kwargs):
+        raise AssertionError("live query should not be called in demo mode")
+
+    monkeypatch.setattr("classin_toolkit.ui.query_missing_homework", fail_query)
+    monkeypatch.setattr("classin_toolkit.ui.query_missing_exam", fail_query)
+    monkeypatch.setattr("classin_toolkit.ui.load_notification_history", fail_query)
+    client = TestClient(create_app(config_path=tmp_path / "missing.yaml", demo=True))
+
+    status = client.get("/api/status").json()
+    missing = client.get("/api/missing-homework").json()
+    notifications = client.get("/api/notifications").json()
+    courses = client.get("/api/course-dashboard/courses?q=C-").json()
+    dashboard = client.get("/api/course-dashboard?days=90").json()
+    sweep = client.post("/api/sweep-missing-homework", json={}).json()
+    exam_import = client.post("/api/import-exam-results", json={}).json()
+    exam_preview = client.get(
+        "/api/missing-exam?exam_name=April%20Monthly%20Exam&exam_date=2026-04-24"
+    ).json()
+    exam_sweep = client.post("/api/sweep-missing-exam", json={}).json()
+
+    assert status["ok"] is True
+    assert status["mode"] == "demo"
+    assert status["academy"] == "ClassIn Demo Academy"
+    assert missing["ok"] is True
+    assert missing["summary"]["total_missing"] > 0
+    assert missing["summary"]["needs_phone"] > 0
+    assert missing["data_context"]["summary"]["students_with_context"] > 0
+    assert any(item["report_context"]["has_context"] for item in missing["items"])
+    assert notifications["summary"]["total"] > 0
+    assert courses["items"]
+    assert dashboard["summary"]["student_count"] > 0
+    assert dashboard["score_trend"]
+    assert sweep["demo"] is True
+    assert exam_import["demo"] is True
+    assert exam_preview["demo"] is True
+    assert exam_preview["summary"]["total_missing"] > 0
+    assert exam_sweep["demo"] is True
+
+
+def test_ui_import_exam_results_calls_pipeline(monkeypatch, tmp_path):
+    cfg = _cfg(tmp_path)
+    captured = {}
+
+    class Result:
+        total_rows = 2
+        merged_rows = 1
+        unresolved_rows = 1
+        skipped_rows = 0
+        errors = ["row 2: student not found"]
+        dry_run = True
+
+    def fake_import_exam_results(cfg, **kwargs):
+        captured.update(kwargs)
+        return Result()
+
+    monkeypatch.setattr("classin_toolkit.ui.import_exam_results", fake_import_exam_results)
+    client = TestClient(create_app(config=cfg))
+
+    res = client.post(
+        "/api/import-exam-results",
+        json={
+            "path": "samples/exam_results_sample.csv",
+            "exam_name": "April Monthly Exam",
+            "exam_date": "2026-04-24",
+            "class_name": "High2-A",
+            "source": "academy-db",
+            "dry_run": True,
+        },
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert body["total"] == 2
+    assert body["merged"] == 1
+    assert body["unresolved"] == 1
+    assert captured["exam_name"] == "April Monthly Exam"
+    assert captured["exam_date"] == "2026-04-24"
+    assert captured["class_name"] == "High2-A"
+    assert captured["source"] == "academy-db"
+    assert captured["dry_run"] is True
+
+
+def test_ui_missing_exam_preview_calls_pipeline(monkeypatch, tmp_path):
+    cfg = _cfg(tmp_path)
+    captured = {}
+
+    def fake_query_missing_exam(cfg, *, exam_name, exam_date, class_name):
+        captured.update(
+            {
+                "exam_name": exam_name,
+                "exam_date": exam_date,
+                "class_name": class_name,
+            }
+        )
+        return [
+            {
+                "student_classin_id": "10002",
+                "student_name": "Kim Young-hee",
+                "student_class_name": "High2-A",
+                "parent_phone": "01055556666",
+                "exam_name": exam_name,
+                "exam_date": exam_date,
+                "attended": False,
+            },
+            {
+                "student_classin_id": "10003",
+                "student_name": "Lee Min-su",
+                "student_class_name": "High2-A",
+                "parent_phone": "",
+                "exam_name": exam_name,
+                "exam_date": exam_date,
+                "attended": None,
+            },
+        ]
+
+    monkeypatch.setattr("classin_toolkit.ui.query_missing_exam", fake_query_missing_exam)
+    client = TestClient(create_app(config=cfg))
+
+    res = client.get(
+        "/api/missing-exam"
+        "?exam_name=April%20Monthly%20Exam"
+        "&exam_date=2026-04-24"
+        "&class_name=High2-A"
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert captured == {
+        "exam_name": "April Monthly Exam",
+        "exam_date": "2026-04-24",
+        "class_name": "High2-A",
+    }
+    assert body["summary"] == {
+        "exam_name": "April Monthly Exam",
+        "exam_date": "2026-04-24",
+        "class_name": "High2-A",
+        "total_missing": 2,
+        "with_parent_phone": 1,
+        "no_parent_phone": 1,
+        "recorded_absent": 1,
+        "not_recorded": 1,
+    }
+    assert body["items"][0]["has_parent_phone"] is True
+    assert body["items"][1]["has_parent_phone"] is False
 
 
 def test_ui_status_reports_local_counts(tmp_path):
@@ -139,5 +290,6 @@ def test_ui_missing_homework_includes_notification_status(monkeypatch, tmp_path)
     }
     assert body["items"][0]["notification_status"] == "dry_run"
     assert body["items"][0]["action_required"] == "needs_review"
+    assert body["items"][0]["report_context"]["has_context"] is False
     assert body["items"][1]["notification_status"] == "pending"
     assert body["items"][1]["action_required"] == "needs_phone"

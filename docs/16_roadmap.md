@@ -8,7 +8,7 @@
 - [x] CED API 래퍼 초안 (`classin/ced.py`)
 - [x] Claude 스케줄 파싱 프롬프트 (`intelligence/prompts/schedule_parse.md`)
 - [ ] 실제 ClassIn 샘플 Webhook 페이로드 확보 → alias 확정
-- [ ] Notion DB 3종 실제 생성 + ID 확보
+- [ ] Notion DB 5종 실제 생성 + ID 확보
 - [ ] Cloudflare Tunnel 연결 테스트
 
 ## Week 2 — MVP1 (미제출 알림)
@@ -35,3 +35,23 @@
 - [ ] 3~5분 Loom 영상 촬영
 - [ ] 제안서 PDF 작성
 - [ ] 아는 원장님 1분에게 영상 공유 → 반응 수집
+
+## 다음 구조 최적화 — 선생님 상황판 + 데이터 병합
+
+- [x] 상황판을 "오늘 처리할 학생 큐" 중심으로 재배치
+- [x] 학생 행 안에 발송 여부, 발송 대상, 실패/연락처 없음, 반복 미제출을 바로 표시
+- [x] `reports_out/weekly`의 주간 리포트 상태를 학생별 context로 붙이기
+- [ ] `local_data/inbox` 폴더 규칙 정의: 오프라인 출결 CSV, 성적 XLSX, 상담 메모, 첨부 자료
+- [ ] 로컬/오프라인 공유 데이터 정규화 + 보수적 학생 매칭
+- [ ] 매칭 실패/중복 후보를 선생님 상황판의 `확인 필요` 큐로 노출
+- [ ] 병합된 context를 주간 리포트와 AI 질문 응답에 재사용
+
+## 데모 보강 — 시험/성과 대시보드
+
+- [x] 시험 결과 import + 미응시 sweep skill (`pipelines/exams.py`)
+- [x] 코스/학생 성과 대시보드 (`pipelines/course_dashboard.py`)
+  - lesson + exam 기록을 읽기 전용으로 투영 (Notion 추가 컬럼 없음)
+  - 검색형 드롭다운(코스, 학생), 기간(7~365일), 출결률/평균점수 트렌드
+  - 위험도 분류(high/medium/good), 상위 변동 학생, 주의 필요 학생
+- [ ] 데모 시나리오에 성과 대시보드 흐름 추가 (`docs/15_demo_scenario.md`)
+- [ ] 실데이터 import 후 출결/성적 신호 anomaly 알림 (예: 3주 연속 하락) 자동화

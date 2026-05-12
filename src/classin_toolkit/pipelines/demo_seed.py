@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
+from typing import Any
 
 from ..config import AppConfig
 from ..storage.notion_repo import NotionRepo
@@ -63,7 +64,7 @@ DEMO_STUDENTS: tuple[DemoStudent, ...] = (
     DemoStudent("10002", "김지각", "고2-A", "010-0000-0002", "지각형"),
     DemoStudent("10003", "이하락", "고2-A", "010-0000-0003", "참여도 하락형"),
     DemoStudent("10004", "정활발", "고2-A", "010-0000-0004", "리더형"),
-    DemoStudent("10005", "최결석", "고2-A", "010-0000-0005", "장기 결석형"),
+    DemoStudent("10005", "최결석", "고2-A", "", "장기 결석형"),
 )
 
 
@@ -151,6 +152,70 @@ def seed_demo_data(
         lesson_rows=len(dataset.lesson_rows),
         dry_run=False,
     )
+
+
+def build_demo_lesson_records(*, base_date: date, weeks: int = 3) -> list[dict[str, Any]]:
+    dataset = build_demo_dataset(base_date=base_date, weeks=weeks)
+    return [_record_from_demo_row(row) for row in dataset.lesson_rows]
+
+
+def build_demo_missing_homework_rows(
+    *,
+    base_date: date,
+    weeks: int = 3,
+    latest_week_only: bool = True,
+) -> list[dict[str, Any]]:
+    rows = build_demo_lesson_records(base_date=base_date, weeks=weeks)
+    if latest_week_only:
+        latest_start = base_date - timedelta(days=base_date.weekday())
+        latest_end = latest_start + timedelta(days=7)
+        rows = [
+            row
+            for row in rows
+            if latest_start <= datetime.fromisoformat(row["date"]).date() < latest_end
+        ]
+    return [row for row in rows if row.get("homework_submitted") is False]
+
+
+def build_demo_notification_history(
+    missing_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return deterministic notification states for UI demos.
+
+    The mix intentionally covers the states teachers need to understand:
+    generated dry-run copy, failed delivery, and pending/no-phone cases.
+    """
+    history: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    created_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    for row in missing_rows:
+        student_id = row.get("student_classin_id") or ""
+        if student_id in seen:
+            continue
+        seen.add(student_id)
+        if student_id == "10002":
+            status = "dry_run"
+            message = "김지각 학생 숙제 제출 안내 문구입니다. 오늘 중 제출 부탁드립니다."
+        elif student_id == "10003":
+            status = "failed"
+            message = "이하락 학생 최근 숙제 누락 안내 문구입니다."
+        else:
+            continue
+        history.append(
+            {
+                "created_at": created_at,
+                "event_type": "missing_homework",
+                "provider": "dry_run" if status == "dry_run" else "aligo",
+                "status": status,
+                "student_classin_id": student_id,
+                "student_name": row.get("student_name") or "",
+                "parent_phone": row.get("parent_phone") or "",
+                "message": message,
+                "artifact_path": "demo://notify_history",
+                "error": "demo failure" if status == "failed" else None,
+            }
+        )
+    return history
 
 
 def _row_for_student(
@@ -295,6 +360,40 @@ def _absent(base: dict) -> DemoLessonRow:
         homework_late=False,
         homework_score=None,
     )
+
+
+def _record_from_demo_row(row: DemoLessonRow) -> dict[str, Any]:
+    return {
+        "page_id": f"demo-page-{row.lesson_id}-{row.student.classin_id}",
+        "student_page_id": f"demo-student-{row.student.classin_id}",
+        "student_classin_id": row.student.classin_id,
+        "student_name": row.student.name,
+        "student_class_name": row.student.class_name,
+        "parent_phone": row.student.parent_phone,
+        "lesson_classin_id": row.lesson_id,
+        "course_classin_id": row.course_id,
+        "date": row.start_at.isoformat(),
+        "attendance": _attendance_label(row),
+        "attendance_seconds": row.attendance_seconds,
+        "hand_raise": row.hand_raise,
+        "trophy": row.trophy,
+        "camera_minutes": row.camera_minutes,
+        "poll": row.poll,
+        "homework_submitted": row.homework_submitted,
+        "homework_late": row.homework_late,
+        "homework_score": row.homework_score,
+    }
+
+
+def _attendance_label(row: DemoLessonRow) -> str:
+    if row.attendance_seconds <= 0:
+        return "결석"
+    if row.first_in_at and (row.first_in_at - row.start_at) > timedelta(minutes=5):
+        return "지각"
+    duration = int((row.end_at - row.start_at).total_seconds())
+    if duration > 0 and row.attendance_seconds < duration * 0.5:
+        return "지각"
+    return "출석"
 
 
 def _epoch(value: datetime | None) -> int | None:

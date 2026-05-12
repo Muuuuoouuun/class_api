@@ -15,6 +15,7 @@ notion:
     students: "REPLACE_ME_STUDENTS_DB_ID"
     lessons: "REPLACE_ME_LESSONS_DB_ID"
     reports: "REPLACE_ME_REPORTS_DB_ID"
+    exams: "REPLACE_ME_EXAMS_DB_ID"        # exam results and missing-exam tracking
     memos: "REPLACE_ME_MEMOS_DB_ID"        # 원장 메모·대응기록 전용
 
 output:
@@ -49,5 +50,3 @@ webhook:
 
 reports:
   output_dir: "./reports_out"
-  weekly_cron_day: "fri"
-  weekly_cron_hour: 17

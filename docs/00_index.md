@@ -28,11 +28,13 @@
 | 15 | [demo_scenario](15_demo_scenario.md) | 가상 학원 + 5 페르소나 + 3~5분 데모 플롯 |
 | 16 | [roadmap](16_roadmap.md) | Week 단위 실행 체크리스트 (진행 상태 추적) |
 | 17 | [test_readiness](17_test_readiness.md) | 테스트 버전 준비물·API 키·config 누락 점검 |
+| 18 | [teacher_dashboard_data_merge](18_teacher_dashboard_data_merge.md) | 선생님 상황판 UX + 보고서·로컬/오프라인 데이터 병합 기준 |
 
 ## 읽는 순서 (역할별)
 
 - **MOON (본인)**: 01 → 03 → 10 → 11 → 16
 - **새로 합류한 개발자**: 00 → 10 → 14 → 11 → 13
+- **상황판/보고서 병합 작업자**: 00 → 18 → 10 → 14 → 15
 - **학원 원장에게 전달할 때**: 01(요약만) + 13 (고지사항 섹션) + 15
 - **ClassIn 한국 지사 이해충돌 확인**: 01 §1 + 02 §3.4
 

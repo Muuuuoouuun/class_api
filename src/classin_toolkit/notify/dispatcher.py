@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import AppConfig
-from ..intelligence.missing_homework import OutgoingMessage
+from .message import OutgoingMessage
 
 log = logging.getLogger(__name__)
 
@@ -21,12 +21,21 @@ HISTORY_FILE = "notify_history.jsonl"
 
 
 async def dispatch_kakao(cfg: AppConfig, messages: list[OutgoingMessage]) -> None:
+    await dispatch_notifications(cfg, messages, event_type="missing_homework")
+
+
+async def dispatch_notifications(
+    cfg: AppConfig,
+    messages: list[OutgoingMessage],
+    *,
+    event_type: str,
+) -> None:
     if cfg.notify.mode == "dry_run":
         artifact_path = _dry_run_dump(cfg, messages)
         _append_history(
             cfg,
             messages,
-            event_type="missing_homework",
+            event_type=event_type,
             provider="dry_run",
             status="dry_run",
             artifact_path=artifact_path,
@@ -39,7 +48,7 @@ async def dispatch_kakao(cfg: AppConfig, messages: list[OutgoingMessage]) -> Non
             _append_history(
                 cfg,
                 messages,
-                event_type="missing_homework",
+                event_type=event_type,
                 provider=cfg.notify.provider,
                 status="failed",
                 error=str(exc),
@@ -48,7 +57,7 @@ async def dispatch_kakao(cfg: AppConfig, messages: list[OutgoingMessage]) -> Non
         _append_history(
             cfg,
             messages,
-            event_type="missing_homework",
+            event_type=event_type,
             provider=cfg.notify.provider,
             status="sent",
         )

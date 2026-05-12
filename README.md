@@ -10,9 +10,9 @@ ClassIn API로 학원 운영 자동화를 관리하는 앱/도구 모음이다.
 
 ```
 [Layer 1] classin/          ClassIn CED API + Webhook 스키마 + v2 서명
-[Layer 2] storage/          Notion DB (단일 진실원)
+[Layer 2] storage/          Notion DB (학생/수업/리포트/메모/시험)
 [Layer 3] intelligence/     Claude 프롬프트 · 분석 · 에이전트(수동 오더)
-[Layer 4] pipelines/        비즈니스 로직 (ingest / core_engine / missing_homework / weekly)
+[Layer 4] pipelines/        비즈니스 로직 (ingest / core_engine / missing_homework / exams / weekly)
 [Layer 5] notify/           카톡 알림 (dry_run → 알리고/솔라피)
 ```
 
@@ -34,6 +34,8 @@ classin-webhook                                             # Webhook 수신 서
 classin-toolkit parse-schedule samples/schedule_sample.csv  # 스케줄 업로드
 classin-toolkit replay-webhook samples/attendance_sample.json
 classin-toolkit sweep-missing-homework
+classin-toolkit import-exam-results samples/exam_results_sample.csv --exam-name "4월 월말평가" --exam-date 2026-04-24 --dry-run
+classin-toolkit sweep-missing-exam --exam-name "4월 월말평가" --exam-date 2026-04-24
 classin-toolkit weekly-reports
 classin-toolkit check-ready --mode local-demo
 classin-toolkit setup-notion --parent-page-id <notion-page-id> --dry-run
@@ -42,6 +44,7 @@ classin-toolkit seed-demo-data --dry-run
 # 수동 오더 라인
 classin-toolkit agent    # 원장 대화형 AI 어시스턴트
 classin-toolkit ui       # 로컬 브라우저 운영 UI
+classin-toolkit ui --demo # config/Notion 없이 데모 상황판
 ```
 
 ## 커맨드 레퍼런스
@@ -52,22 +55,27 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 | 자동 (CED)  | `classin-toolkit parse-schedule <csv> [--live]` | 스케줄 → ClassIn 수업 일괄 생성 |
 | 자동 (디버그) | `classin-toolkit replay-webhook <json>` | 저장된 페이로드 재생 |
 | 자동 (MVP1) | `classin-toolkit sweep-missing-homework [--lesson-id X]` | 미제출자 카톡 문구 생성 |
+| 자동 (시험) | `classin-toolkit import-exam-results <csv/json> --exam-name ... --exam-date ... [--dry-run]` | 시험 결과를 학생 Master 와 병합해 Notion 시험 DB 에 적재 |
+| 자동 (시험) | `classin-toolkit sweep-missing-exam --exam-name ... --exam-date ... [--class-name ...]` | 특정 시험 미응시자 카톡 문구 생성 |
 | 자동 (MVP2) | `classin-toolkit weekly-reports` | 학생별 주간 리포트 Notion 페이지 |
 | 자동 (SSO)  | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | ClassIn 앱 호출 링크 |
 | 점검 | `classin-toolkit check-ready --mode local-demo` | 테스트 단계별 API 키·DB ID 누락 확인 |
-| 세팅 | `classin-toolkit setup-notion --parent-page-id ... --write` | Notion DB 4개 자동 생성 |
+| 세팅 | `classin-toolkit setup-notion --parent-page-id ... --write` | Notion DB 5개 자동 생성 |
 | 데모 | `classin-toolkit seed-demo-data --write` | 5명 페르소나 학생·수업 기록 Notion 생성 |
 | 수동 (Agent) | `classin-toolkit agent` | 원장/교사 자연어 질문 → Claude tool-use |
 | 수동 (UI) | `classin-toolkit ui` | 로컬 브라우저에서 리포트·sweep·메모·AI 질문 실행 |
+| 수동 (Demo UI) | `classin-toolkit ui --demo` | config.yaml 없이 5명 페르소나 상황판 시연 |
 
 ## MVP 상태
 
 - [x] 코어 엔진: 스케줄 → Claude 파싱 → CED API (addCourse/addCourseClass)
 - [x] MVP1: After-Class Webhook → Notion 적재 → 미제출 sweep → 카톡 dry-run
 - [x] MVP2: 주간 학생별 개인화 리포트 → Notion 페이지 + 학부모 문구
-- [x] 에이전트: tool-use 채팅 (수동 오더)
+- [x] 시험 결과 import + 기존 학생 Master 병합 + 미응시 sweep
+- [x] 에이전트: tool-use 채팅 (수동 오더, 시험 미응시 조회 포함)
+- [ ] 선생님 상황판: 미제출·발송 여부·보고서 맥락·로컬 공유 데이터 병합
 - [ ] 실제 카톡 알림톡 연동 (템플릿 심사 후 Standard 티어)
-- [ ] Notion DB 3종 스키마 세팅 (학원별 1회) — [docs/12_notion_schema.md](docs/12_notion_schema.md)
+- [ ] Notion DB 5종 스키마 세팅 (학원별 1회) — [docs/12_notion_schema.md](docs/12_notion_schema.md)
 - [ ] 파일럿 학원 1곳 확보 → 실 데이터 검증
 
 ## 학원 PC 운영 체크리스트 (발췌)
@@ -91,7 +99,8 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 ## 다음 할 일
 
 1. ClassIn 담당자에게 `datasub/publicfield.html` 내 SafeKey 정확 알고리즘 확인
-2. Notion DB 3종 실제 생성 후 `config.yaml` 의 DB ID 채우기
+2. Notion DB 5종 실제 생성 후 `config.yaml` 의 DB ID 채우기
 3. 5 페르소나 페이크 데이터로 MVP2 리포트 차별화 수동 검증
-4. 파일럿 학원 확보 → 실 Webhook 스트림 1~2주 캡처
-5. `cloudflared` 패키징 + Windows 작업 스케줄러 스크립트 정리
+4. 선생님 상황판을 "오늘 처리할 학생 큐"로 재구성하고 보고서·로컬/오프라인 데이터 병합 반영
+5. 파일럿 학원 확보 → 실 Webhook 스트림 1~2주 캡처
+6. `cloudflared` 패키징 + Windows 작업 스케줄러 스크립트 정리

@@ -15,17 +15,20 @@
 │              core_engine.py        스케줄 → 수업·숙제 자동 생성
 │              ingest.py             Webhook Cmd 4종 → Notion 적재
 │              missing_homework.py   미제출자 sweep (배치)
+│              exams.py              시험 결과 병합 + 미응시 sweep
 │              daily.py              일일 현황 HTML 렌더
 │              weekly.py             주간 드래프트 + 승인 아카이브
+│              data_merge.py         로컬/오프라인 공유 데이터 → 학생별 context (예정)
 ├─ Layer 3 : 지능화 ─────────────── intelligence/
 │              claude_client.py      Anthropic SDK 래퍼 + prompt caching
 │              schedule_parser.py    자유형 스케줄 → 구조화 JSON       (자동 파이프라인용)
 │              missing_homework.py   학생별 카톡 문구 생성             (자동 파이프라인용)
 │              weekly_report.py      학생별 주간 리포트 생성           (자동 파이프라인용)
-│              agent.py              Claude tool-use 채팅 (수동 오더) — 도구 4종
+│              skills.py             Claude tool-use skill registry — 도구 5종
+│              agent.py              Claude tool-use 채팅 루프 (수동 오더)
 │              prompts/*.md          프롬프트 파일(외부화)
 ├─ Layer 2 : 저장소·출력 ─────────── storage/
-│              notion_repo.py        원본 진실원 (학생 Master·수업 기록·리포트 아카이브·메모)
+│              notion_repo.py        원본 진실원 (학생 Master·수업 기록·리포트 아카이브·메모·시험)
 │              html_renderer.py      일일/주간 HTML 파생 리포트 (Jinja2)
 │              output_port.py        Protocol (DailyOutput/WeeklyOutput/MemoOutput)
 │              templates/            base·daily·weekly HTML
@@ -68,6 +71,10 @@ ClassIn 서버  ──POST──>  FastAPI /classin/webhook
 Scheduler (cron / 수동 CLI)
    ├─ missing_homework.sweep_missing_homework
    │     └─> Notion 조회 → Claude 문구 → notify/dispatcher (dry_run)
+   ├─ exams.import_exam_results
+   │     └─> CSV/JSON → 학생 Master 매칭 → Notion 시험 DB upsert
+   ├─ exams.sweep_missing_exam
+   │     └─> 시험 DB + 학생 Master 비교 → Claude 문구 → notify/dispatcher
    └─ weekly.run_weekly_reports
          └─> Notion 학생별 집계 → Claude 리포트 → Notion 페이지 저장
 ```
@@ -84,6 +91,7 @@ Scheduler (cron / 수동 CLI)
                            └─ 승인됨=true, HTML 링크 컬럼 포함
 
 메모       :  CLI write-memo → Notion 메모 DB (원장 편집 채널)
+시험       :  CLI import-exam-results → Notion 시험 DB (외부 DB/CSV/API 결과 병합)
 ```
 
 모드 전환 (`config.yaml`):
@@ -95,12 +103,31 @@ Scheduler (cron / 수동 CLI)
 공개 URL: `output.daily.public_url_base` 에 Cloudflare Tunnel 호스트 입력 →
 HTML 링크가 카톡 문구에 자연스럽게 포함됨 (모바일에서 즉시 열림).
 
-### E. 수동 오더 에이전트 (상시 대기)
+### E. 보고서 + 로컬/오프라인 데이터 병합 (예정)
+```
+reports_out/weekly + Notion 리포트 DB
+local_data/inbox/*.csv, *.xlsx, *.md, attachments/*
+   └─> pipelines/data_merge.py
+        ├─ 원본 보존
+        ├─ 학생명 + 반 + 날짜 + ClassIn ID 기반 보수적 매칭
+        ├─ 자동 매칭 실패 항목은 확인 필요 큐로 분리
+        └─ 학생별 report_context 생성
+              ├─ 선생님 상황판
+              ├─ weekly_report 프롬프트
+              └─ agent 질문 응답
+```
+
+ClassIn 수업 기록은 기본 운영 데이터이고, 로컬 CSV/XLSX/PDF/메모는 보강 맥락이다.
+외부 데이터는 원본을 수정하지 않고 정규화 결과만 파생 산출물로 둔다.
+자세한 UX와 병합 기준은 `docs/18_teacher_dashboard_data_merge.md`를 따른다.
+
+### F. 수동 오더 에이전트 (상시 대기)
 ```
 원장 터미널  ──>  classin-toolkit agent
                      └─ intelligence/agent.chat_loop
                           └─ Claude tool_use
                                ├─ query_missing_homework ┐
+                               ├─ query_missing_exam     ├─> storage/notion_repo
                                ├─ query_student_stats    ├─> storage/notion_repo
                                ├─ list_students          ┘
                                └─ trigger_weekly_report ──> pipelines/weekly
@@ -139,6 +166,8 @@ Layer N은 Layer N-k만 import. **역방향 import 금지**.
    │                               └─> ClassIn Datasub 등록
    ├─ cron (Windows 작업 스케줄러)                     ← 자동: 배치
    │     ├─ 매 시각 +30분 : classin-toolkit sweep-missing-homework
+   │     ├─ 시험 업로드 후 : classin-toolkit import-exam-results <csv>
+   │     ├─ 시험 종료 후   : classin-toolkit sweep-missing-exam --exam-name ... --exam-date ...
    │     ├─ 매일 22시    : classin-toolkit render-daily
    │     └─ 매주 금 17시  : classin-toolkit generate-weekly-drafts
    ├─ 원장 대화형 셸                                   ← 수동: 질문 응답
