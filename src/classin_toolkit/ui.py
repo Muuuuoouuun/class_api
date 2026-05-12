@@ -797,6 +797,12 @@ def _render_shell(status: dict[str, Any]) -> str:
     title = html.escape(status.get("academy") or "Classin++")
     initial_source = (status.get("academy") or "Classin++").strip()
     title_initial = html.escape(initial_source[:1] if initial_source else "C")
+    today_value = date_cls.today()
+    _korean_weekdays = ["월", "화", "수", "목", "금", "토", "일"]
+    today_korean = html.escape(
+        f"{today_value.year}년 {today_value.month}월 {today_value.day}일 "
+        f"{_korean_weekdays[today_value.weekday()]}요일"
+    )
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -1113,10 +1119,76 @@ def _render_shell(status: dict[str, Any]) -> str:
       color: var(--text);
       margin: 0;
     }}
+    .page-title .wave {{ display: inline-block; margin-left: 6px; }}
     .page-sub {{
       font-size: 14px;
       color: var(--muted-2);
       margin-top: 6px;
+    }}
+    .page-actions {{
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }}
+    .quick-actions {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }}
+    .quick-card {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      text-align: left;
+      transition: transform .15s ease, box-shadow .15s ease;
+      min-height: auto;
+      color: var(--text);
+      font: inherit;
+    }}
+    .quick-card:hover {{
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-soft);
+      background: var(--panel);
+    }}
+    .quick-icon {{
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--primary-soft);
+      color: var(--primary-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+    }}
+    .quick-icon.warn {{ background: var(--accent-soft); color: var(--accent-ink); }}
+    .quick-icon.blue {{ background: var(--blue-soft); color: var(--blue); }}
+    .quick-meta {{ flex: 1; min-width: 0; }}
+    .quick-title {{
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+    }}
+    .quick-desc {{
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-top: 2px;
+    }}
+    .quick-card .chev {{ color: var(--muted-2); flex: 0 0 auto; }}
+    @media (max-width: 1100px) {{
+      .quick-actions {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    }}
+    @media (max-width: 600px) {{
+      .quick-actions {{ grid-template-columns: 1fr; }}
+      .page-head {{ flex-direction: column; align-items: flex-start; }}
     }}
     .status-strip {{
       display: grid;
@@ -2152,6 +2224,67 @@ def _render_shell(status: dict[str, Any]) -> str:
     </section>
 
     <section id="tab-operations" class="tab-view active">
+    <header class="page-head">
+      <div>
+        <div class="page-eyebrow" id="todayLabel">{today_korean} · {title}</div>
+        <h2 class="page-title">오늘 운영 현황 <span class="wave" aria-hidden="true">👋</span></h2>
+        <div class="page-sub">미제출 알림 · 시험 · 리포트를 한 곳에서 관리합니다.</div>
+      </div>
+      <div class="page-actions">
+        <button class="secondary" data-jump="exam">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+          시험 결과 업로드
+        </button>
+        <button data-action="sweepMissing">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+          미제출 sweep 실행
+        </button>
+      </div>
+    </header>
+
+    <div class="quick-actions" role="list">
+      <button class="quick-card" data-action="sweepMissing" role="listitem">
+        <span class="quick-icon warn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1112 0c0 7 3 7 3 9H3c0-2 3-2 3-9z"/><path d="M10 21a2 2 0 004 0"/></svg>
+        </span>
+        <span class="quick-meta">
+          <span class="quick-title">미제출 일괄 알림</span>
+          <span class="quick-desc" id="qaMissingDesc">미제출 학생 일괄 sweep</span>
+        </span>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <button class="quick-card" data-jump="exam" role="listitem">
+        <span class="quick-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+        </span>
+        <span class="quick-meta">
+          <span class="quick-title">시험 결과 import</span>
+          <span class="quick-desc">CSV/JSON → 미응시 sweep</span>
+        </span>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <button class="quick-card" data-jump="report" role="listitem">
+        <span class="quick-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6"/></svg>
+        </span>
+        <span class="quick-meta">
+          <span class="quick-title">리포트 만들기</span>
+          <span class="quick-desc">일일 · 주간 리포트</span>
+        </span>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <button class="quick-card" data-tab="performance" role="listitem">
+        <span class="quick-icon blue">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14c3 0 6 1.8 6 5"/></svg>
+        </span>
+        <span class="quick-meta">
+          <span class="quick-title">성과 대시보드</span>
+          <span class="quick-desc">학생/코스 KPI · 추이</span>
+        </span>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+
     <section class="grid">
       <div>
         <div class="panel hero-panel">
@@ -2278,14 +2411,15 @@ def _render_shell(status: dict[str, Any]) -> str:
     </section>
 
     <section id="tab-performance" class="tab-view">
-      <div class="panel hero-panel">
-        <div class="panel-head">
-          <div>
-            <h2>성과 대시보드</h2>
-            <p id="performanceScope">전체 코스</p>
-          </div>
-          <span class="section-subtitle" id="performancePeriod">최근 90일</span>
+      <header class="page-head">
+        <div>
+          <div class="page-eyebrow">학생 · 코스 분석</div>
+          <h2 class="page-title">성과 대시보드</h2>
+          <div class="page-sub" id="performanceScope">전체 코스</div>
         </div>
+        <span class="section-subtitle" id="performancePeriod">최근 90일</span>
+      </header>
+      <div class="panel hero-panel">
         <div class="performance-controls">
           <div class="segmented" id="dashboardMode">
             <button data-mode="course" class="active">코스</button>
@@ -2851,6 +2985,11 @@ def _render_shell(status: dict[str, Any]) -> str:
         sideBadge.textContent = total;
         sideBadge.hidden = total === 0;
       }}
+      const qaDesc = document.querySelector("#qaMissingDesc");
+      if (qaDesc) {{
+        const total = summary.total_missing || 0;
+        qaDesc.textContent = total ? `미제출 ${{total}}명 대기` : "미제출 학생 없음";
+      }}
       document.querySelector("#noPhoneCount").textContent = summary.no_parent_phone || 0;
       document.querySelector("#dryRunCount").textContent = summary.dry_run || 0;
       document.querySelector("#sentCount").textContent = summary.sent || 0;
@@ -3133,6 +3272,26 @@ def _render_shell(status: dict[str, Any]) -> str:
       const tabButton = event.target.closest("button[data-tab]");
       const modeButton = event.target.closest("button[data-mode]");
       const subtabButton = event.target.closest("button[data-subtab]");
+      const jumpButton = event.target.closest("button[data-jump]");
+      if (jumpButton) {{
+        const target = jumpButton.dataset.jump;
+        document.querySelectorAll(".sidenav button[data-tab]").forEach((item) => {{
+          item.classList.toggle("active", item.dataset.tab === "operations");
+        }});
+        document.querySelectorAll(".tab-view").forEach((view) => view.classList.toggle("active", view.id === "tab-operations"));
+        const crumb = document.querySelector("#crumbCurrent");
+        if (crumb) crumb.textContent = "운영";
+        const subtab = document.querySelector(`button[data-subtab="${{target}}"]`);
+        if (subtab) {{
+          const scope = subtab.closest(".panel");
+          if (scope) {{
+            scope.querySelectorAll("button[data-subtab]").forEach((btn) => btn.classList.toggle("active", btn === subtab));
+            scope.querySelectorAll("[data-subtabview]").forEach((view) => view.classList.toggle("active", view.dataset.subtabview === target));
+            scope.scrollIntoView({{ behavior: "smooth", block: "start" }});
+          }}
+        }}
+        return;
+      }}
       if (subtabButton) {{
         const target = subtabButton.dataset.subtab;
         const scope = subtabButton.closest(".panel");
