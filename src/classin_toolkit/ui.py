@@ -1847,6 +1847,322 @@ def _render_shell(status: dict[str, Any]) -> str:
       .student-table-head > div:nth-child(2),
       .student-row .student-class-cell {{ display: none; }}
     }}
+
+    /* ============ Report builder (Classin++ A4 preview) ============ */
+    .report-format-bar {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 14px;
+      background: var(--surface, #fff);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }}
+    .report-format-left {{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }}
+    .report-format-label {{ font-size: 13px; font-weight: 600; color: var(--text); }}
+    .report-format-seg {{ padding: 3px; background: #f1f5f0; border: 1px solid var(--line-2); border-radius: 8px; }}
+    .report-format-seg button {{ min-height: 28px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; }}
+    .report-format-seg button.active {{ background: #fff; color: var(--green-2); box-shadow: 0 1px 2px rgba(0,0,0,0.06); }}
+    .report-format-help {{ font-size: 12px; color: var(--muted); }}
+    .report-format-pill {{
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--green-3);
+      color: var(--green-ink);
+      font-size: 11px;
+      font-weight: 700;
+    }}
+
+    .report-grid {{
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 20px;
+    }}
+    .report-side {{ display: flex; flex-direction: column; gap: 16px; }}
+    .report-side-card {{
+      background: var(--surface, #fff);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }}
+    .report-side-title {{
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 12px;
+    }}
+    .report-target {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border: 1px solid var(--green);
+      border-radius: 8px;
+      background: var(--green-4);
+    }}
+    .report-target-avatar {{
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--green-3);
+      color: var(--green-ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
+    }}
+    .report-target-name {{ font-size: 13px; font-weight: 600; }}
+    .report-target-class {{ font-size: 11px; color: var(--muted); margin-top: 2px; }}
+    .report-target-hint {{ margin-top: 12px; font-size: 12px; color: var(--muted); }}
+
+    .report-data-list {{ list-style: none; padding: 0; margin: 0; }}
+    .report-data-list li {{ padding: 0; }}
+    .report-data-list label {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 13px;
+      color: var(--ink);
+      font-weight: 500;
+      cursor: pointer;
+    }}
+    .report-data-list label > span:first-of-type {{ flex: 1; }}
+    .report-data-list input[type=checkbox] {{ width: 16px; height: 16px; min-height: 0; accent-color: var(--green); margin: 0; }}
+    .src-pill {{
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }}
+    .src-pill.api  {{ background: var(--green-3); color: var(--green-ink); }}
+    .src-pill.self {{ background: #e0e7ff; color: #3730a3; }}
+
+    .report-comment {{ position: relative; }}
+    .report-comment textarea {{
+      width: 100%;
+      min-height: 96px;
+      padding: 10px 12px 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      resize: none;
+      line-height: 1.5;
+    }}
+    .ai-polish-btn {{
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--green-4);
+      color: var(--green-2);
+      border: 1px solid var(--green-3);
+      font-size: 11px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-height: auto;
+      cursor: pointer;
+    }}
+    .ai-polish-btn:hover {{ background: var(--green-3); color: var(--green-ink); transform: none; box-shadow: none; }}
+
+    .report-canvas {{
+      background: #f4f7f1;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }}
+    .report-canvas-head {{
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line-2);
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+    }}
+    .report-layout-pill {{
+      padding: 3px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink-2);
+      font-size: 11px;
+      font-weight: 600;
+    }}
+    .report-canvas-body {{
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+    }}
+    .report-paper {{
+      width: 100%;
+      max-width: 560px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px -8px rgba(15,23,17,.15);
+      overflow: hidden;
+      font-size: 11px;
+      color: var(--ink);
+    }}
+    .report-paper-head {{
+      padding: 16px 20px;
+      background: #fff;
+      border-bottom: 3px solid var(--green);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }}
+    .report-paper-eyebrow {{
+      font-size: 9px;
+      opacity: .65;
+      font-weight: 700;
+      letter-spacing: .1em;
+      margin-bottom: 3px;
+    }}
+    .report-paper-title {{
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }}
+    .report-paper-meta {{ font-size: 10px; opacity: .7; margin-top: 2px; }}
+    .report-paper-brand {{ display: flex; align-items: center; gap: 6px; }}
+    .report-paper-brand-name {{ font-size: 10px; font-weight: 700; color: var(--ink-2); }}
+    .report-paper-brand-mark {{
+      width: 18px;
+      height: 18px;
+      border-radius: 5px;
+      background: var(--green);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 10px;
+    }}
+    .report-paper-body {{ padding: 20px; }}
+    .report-paper-section-title {{
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin: 18px 0 10px;
+    }}
+    .report-paper-section-title:first-child {{ margin-top: 0; }}
+    .report-metric-grid {{
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 10px;
+    }}
+    .report-metric {{
+      padding: 12px;
+      border: 1px solid var(--line-2);
+      border-radius: 8px;
+      background: #fff;
+    }}
+    .report-metric .m-label {{ font-size: 9px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }}
+    .report-metric .m-value {{ font-size: 18px; font-weight: 700; color: var(--green); letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }}
+    .report-metric .m-value span {{ font-size: 10px; color: var(--muted-2); font-weight: 600; margin-left: 2px; }}
+    .report-metric .m-sub {{ font-size: 9px; color: var(--muted); margin-top: 5px; }}
+
+    .report-score-bars {{ display: flex; flex-direction: column; gap: 9px; }}
+    .score-bar .score-head {{ display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 3px; }}
+    .score-bar .score-head b {{ color: var(--green); }}
+    .score-bar .bar-track {{
+      position: relative;
+      height: 6px;
+      background: #f1f5f0;
+      border-radius: 999px;
+    }}
+    .score-bar .bar-fill {{
+      height: 100%;
+      background: var(--green);
+      border-radius: 999px;
+    }}
+    .score-bar .avg-mark {{
+      position: absolute;
+      top: -2px;
+      bottom: -2px;
+      width: 2px;
+      background: var(--muted-2);
+      border-radius: 1px;
+    }}
+
+    .report-tags {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
+    .tag-col {{ display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }}
+    .tag-col-title {{
+      width: 100%;
+      font-size: 10px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }}
+    .tag-col-title.good {{ color: var(--green-2); }}
+    .tag-col-title.warn {{ color: #92520a; }}
+    .report-tag {{
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+    }}
+    .report-tag.good {{ background: var(--green-3); color: var(--green-ink); }}
+    .report-tag.warn {{ background: var(--warn-bg); color: #92520a; }}
+
+    .report-teacher-note {{
+      padding: 12px 14px;
+      background: #fafdf9;
+      border: 1px solid var(--line-2);
+      border-radius: 6px;
+      font-size: 10.5px;
+      line-height: 1.6;
+      color: var(--ink-2);
+    }}
+
+    .report-advanced {{
+      margin-top: 20px;
+      background: var(--surface, #fff);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 14px 20px;
+    }}
+    .report-advanced summary {{
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-2);
+      list-style: none;
+      padding: 4px 0;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .report-advanced summary::-webkit-details-marker {{ display: none; }}
+    .report-advanced summary::after {{ content: "▸"; margin-left: auto; transition: transform .15s ease; color: var(--muted); }}
+    .report-advanced[open] summary::after {{ transform: rotate(90deg); }}
+    .report-advanced-body {{ margin-top: 14px; }}
+
+    @media (max-width: 1100px) {{
+      .report-grid {{ grid-template-columns: 1fr; }}
+    }}
+    @media (max-width: 600px) {{
+      .report-format-bar {{ flex-direction: column; align-items: flex-start; }}
+      .report-metric-grid {{ grid-template-columns: 1fr 1fr; }}
+    }}
     .dropzone {{
       border: 2px dashed var(--primary);
       border-radius: var(--radius-lg);
@@ -4189,72 +4505,202 @@ def _render_shell(status: dict[str, Any]) -> str:
     </section>
 
     <section id="tab-report" class="tab-view">
-      <header class="page-head">
+      <header class="dash-greeting">
         <div>
-          <div class="page-eyebrow">리포트 빌더</div>
-          <h2 class="page-title">학원 브랜드 리포트</h2>
-          <div class="page-sub">일일/주간 리포트, 시험 처리, 메모, AI 질문을 한 곳에서.</div>
+          <div class="dash-eyebrow">리포트 빌더</div>
+          <h1 class="dash-title">학원 브랜드 성적 리포트</h1>
+          <div class="dash-sub">Classin 성적 + 학원 자체 데이터로 학부모용 리포트를 생성합니다.</div>
+        </div>
+        <div class="dash-actions">
+          <button class="secondary" data-action="openTemplateModal">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+            템플릿 설정
+          </button>
+          <button class="secondary" data-action="renderDaily" id="reportDownloadBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            <span id="reportDownloadLabel">PDF 다운로드</span>
+          </button>
+          <button data-action="generateWeekly">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+            학부모에게 발송
+          </button>
         </div>
       </header>
 
-      <div class="panel hero-panel">
-        <nav class="subtabs" aria-label="도구 탭">
-          <button data-subtab="report" class="active">리포트</button>
-          <button data-subtab="exam">시험</button>
-          <button data-subtab="memo">메모</button>
-          <button data-subtab="agent">AI 질문</button>
-        </nav>
-
-        <div data-subtabview="report" class="subtab-view active">
-          <div class="actions">
-            <div class="row">
-              <label>일자<input id="dailyDate" type="date" value="{today}"></label>
-              <button data-action="renderDaily">일일 리포트 생성</button>
-            </div>
-            <div class="row">
-              <label>주 시작일<input id="weekDate" type="date" value="{week_start}"></label>
-              <button data-action="approveWeekly" class="secondary">주간 승인</button>
-            </div>
-            <button data-action="generateWeekly">주간 드래프트 생성</button>
-            <button data-action="refreshStatus" class="secondary">상태 새로고침</button>
+      <div class="report-format-bar">
+        <div class="report-format-left">
+          <div class="report-format-label">출력 형식</div>
+          <div class="segmented report-format-seg" id="reportFormatSeg">
+            <button data-report-format="pdf" class="active">PDF 리포트</button>
+            <button data-report-format="csv">CSV (엑셀)</button>
           </div>
+          <span class="report-format-pill" id="reportTemplatePill" hidden>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            <span id="reportTemplateName"></span> 적용됨
+          </span>
         </div>
-
-        <div data-subtabview="exam" class="subtab-view">
-          <div class="stack">
-            <div class="actions">
-              <label>CSV/JSON path<input id="examPath" type="text" placeholder="samples/exam_results_sample.csv"></label>
-              <label>시험명<input id="examName" type="text" placeholder="4월 월말평가"></label>
-              <label>시험일<input id="examDate" type="date" value="{today}"></label>
-              <label>반<input id="examClassName" type="text"></label>
-              <label>출처<input id="examSource" type="text" value="academy-db"></label>
-              <label style="align-self:end; flex-direction:row; display:flex; align-items:center; gap:8px; color:var(--text-2); font-weight:600;"><input id="examDryRun" type="checkbox" checked style="width:auto; min-height:0;"> dry-run 모드</label>
-              <button data-action="importExam" class="secondary">시험 import</button>
-              <button data-action="previewMissingExam" class="secondary">미응시 확인</button>
-              <button data-action="sweepMissingExam">미응시 sweep</button>
-            </div>
-            <div id="examPreview" class="exam-preview empty">미응시 확인 결과 없음</div>
-          </div>
-        </div>
-
-        <div data-subtabview="memo" class="subtab-view">
-          <div class="stack">
-            <div class="actions">
-              <label>ClassIn ID<input id="memoClassinId" type="text"></label>
-              <label>태그<input id="memoTag" type="text" placeholder="예: 상담"></label>
-            </div>
-            <label>내용<textarea id="memoText" placeholder="학생/학부모 관련 메모를 입력하세요"></textarea></label>
-            <button data-action="writeMemo">메모 저장</button>
-          </div>
-        </div>
-
-        <div data-subtabview="agent" class="subtab-view">
-          <div class="stack">
-            <label>질문<textarea id="agentQuestion" placeholder="예: 이번 주 미제출이 가장 많은 반은?"></textarea></label>
-            <button data-action="askAgent">질문 보내기</button>
-          </div>
-        </div>
+        <div class="report-format-help" id="reportFormatHelp">디자인된 PDF — 학부모 발송에 적합</div>
       </div>
+
+      <div class="report-grid">
+        <aside class="report-side">
+          <div class="report-side-card">
+            <div class="report-side-title">대상</div>
+            <div class="report-target">
+              <span class="report-target-avatar">김</span>
+              <div>
+                <div class="report-target-name">김도윤</div>
+                <div class="report-target-class">중2 수학 심화 A</div>
+              </div>
+            </div>
+            <div class="report-target-hint">전체 클래스 18명에 동일 양식으로 일괄 생성됩니다.</div>
+          </div>
+
+          <div class="report-side-card">
+            <div class="report-side-title">포함 데이터</div>
+            <ul class="report-data-list">
+              <li><label><input type="checkbox" checked><span>Classin 출석 데이터</span><span class="src-pill api">API</span></label></li>
+              <li><label><input type="checkbox" checked><span>숙제 제출 이력</span><span class="src-pill api">API</span></label></li>
+              <li><label><input type="checkbox" checked><span>OMR 시험 점수</span><span class="src-pill api">API</span></label></li>
+              <li><label><input type="checkbox" checked><span>단원평가 (자체)</span><span class="src-pill self">자체</span></label></li>
+              <li><label><input type="checkbox" checked><span>강사 코멘트</span><span class="src-pill self">자체</span></label></li>
+              <li><label><input type="checkbox"><span>출결 사유</span><span class="src-pill self">자체</span></label></li>
+            </ul>
+          </div>
+
+          <div class="report-side-card">
+            <div class="report-side-title">강사 코멘트</div>
+            <div class="report-comment">
+              <textarea id="reportComment" placeholder="학생의 강점과 보완할 점을 자유롭게 작성하세요">기본 개념은 안정적입니다. 부등식 영역에서 부호 처리에 실수가 반복돼 다음 주 보충 권장.</textarea>
+              <button class="ai-polish-btn" data-action="aiPolishComment" type="button">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg>
+                AI 다듬기
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="report-canvas">
+          <div class="report-canvas-head">
+            <span>미리보기 · A4 1페이지</span>
+            <span class="report-layout-pill">레이아웃: 데이터 카드</span>
+          </div>
+          <div class="report-canvas-body">
+            <div class="report-paper">
+              <div class="report-paper-head">
+                <div>
+                  <div class="report-paper-eyebrow">MONTHLY LEARNING REPORT</div>
+                  <div class="report-paper-title">김도윤 학생 학습 리포트</div>
+                  <div class="report-paper-meta">중2 수학 심화 A · 2026년 4월 — 2개 단원</div>
+                </div>
+                <div class="report-paper-brand">
+                  <div class="report-paper-brand-name">GreenEdu</div>
+                  <div class="report-paper-brand-mark">G</div>
+                </div>
+              </div>
+              <div class="report-paper-body">
+                <div class="report-metric-grid">
+                  <div class="report-metric"><div class="m-label">출석률</div><div class="m-value">96<span>%</span></div><div class="m-sub">14/15회</div></div>
+                  <div class="report-metric"><div class="m-label">숙제 제출</div><div class="m-value">88<span>%</span></div><div class="m-sub">목표 90%</div></div>
+                  <div class="report-metric"><div class="m-label">평균 점수</div><div class="m-value">84<span>점</span></div><div class="m-sub">+6점 전월</div></div>
+                  <div class="report-metric"><div class="m-label">반 내 순위</div><div class="m-value">상위 22%</div><div class="m-sub">총 18명 중</div></div>
+                </div>
+
+                <div class="report-paper-section-title">단원평가 · 시험 성적</div>
+                <div class="report-score-bars">
+                  <div class="score-bar"><div class="score-head"><span>단원평가 1</span><span><b>72</b> · 반평균 68</span></div><div class="bar-track"><div class="avg-mark" style="left:68%"></div><div class="bar-fill" style="width:72%"></div></div></div>
+                  <div class="score-bar"><div class="score-head"><span>OMR 모의 #1</span><span><b>81</b> · 반평균 74</span></div><div class="bar-track"><div class="avg-mark" style="left:74%"></div><div class="bar-fill" style="width:81%"></div></div></div>
+                  <div class="score-bar"><div class="score-head"><span>단원평가 2</span><span><b>88</b> · 반평균 71</span></div><div class="bar-track"><div class="avg-mark" style="left:71%"></div><div class="bar-fill" style="width:88%"></div></div></div>
+                  <div class="score-bar"><div class="score-head"><span>OMR 모의 #2</span><span><b>84</b> · 반평균 76</span></div><div class="bar-track"><div class="avg-mark" style="left:76%"></div><div class="bar-fill" style="width:84%"></div></div></div>
+                  <div class="score-bar"><div class="score-head"><span>종합평가</span><span><b>92</b> · 반평균 78</span></div><div class="bar-track"><div class="avg-mark" style="left:78%"></div><div class="bar-fill" style="width:92%"></div></div></div>
+                </div>
+
+                <div class="report-paper-section-title">강점 · 보완</div>
+                <div class="report-tags">
+                  <div class="tag-col">
+                    <div class="tag-col-title good">강점</div>
+                    <span class="report-tag good">도형의 성질</span>
+                    <span class="report-tag good">방정식 응용</span>
+                  </div>
+                  <div class="tag-col">
+                    <div class="tag-col-title warn">보완 필요</div>
+                    <span class="report-tag warn">부등식 영역</span>
+                    <span class="report-tag warn">확률</span>
+                  </div>
+                </div>
+
+                <div class="report-paper-section-title">강사 코멘트</div>
+                <div class="report-teacher-note" id="reportPaperComment">기본 개념은 안정적입니다. 부등식 영역에서 부호 처리에 실수가 반복돼 다음 주 보충 권장.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <details class="report-advanced">
+        <summary>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          고급 도구 — 일일/주간 리포트, 시험 import, 메모, AI 질문
+        </summary>
+        <div class="report-advanced-body">
+          <nav class="subtabs" aria-label="고급 도구 탭">
+            <button data-subtab="report" class="active">일일/주간</button>
+            <button data-subtab="exam">시험</button>
+            <button data-subtab="memo">메모</button>
+            <button data-subtab="agent">AI 질문</button>
+          </nav>
+
+          <div data-subtabview="report" class="subtab-view active">
+            <div class="actions">
+              <div class="row">
+                <label>일자<input id="dailyDate" type="date" value="{today}"></label>
+                <button data-action="renderDaily">일일 리포트 생성</button>
+              </div>
+              <div class="row">
+                <label>주 시작일<input id="weekDate" type="date" value="{week_start}"></label>
+                <button data-action="approveWeekly" class="secondary">주간 승인</button>
+              </div>
+              <button data-action="generateWeekly">주간 드래프트 생성</button>
+              <button data-action="refreshStatus" class="secondary">상태 새로고침</button>
+            </div>
+          </div>
+
+          <div data-subtabview="exam" class="subtab-view">
+            <div class="stack">
+              <div class="actions">
+                <label>CSV/JSON path<input id="examPath" type="text" placeholder="samples/exam_results_sample.csv"></label>
+                <label>시험명<input id="examName" type="text" placeholder="4월 월말평가"></label>
+                <label>시험일<input id="examDate" type="date" value="{today}"></label>
+                <label>반<input id="examClassName" type="text"></label>
+                <label>출처<input id="examSource" type="text" value="academy-db"></label>
+                <label style="align-self:end; flex-direction:row; display:flex; align-items:center; gap:8px; color:var(--text-2); font-weight:600;"><input id="examDryRun" type="checkbox" checked style="width:auto; min-height:0;"> dry-run 모드</label>
+                <button data-action="importExam" class="secondary">시험 import</button>
+                <button data-action="previewMissingExam" class="secondary">미응시 확인</button>
+                <button data-action="sweepMissingExam">미응시 sweep</button>
+              </div>
+              <div id="examPreview" class="exam-preview empty">미응시 확인 결과 없음</div>
+            </div>
+          </div>
+
+          <div data-subtabview="memo" class="subtab-view">
+            <div class="stack">
+              <div class="actions">
+                <label>ClassIn ID<input id="memoClassinId" type="text"></label>
+                <label>태그<input id="memoTag" type="text" placeholder="예: 상담"></label>
+              </div>
+              <label>내용<textarea id="memoText" placeholder="학생/학부모 관련 메모를 입력하세요"></textarea></label>
+              <button data-action="writeMemo">메모 저장</button>
+            </div>
+          </div>
+
+          <div data-subtabview="agent" class="subtab-view">
+            <div class="stack">
+              <label>질문<textarea id="agentQuestion" placeholder="예: 이번 주 미제출이 가장 많은 반은?"></textarea></label>
+              <button data-action="askAgent">질문 보내기</button>
+            </div>
+          </div>
+        </div>
+      </details>
     </section>
 
     <section id="tab-students" class="tab-view">
@@ -4715,6 +5161,24 @@ def _render_shell(status: dict[str, Any]) -> str:
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted-2)"><path d="M9 6l6 6-6 6"/></svg>
           </button>`;
       }}).join("");
+    }}
+
+    function syncReportComment() {{
+      const ta = document.querySelector("#reportComment");
+      const paper = document.querySelector("#reportPaperComment");
+      if (ta && paper) paper.textContent = ta.value;
+    }}
+
+    function syncReportFormat(value) {{
+      document.querySelectorAll("#reportFormatSeg button").forEach((btn) => {{
+        btn.classList.toggle("active", btn.dataset.reportFormat === value);
+      }});
+      const label = document.querySelector("#reportDownloadLabel");
+      if (label) label.textContent = value === "csv" ? "CSV 다운로드" : "PDF 다운로드";
+      const help = document.querySelector("#reportFormatHelp");
+      if (help) help.textContent = value === "csv"
+        ? "엑셀로 열기 가능 — 학원 내부 분석용"
+        : "디자인된 PDF — 학부모 발송에 적합";
     }}
 
     function renderActivityFeed(notifications) {{
@@ -5847,6 +6311,26 @@ def _render_shell(status: dict[str, Any]) -> str:
         const det = document.querySelector("#studentAnalytics");
         if (det) det.open = !det.open;
       }},
+      async openTemplateModal() {{
+        writeLog("템플릿 설정 모달은 곧 제공됩니다. 현재는 기본 '데이터 카드' 레이아웃이 적용됩니다.");
+      }},
+      async aiPolishComment() {{
+        const ta = document.querySelector("#reportComment");
+        if (!ta) return;
+        const original = (ta.value || "").trim();
+        if (!original) {{
+          writeLog("강사 코멘트를 먼저 입력해 주세요.");
+          return;
+        }}
+        // demo polish (real impl would call /api/agent)
+        const polished = original
+          .replace(/권장\.?$/, "지도해 주시면 더 좋아질 것 같습니다.")
+          .replace(/실수가/, "사소한 실수가")
+          .replace(/안정적입니다/, "튼튼하게 잡혀 있습니다");
+        ta.value = polished;
+        syncReportComment();
+        writeLog("AI가 코멘트를 다듬었습니다.", {{ chars: polished.length }});
+      }},
       async writeMemo() {{
         const data = await callApi("/api/write-memo", {{
           classin_id: document.querySelector("#memoClassinId").value,
@@ -5874,6 +6358,11 @@ def _render_shell(status: dict[str, Any]) -> str:
       const tabButton = event.target.closest("button[data-tab]");
       const modeButton = event.target.closest("button[data-mode]");
       const subtabButton = event.target.closest("button[data-subtab]");
+      const reportFmtButton = event.target.closest("button[data-report-format]");
+      if (reportFmtButton) {{
+        syncReportFormat(reportFmtButton.dataset.reportFormat);
+        return;
+      }}
       const hwModeButton = event.target.closest("button[data-hw-mode]");
       if (hwModeButton) {{
         hwMode = hwModeButton.dataset.hwMode;
@@ -6123,6 +6612,12 @@ def _render_shell(status: dict[str, Any]) -> str:
     }});
     syncTemplateUi();
     syncChannelUi();
+
+    const reportCommentEl = document.querySelector("#reportComment");
+    if (reportCommentEl) {{
+      reportCommentEl.addEventListener("input", syncReportComment);
+      syncReportComment();
+    }}
 
     renderStatus(status);
     syncDashboardMode();
