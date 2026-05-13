@@ -1968,22 +1968,27 @@ def _render_shell(status: dict[str, Any]) -> str:
     .bulk-flow {{
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 16px;
+      padding: 0;
+      background: transparent;
+      border: none;
+      box-shadow: none;
     }}
     .step-card {{
       border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: rgba(255, 255, 255, .65);
-      padding: 16px 18px;
+      border-radius: var(--radius-lg);
+      background: var(--panel);
+      padding: 20px 22px;
+      box-shadow: var(--shadow);
     }}
     .step-card + .step-card {{
       margin-top: 0;
     }}
     .step-head {{
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 12px;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }}
     .step-head > div {{ flex: 1; min-width: 0; }}
     .step-head h3 {{
@@ -1991,6 +1996,18 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-size: 15px;
       font-weight: 700;
       color: var(--text);
+      letter-spacing: -0.01em;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .step-head h3::before {{
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--primary);
+      flex-shrink: 0;
     }}
     .step-head p {{
       margin: 4px 0 0;
@@ -2006,18 +2023,133 @@ def _render_shell(status: dict[str, Any]) -> str:
       padding: 1px 5px;
       color: var(--text-2);
     }}
-    .step-badge {{
-      flex-shrink: 0;
+    .step-badge {{ display: none; }}
+    /* Mode segment toggle for homework alert */
+    .hw-mode-segment {{
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }}
+    .hw-mode-segment button {{
+      min-height: 38px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-2);
+      font-size: 13.5px;
+      font-weight: 600;
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      width: 26px;
-      height: 26px;
-      border-radius: 999px;
+      gap: 8px;
+      box-shadow: none;
+    }}
+    .hw-mode-segment button:hover {{
+      background: var(--panel-soft);
+      color: var(--text);
+      transform: none;
+      box-shadow: none;
+    }}
+    .hw-mode-segment button.active {{
       background: var(--primary);
       color: #fff;
+      border-color: var(--primary);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, .1);
+    }}
+    .hw-mode-segment .mode-count {{
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
       font-weight: 700;
+      background: var(--accent-soft);
+      color: var(--accent-ink);
+    }}
+    .hw-mode-segment button.active .mode-count {{
+      background: rgba(255, 255, 255, .25);
+      color: #fff;
+    }}
+    /* Class-grouped student list */
+    .hw-class-group + .hw-class-group {{ margin-top: 8px; }}
+    .hw-class-header {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: var(--primary-softer);
+      border-bottom: 1px solid var(--line-2);
+      border-top: 1px solid var(--line-2);
+      font-size: 12.5px;
+    }}
+    .hw-class-header label {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      color: var(--text);
+      cursor: pointer;
+    }}
+    .hw-class-header label input {{
+      width: 16px;
+      height: 16px;
+      min-height: 0;
+      margin: 0;
+      accent-color: var(--primary);
+    }}
+    .hw-class-meta {{
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 600;
+    }}
+    /* AI hint banner in compose card */
+    .ai-hint-banner {{
+      margin-top: 14px;
+      padding: 12px 14px;
+      background: var(--primary-softer);
+      border: 1px solid var(--primary-soft);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      gap: 12px;
       font-size: 13px;
+      color: var(--primary-strong);
+    }}
+    .ai-hint-banner svg {{ color: var(--primary); flex-shrink: 0; }}
+    .ai-hint-banner > div {{ flex: 1; line-height: 1.5; }}
+    .ai-hint-banner b {{ color: var(--text); }}
+    .ai-hint-banner .badge {{
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      font-weight: 700;
+    }}
+    /* AI ON pill in header */
+    .ai-on-pill {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--primary-softer), #fff);
+      border: 1px solid var(--primary-soft);
+      color: var(--primary-strong);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }}
+    .ai-on-pill::before {{
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--primary);
+      animation: conn-pulse 2.4s ease-in-out infinite;
     }}
     .template-presets button {{
       border-radius: 999px;
@@ -3431,60 +3563,74 @@ def _render_shell(status: dict[str, Any]) -> str:
     <section id="tab-homework" class="tab-view">
       <header class="page-head">
         <div>
-          <div class="page-eyebrow">숙제 관리 · 단체 발송</div>
-          <h2 class="page-title">미제출 학생 검색 → 단체 발송</h2>
-          <div class="page-sub">조건으로 학생을 찾고, 단체 문구를 작성한 뒤 한 번에 발송합니다.</div>
+          <div class="page-eyebrow">숙제 관리</div>
+          <h2 class="page-title">미제출자에게 알림 보내기</h2>
+          <div class="page-sub">특정 코스만, 또는 전체 미제출자에게 한 번에 보낼 수 있어요.</div>
         </div>
         <div class="page-actions">
-          <button class="secondary" data-action="refreshMissing">
+          <span class="ai-on-pill" title="AI가 문구 추천 · 학원 상담 안내를 자동 적용합니다">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg>
+            AI 문구 추천 ON
+          </span>
+          <button class="secondary" data-action="refreshMissing" aria-label="새로고침">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 5v5h-5"/></svg>
             새로고침
-          </button>
-          <button data-action="sweepMissing" id="bulkSendHeaderBtn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
-            단체 발송<span class="btn-count" id="bulkSendHeaderCount">0</span>
           </button>
         </div>
       </header>
 
-      <div class="panel hero-panel bulk-flow">
+      <nav class="hw-mode-segment" id="hwModeSegment" role="tablist" aria-label="발송 범위">
+        <button type="button" data-hw-mode="all" class="active" role="tab" aria-selected="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+          전체 미제출 일괄 발송
+          <span class="mode-count" id="hwModeCount">0명</span>
+        </button>
+        <button type="button" data-hw-mode="single" role="tab" aria-selected="false">특정 코스만</button>
+      </nav>
+
+      <div class="bulk-flow">
         <div class="step-card">
           <div class="step-head">
-            <span class="step-badge">1</span>
             <div>
-              <h3>학생 검색</h3>
-              <p>조회 시간·수업·상태로 단체 발송 대상을 추립니다.</p>
+              <h3>대상 학생</h3>
+              <p id="hwSubjectSub">전체 미제출 학생을 한 번에 선택할 수 있습니다.</p>
             </div>
             <span class="section-subtitle" id="missingResultMeta">대기</span>
           </div>
-          <div class="control-grid">
-            <label>조회 시간(시간)<input id="windowHours" type="number" min="1" step="1" value="24"></label>
-            <label class="combobox-label">코스
+          <div class="control-grid" id="hwFilterRow" hidden>
+            <label class="combobox-label" style="grid-column: 1 / 3;">코스
               <div class="combobox" id="lessonCombobox">
-                <input id="lessonComboboxInput" type="search" placeholder="코스명 또는 ID로 검색 (전체 = 비움)" autocomplete="off">
+                <input id="lessonComboboxInput" type="search" placeholder="코스명 또는 ID로 검색" autocomplete="off">
                 <input id="lessonId" type="hidden">
                 <button type="button" class="combobox-clear" id="lessonComboboxClear" aria-label="선택 해제" hidden>×</button>
                 <div class="combobox-menu" id="lessonComboboxMenu" hidden role="listbox"></div>
               </div>
             </label>
             <button data-action="refreshMissing" class="secondary">조건으로 검색</button>
-            <button data-action="resetBulkFilters" class="secondary">조건 초기화</button>
           </div>
-          <div class="toolbar" id="missingFilters" role="tablist" aria-label="미제출 필터">
-            <button data-filter="all" class="active">전체<span class="chip-count" data-count="all">0</span></button>
-            <button data-filter="needs_message">문구 필요<span class="chip-count" data-count="needs_message">0</span></button>
-            <button data-filter="needs_review">검토 필요<span class="chip-count" data-count="needs_review">0</span></button>
-            <button data-filter="needs_phone">연락처 없음<span class="chip-count" data-count="needs_phone">0</span></button>
-            <button data-filter="needs_retry">실패<span class="chip-count" data-count="needs_retry">0</span></button>
-            <button data-filter="repeat">반복<span class="chip-count" data-count="repeat">0</span></button>
-            <button data-filter="done">완료<span class="chip-count" data-count="done">0</span></button>
-          </div>
+          <details class="conn-details" id="hwAdvanced" style="margin-bottom:10px;">
+            <summary>고급 필터 · 상태별 추리기</summary>
+            <div style="margin-top:10px;">
+              <div class="control-grid" style="grid-template-columns: minmax(120px, 200px) auto;">
+                <label>조회 시간(시간)<input id="windowHours" type="number" min="1" step="1" value="24"></label>
+                <button data-action="resetBulkFilters" class="secondary">초기화</button>
+              </div>
+              <div class="toolbar" id="missingFilters" role="tablist" aria-label="미제출 필터" style="margin-top:10px;">
+                <button data-filter="all" class="active">전체<span class="chip-count" data-count="all">0</span></button>
+                <button data-filter="needs_message">문구 필요<span class="chip-count" data-count="needs_message">0</span></button>
+                <button data-filter="needs_review">검토 필요<span class="chip-count" data-count="needs_review">0</span></button>
+                <button data-filter="needs_phone">연락처 없음<span class="chip-count" data-count="needs_phone">0</span></button>
+                <button data-filter="needs_retry">실패<span class="chip-count" data-count="needs_retry">0</span></button>
+                <button data-filter="repeat">반복<span class="chip-count" data-count="repeat">0</span></button>
+                <button data-filter="done">완료<span class="chip-count" data-count="done">0</span></button>
+              </div>
+            </div>
+          </details>
           <div id="missingTable" style="margin-top:8px"></div>
         </div>
 
         <div class="step-card msg-card">
           <div class="step-head">
-            <span class="step-badge">2</span>
             <div>
               <h3>메시지 작성</h3>
               <p>톤을 고르면 문구가 자동 적용됩니다. 필요하면 <button type="button" class="link-btn" data-action="toggleBulkEditor">직접 편집</button>도 가능해요.</p>
@@ -3549,11 +3695,15 @@ def _render_shell(status: dict[str, Any]) -> str:
             </label>
             <div class="template-char-meta"><span id="templateCharMeta">0자</span></div>
           </div>
+          <div class="ai-hint-banner" id="aiHintBanner" hidden>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg>
+            <div>연속 미제출 3회 이상 학생 <b id="aiHintRepeatCount">0</b>명에게는 학원 상담 자동 안내가 메시지에 포함됩니다.</div>
+            <span class="badge">자동 적용</span>
+          </div>
         </div>
 
         <div class="step-card send-card">
           <div class="step-head">
-            <span class="step-badge">3</span>
             <div>
               <h3>단체 발송</h3>
               <p>위에서 작성한 문구로 대상 학생에게 한 번에 발송합니다.</p>
@@ -3884,6 +4034,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     let missingState = {{ summary: {{}}, items: [] }};
     let activeMissingFilter = "all";
     let dashboardMode = "course";
+    let hwMode = "all";
     let courseOptions = [];
     let studentOptions = [];
     let optionSearchTimer = null;
@@ -4565,6 +4716,8 @@ def _render_shell(status: dict[str, Any]) -> str:
         const total = summary.total_missing || 0;
         qaDesc.textContent = total ? `미제출 ${{total}}명 대기` : "미제출 학생 없음";
       }}
+      const modeCount = document.querySelector("#hwModeCount");
+      if (modeCount) modeCount.textContent = `${{summary.total_missing || 0}}명`;
       document.querySelector("#noPhoneCount").textContent = summary.no_parent_phone || 0;
       document.querySelector("#dryRunCount").textContent = summary.dry_run || 0;
       document.querySelector("#sentCount").textContent = summary.sent || 0;
@@ -4583,6 +4736,55 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
       const allSendable = items.filter((it) => it.has_parent_phone && it.action_required !== "done");
       const allChecked = allSendable.length > 0 && allSendable.every(isItemSelected);
+
+      const renderRow = (item) => {{
+        const initial = String(item.student_name || "").slice(0, 1);
+        const canSelect = item.has_parent_phone && item.action_required !== "done";
+        const checked = canSelect && isItemSelected(item);
+        const phoneLine = item.has_parent_phone
+          ? `학부모 ${{escapeHtml(maskPhone(item.parent_phone))}}`
+          : `<span class="missing-row-warn">연락처 없음</span>`;
+        const last = relativeLabel(item.date);
+        return `
+          <label class="missing-row ${{canSelect ? "" : "missing-row--locked"}}" data-key="${{escapeHtml(itemKey(item))}}">
+            <input type="checkbox" class="missing-row-check" ${{checked ? "checked" : ""}} ${{canSelect ? "" : "disabled"}}>
+            <span class="missing-row-avatar" style="background:${{avatarBg(item.student_name)}}">${{escapeHtml(initial)}}</span>
+            <span class="missing-row-meta">
+              <span class="missing-row-name">${{escapeHtml(item.student_name)}}</span>
+              <span class="missing-row-sub">${{phoneLine}}</span>
+            </span>
+            <span class="missing-row-stats">
+              <span class="missing-row-last">마지막 제출 ${{escapeHtml(last)}}</span>
+              ${{streakBadge(item.missing_count)}}
+            </span>
+          </label>`;
+      }};
+
+      // Group by class when 2+ distinct classes present and not in single mode
+      const classes = Array.from(new Set(items.map((i) => i.class_name || "기타")));
+      let body;
+      if (classes.length >= 2 && hwMode === "all") {{
+        const grouped = classes.map((cls) => {{
+          const list = items.filter((i) => (i.class_name || "기타") === cls);
+          const groupSendable = list.filter((it) => it.has_parent_phone && it.action_required !== "done");
+          const groupAllSel = groupSendable.length > 0 && groupSendable.every(isItemSelected);
+          return `
+            <div class="hw-class-group">
+              <div class="hw-class-header">
+                <label>
+                  <input type="checkbox" class="hw-class-check" data-class="${{escapeHtml(cls)}}" ${{groupAllSel ? "checked" : ""}} ${{groupSendable.length ? "" : "disabled"}}>
+                  ${{escapeHtml(cls)}}
+                </label>
+                <span class="hw-class-meta">${{list.length}}명 미제출</span>
+              </div>
+              ${{list.map(renderRow).join("")}}
+            </div>`;
+        }}).join("");
+        body = `<div class="missing-list" id="missingList">${{grouped}}</div>`;
+      }} else {{
+        body = `<div class="missing-list" id="missingList">${{items.map(renderRow).join("")}}</div>`;
+      }}
+
       target.innerHTML = `
         <div class="missing-list-head">
           <label class="select-all">
@@ -4591,30 +4793,16 @@ def _render_shell(status: dict[str, Any]) -> str:
           </label>
           <span class="missing-list-hint">발송 가능한 학생만 체크할 수 있습니다.</span>
         </div>
-        <div class="missing-list" id="missingList">
-          ${{items.map((item) => {{
-            const initial = String(item.student_name || "").slice(0, 1);
-            const canSelect = item.has_parent_phone && item.action_required !== "done";
-            const checked = canSelect && isItemSelected(item);
-            const phoneLine = item.has_parent_phone
-              ? `학부모 ${{escapeHtml(maskPhone(item.parent_phone))}}`
-              : `<span class="missing-row-warn">연락처 없음</span>`;
-            const last = relativeLabel(item.date);
-            return `
-              <label class="missing-row ${{canSelect ? "" : "missing-row--locked"}}" data-key="${{escapeHtml(itemKey(item))}}">
-                <input type="checkbox" class="missing-row-check" ${{checked ? "checked" : ""}} ${{canSelect ? "" : "disabled"}}>
-                <span class="missing-row-avatar" style="background:${{avatarBg(item.student_name)}}">${{escapeHtml(initial)}}</span>
-                <span class="missing-row-meta">
-                  <span class="missing-row-name">${{escapeHtml(item.student_name)}}</span>
-                  <span class="missing-row-sub">${{phoneLine}}</span>
-                </span>
-                <span class="missing-row-stats">
-                  <span class="missing-row-last">마지막 제출 ${{escapeHtml(last)}}</span>
-                  ${{streakBadge(item.missing_count)}}
-                </span>
-              </label>`;
-          }}).join("")}}
-        </div>`;
+        ${{body}}`;
+
+      // Update AI hint banner
+      const repeatCount = items.filter((i) => (i.missing_count || 0) >= 3).length;
+      const hint = document.querySelector("#aiHintBanner");
+      const hintCount = document.querySelector("#aiHintRepeatCount");
+      if (hint && hintCount) {{
+        hint.hidden = repeatCount === 0;
+        hintCount.textContent = repeatCount;
+      }}
     }}
 
     function itemMatchesFilter(item) {{
@@ -4705,7 +4893,6 @@ def _render_shell(status: dict[str, Any]) -> str:
       setText("#bulkNoPhone", noPhone);
       setText("#bulkRecentSent", summary.sent || 0);
       setText("#bulkSendBtnLabel", `${{selectedCount}}명에게 단체 발송`);
-      setText("#bulkSendHeaderCount", selectedCount);
       setText("#missingResultMeta", items.length
         ? `검색 ${{items.length}}명 · 선택 ${{selectedCount}}`
         : "결과 없음");
@@ -4713,8 +4900,6 @@ def _render_shell(status: dict[str, Any]) -> str:
 
       const btn = document.querySelector("#bulkSendBtn");
       if (btn) btn.disabled = selectedCount === 0;
-      const headerBtn = document.querySelector("#bulkSendHeaderBtn");
-      if (headerBtn) headerBtn.disabled = selectedCount === 0;
 
       const previewItem = selected[0] || eligible[0] || items[0] || null;
       const preview = document.querySelector("#templatePreviewBody");
@@ -5071,6 +5256,31 @@ def _render_shell(status: dict[str, Any]) -> str:
       const tabButton = event.target.closest("button[data-tab]");
       const modeButton = event.target.closest("button[data-mode]");
       const subtabButton = event.target.closest("button[data-subtab]");
+      const hwModeButton = event.target.closest("button[data-hw-mode]");
+      if (hwModeButton) {{
+        hwMode = hwModeButton.dataset.hwMode;
+        document.querySelectorAll("#hwModeSegment button").forEach((btn) => {{
+          const on = btn.dataset.hwMode === hwMode;
+          btn.classList.toggle("active", on);
+          btn.setAttribute("aria-selected", on ? "true" : "false");
+        }});
+        const filterRow = document.querySelector("#hwFilterRow");
+        if (filterRow) filterRow.hidden = hwMode !== "single";
+        const sub = document.querySelector("#hwSubjectSub");
+        if (sub) sub.textContent = hwMode === "all"
+          ? "전체 미제출 학생을 한 번에 선택할 수 있습니다."
+          : "코스를 선택하면 해당 코스의 미제출자만 표시됩니다.";
+        // Clear lesson filter when switching to "all"
+        if (hwMode === "all") {{
+          const input = document.querySelector("#lessonComboboxInput");
+          const hidden = document.querySelector("#lessonId");
+          if (input) input.value = "";
+          if (hidden) hidden.value = "";
+          loadSituation().catch((error) => writeLog(error.message));
+        }}
+        if (typeof renderMissing === "function") renderMissing(missingState);
+        return;
+      }}
       if (subtabButton) {{
         const target = subtabButton.dataset.subtab;
         const scope = subtabButton.closest(".panel");
@@ -5277,6 +5487,18 @@ def _render_shell(status: dict[str, Any]) -> str:
         const items = (missingState.items || []).filter(itemMatchesFilter);
         items.forEach((it) => {{
           if (it.has_parent_phone && it.action_required !== "done") setItemSelected(it, checked);
+        }});
+        renderMissing(missingState);
+        return;
+      }}
+      if (event.target.classList.contains("hw-class-check")) {{
+        const cls = event.target.dataset.class;
+        const checked = event.target.checked;
+        const items = (missingState.items || []).filter(itemMatchesFilter);
+        items.forEach((it) => {{
+          if ((it.class_name || "기타") === cls && it.has_parent_phone && it.action_required !== "done") {{
+            setItemSelected(it, checked);
+          }}
         }});
         renderMissing(missingState);
       }}
