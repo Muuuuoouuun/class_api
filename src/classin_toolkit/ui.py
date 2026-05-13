@@ -1721,6 +1721,132 @@ def _render_shell(status: dict[str, Any]) -> str:
       .kpi-card--main .kpi-side {{ border-left: 0; border-top: 1px solid var(--line-2); }}
       .dash-greeting {{ flex-direction: column; align-items: flex-start; }}
     }}
+
+    /* ============ Students tab (Classin++ clean table) ============ */
+    .student-toolbar {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 12px 14px;
+      background: var(--surface, #fff);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+    }}
+    .student-toolbar .segmented {{ margin: 0; padding: 3px; background: var(--green-4); border: 1px solid var(--line-2); border-radius: 10px; }}
+    .student-toolbar .segmented button {{ min-height: 30px; padding: 4px 12px; font-size: 13px; }}
+    .student-toolbar .segmented button.active {{ background: #fff; box-shadow: var(--shadow-soft); color: var(--green-2); border-color: var(--line); }}
+    .student-toolbar .mode-field {{ display: block; min-width: 180px; }}
+    .student-toolbar .mode-field input, .student-toolbar .mode-field select {{ min-height: 34px; font-size: 13px; }}
+    .student-toolbar .period-field {{ display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }}
+    .student-toolbar .period-field select {{ min-height: 32px; min-width: 90px; padding: 4px 8px; font-size: 13px; }}
+
+    .student-table-card {{
+      background: var(--surface, #fff);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }}
+    .student-table-head {{
+      padding: 12px 20px;
+      display: grid;
+      grid-template-columns: 2.2fr 2fr 1fr 1.4fr 1fr 40px;
+      gap: 16px;
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--line-2);
+      background: linear-gradient(180deg, #fafdf9, #f4f8f1);
+    }}
+    .student-row {{
+      padding: 14px 20px;
+      display: grid;
+      grid-template-columns: 2.2fr 2fr 1fr 1.4fr 1fr 40px;
+      gap: 16px;
+      align-items: center;
+      border-bottom: 1px solid var(--line-2);
+      cursor: pointer;
+      transition: background .12s;
+      background: #fff;
+      border-left: 0;
+      border-right: 0;
+      border-top: 0;
+      width: 100%;
+      text-align: left;
+      min-height: auto;
+      font: inherit;
+      color: inherit;
+    }}
+    .student-row:last-child {{ border-bottom: none; }}
+    .student-row:hover {{ background: var(--green-4); transform: none; box-shadow: none; }}
+    .student-row .student-row-name {{ display: flex; align-items: center; gap: 10px; min-width: 0; }}
+    .student-row .student-avatar {{
+      width: 32px; height: 32px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px; flex: 0 0 auto;
+    }}
+    .student-row .student-name-text {{ font-size: 14px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .student-row .student-class-text {{ font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .student-row .student-num {{ font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }}
+    .student-row .hw-cell {{ display: flex; align-items: center; gap: 8px; }}
+    .student-row .hw-cell .hw-bar {{ flex: 1; height: 6px; border-radius: 999px; background: var(--green-4); overflow: hidden; min-width: 40px; }}
+    .student-row .hw-cell .hw-bar > span {{ display: block; height: 100%; border-radius: inherit; }}
+    .student-row .hw-cell .hw-pct {{ font-size: 12px; font-weight: 600; min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }}
+    .student-row .chev {{ color: var(--muted-2); justify-self: end; }}
+
+    .student-analytics {{
+      margin-top: 14px;
+      background: var(--surface, #fff);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 14px 20px;
+    }}
+    .student-analytics summary {{
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-2);
+      list-style: none;
+      padding: 4px 0;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .student-analytics summary::-webkit-details-marker {{ display: none; }}
+    .student-analytics summary::after {{
+      content: "▸";
+      margin-left: auto;
+      transition: transform .15s ease;
+      color: var(--muted);
+    }}
+    .student-analytics[open] summary::after {{ transform: rotate(90deg); }}
+    .student-analytics .kpi-card-mini {{
+      padding: 12px 14px;
+      background: var(--green-4);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius);
+    }}
+    .student-analytics .kpi-card-mini span {{ color: var(--muted); font-size: 11.5px; font-weight: 600; }}
+    .student-analytics .kpi-card-mini strong {{ display: block; margin-top: 6px; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }}
+    .student-analytics .kpi-card-mini small {{ display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }}
+
+    .student-empty {{
+      padding: 48px 20px;
+      text-align: center;
+      color: var(--muted);
+    }}
+    @media (max-width: 900px) {{
+      .student-table-head, .student-row {{ grid-template-columns: 2fr 1fr 1fr 40px; }}
+      .student-table-head > div:nth-child(2),
+      .student-row .student-class-cell {{ display: none; }}
+    }}
     .dropzone {{
       border: 2px dashed var(--primary);
       border-radius: var(--radius-lg);
@@ -4132,96 +4258,88 @@ def _render_shell(status: dict[str, Any]) -> str:
     </section>
 
     <section id="tab-students" class="tab-view">
-      <header class="page-head">
+      <header class="dash-greeting">
         <div>
-          <div class="page-eyebrow">학생 · 코스 분석</div>
-          <h2 class="page-title">학생 성과 대시보드</h2>
-          <div class="page-sub" id="performanceScope">전체 코스</div>
+          <div class="dash-eyebrow">학생 관리</div>
+          <h1 class="dash-title">전체 학생</h1>
+          <div class="dash-sub" id="performanceScope"><span id="studentCountLabel">0명</span> · Classin API + 학원 자체 데이터 통합</div>
         </div>
-        <span class="section-subtitle" id="performancePeriod">최근 90일</span>
+        <div class="dash-actions">
+          <button class="secondary" data-action="toggleStudentAnalytics" id="analyticsToggle">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V8M10 20V4M16 20v-8M22 20H2"/></svg>
+            분석 보기
+          </button>
+          <button data-action="refreshDashboard">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 5v5h-5"/></svg>
+            새로고침
+          </button>
+        </div>
       </header>
-      <div class="panel hero-panel">
-        <div class="performance-controls">
-          <div class="segmented" id="dashboardMode">
-            <button data-mode="course" class="active">코스</button>
-            <button data-mode="student">학생</button>
-          </div>
-          <label class="mode-field" data-mode-field="course-search">코스 검색<input id="courseSearch" type="search" placeholder="코스명 또는 ID"></label>
-          <label class="mode-field" data-mode-field="course-select">코스 선택<select id="courseSelect"></select></label>
-          <label class="mode-field hidden" data-mode-field="student-search">학생 검색<input id="studentSearch" type="search" placeholder="학생명 또는 ID"></label>
-          <label class="mode-field hidden" data-mode-field="student-select">학생 선택<select id="studentSelect"></select></label>
-          <label>기간<select id="dashboardDays">
-            <option value="30">30일</option>
-            <option value="60">60일</option>
-            <option value="90" selected>90일</option>
-            <option value="180">180일</option>
-            <option value="365">365일</option>
-          </select></label>
-          <button data-action="refreshDashboard">대시보드 갱신</button>
+
+      <div class="student-toolbar">
+        <div class="segmented" id="dashboardMode">
+          <button data-mode="course" class="active">코스 보기</button>
+          <button data-mode="student">학생 보기</button>
         </div>
-
-        <div class="dashboard-grid">
-          <div>
-            <div class="hero-metrics">
-              <div class="kpi-card">
-                <span>학생</span>
-                <strong id="perfStudentCount">0</strong>
-                <small id="perfLessonCount">수업 0건</small>
-              </div>
-              <div class="kpi-card">
-                <span>출석율</span>
-                <strong id="perfAttendanceRate">-</strong>
-                <small id="perfAttendanceHint">출석+지각 기준</small>
-              </div>
-              <div class="kpi-card">
-                <span>평균 성적</span>
-                <strong id="perfScoreAvg">-</strong>
-                <small id="perfScoreDelta">추이 없음</small>
-              </div>
-              <div class="kpi-card">
-                <span>관리 필요</span>
-                <strong id="perfRiskCount">0</strong>
-                <small id="perfMissingCount">미제출 0건</small>
-              </div>
-            </div>
-            <div class="chart-grid">
-              <div class="chart-card">
-                <div class="chart-head">
-                  <h3>성적 추이</h3>
-                  <span id="scoreTrendMeta">-</span>
-                </div>
-                <div id="scoreTrendChart" class="chart-box"></div>
-              </div>
-              <div class="chart-card">
-                <div class="chart-head">
-                  <h3>출석율 추이</h3>
-                  <span id="attendanceTrendMeta">-</span>
-                </div>
-                <div id="attendanceTrendChart" class="chart-box"></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="attention-panel">
-            <div class="chart-card">
-              <div class="chart-head">
-                <h3>집중 관리</h3>
-                <span id="attentionMeta">0명</span>
-              </div>
-              <div id="attentionList" class="attention-list"></div>
-            </div>
-            <div class="chart-card">
-              <div class="chart-head">
-                <h3>상승 학생</h3>
-                <span id="moverMeta">0명</span>
-              </div>
-              <div id="moverList" class="attention-list"></div>
-            </div>
-          </div>
-        </div>
-
-        <div id="studentCards" class="student-card-grid"></div>
+        <label class="mode-field" data-mode-field="course-search"><input id="courseSearch" type="search" placeholder="코스 검색..."></label>
+        <label class="mode-field" data-mode-field="course-select"><select id="courseSelect"></select></label>
+        <label class="mode-field hidden" data-mode-field="student-search"><input id="studentSearch" type="search" placeholder="학생 검색..."></label>
+        <label class="mode-field hidden" data-mode-field="student-select"><select id="studentSelect"></select></label>
+        <label class="period-field">기간 <select id="dashboardDays">
+          <option value="30">30일</option>
+          <option value="60">60일</option>
+          <option value="90" selected>90일</option>
+          <option value="180">180일</option>
+          <option value="365">365일</option>
+        </select></label>
+        <span class="section-subtitle" id="performancePeriod" style="margin-left:auto">최근 90일</span>
       </div>
+
+      <div class="student-table-card">
+        <div class="student-table-head">
+          <div>학생</div>
+          <div>클래스</div>
+          <div>출석률</div>
+          <div>숙제 제출</div>
+          <div>평균</div>
+          <div></div>
+        </div>
+        <div id="studentTable"></div>
+      </div>
+
+      <details class="student-analytics" id="studentAnalytics">
+        <summary>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V8M10 20V4M16 20v-8M22 20H2"/></svg>
+          심층 분석 — 성적·출석 추이, 집중 관리 학생
+        </summary>
+        <div class="hero-metrics" style="margin-top:14px">
+          <div class="kpi-card-mini"><span>학생</span><strong id="perfStudentCount">0</strong><small id="perfLessonCount">수업 0건</small></div>
+          <div class="kpi-card-mini"><span>출석율</span><strong id="perfAttendanceRate">-</strong><small id="perfAttendanceHint">출석+지각 기준</small></div>
+          <div class="kpi-card-mini"><span>평균 성적</span><strong id="perfScoreAvg">-</strong><small id="perfScoreDelta">추이 없음</small></div>
+          <div class="kpi-card-mini"><span>관리 필요</span><strong id="perfRiskCount">0</strong><small id="perfMissingCount">미제출 0건</small></div>
+        </div>
+        <div class="chart-grid" style="margin-top:14px">
+          <div class="chart-card">
+            <div class="chart-head"><h3>성적 추이</h3><span id="scoreTrendMeta">-</span></div>
+            <div id="scoreTrendChart" class="chart-box"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-head"><h3>출석율 추이</h3><span id="attendanceTrendMeta">-</span></div>
+            <div id="attendanceTrendChart" class="chart-box"></div>
+          </div>
+        </div>
+        <div class="attention-panel" style="margin-top:14px">
+          <div class="chart-card">
+            <div class="chart-head"><h3>집중 관리</h3><span id="attentionMeta">0명</span></div>
+            <div id="attentionList" class="attention-list"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-head"><h3>상승 학생</h3><span id="moverMeta">0명</span></div>
+            <div id="moverList" class="attention-list"></div>
+          </div>
+        </div>
+        <div id="studentCards" class="student-card-grid" style="margin-top:14px"></div>
+      </details>
     </section>
 
     <section id="tab-profile" class="tab-view">
@@ -4934,6 +5052,48 @@ def _render_shell(status: dict[str, Any]) -> str:
       document.querySelector("#attentionMeta").textContent = `${{(data.needs_attention || []).length}}명`;
       document.querySelector("#moverMeta").textContent = `${{(data.top_movers || []).length}}명`;
       renderStudentCards(data.students || []);
+      renderStudentTable(data.students || []);
+      const label = document.querySelector("#studentCountLabel");
+      if (label) label.textContent = `${{(data.students || []).length}}명`;
+    }}
+
+    function renderStudentTable(items) {{
+      const target = document.querySelector("#studentTable");
+      if (!target) return;
+      if (!items.length) {{
+        target.innerHTML = `<div class="student-empty">표시할 학생이 없습니다. 코스를 선택하거나 데이터를 동기화하세요.</div>`;
+        return;
+      }}
+      const palette = ["#dcf2e3","#e0e7ff","#fde4cf","#fce7f3","#dbeafe","#e9d5ff","#fed7aa"];
+      const ink     = ["#0b3d20","#3730a3","#92400e","#9d174d","#1e3a8a","#581c87","#9a3412"];
+      const hash = (s) => {{ let h = 0; for (const ch of String(s)) h = (h*31 + ch.charCodeAt(0)) & 0xffffffff; return Math.abs(h); }};
+      target.innerHTML = items.map((it) => {{
+        const name = it.student_name || "미등록";
+        const initial = name.slice(0, 1);
+        const i = hash(name) % palette.length;
+        const att = it.attendance_rate == null ? "-" : `${{Math.round(it.attendance_rate * 100)}}%`;
+        const score = it.score_avg == null ? "-" : `${{Number(it.score_avg).toFixed(1)}}점`;
+        // Derive a "homework submission" % from missing count (heuristic): 100 - min(100, missing * 12)
+        const hwPct = it.homework_submission_rate != null
+          ? Math.round(it.homework_submission_rate * 100)
+          : Math.max(0, 100 - Math.min(100, (it.homework_missing || 0) * 12));
+        const hwColor = hwPct >= 85 ? "var(--green)" : hwPct >= 70 ? "var(--warn)" : "var(--danger)";
+        return `
+          <button class="student-row" data-student-id="${{escapeHtml(it.student_classin_id || "")}}">
+            <span class="student-row-name">
+              <span class="student-avatar" style="background:${{palette[i]}}; color:${{ink[i]}}">${{escapeHtml(initial)}}</span>
+              <span class="student-name-text">${{escapeHtml(name)}}</span>
+            </span>
+            <span class="student-class-cell student-class-text">${{escapeHtml(it.class_name || "-")}}</span>
+            <span class="student-num">${{att}}</span>
+            <span class="hw-cell">
+              <span class="hw-bar"><span style="width:${{hwPct}}%; background:${{hwColor}}"></span></span>
+              <span class="hw-pct">${{hwPct}}%</span>
+            </span>
+            <span class="student-num">${{score}}</span>
+            <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </button>`;
+      }}).join("");
     }}
 
     function renderAttentionList(selector, items, movers) {{
@@ -5682,6 +5842,10 @@ def _render_shell(status: dict[str, Any]) -> str:
       async refreshDashboard() {{
         const data = await loadDashboard();
         writeLog("성과 대시보드를 갱신했습니다.", data.summary);
+      }},
+      async toggleStudentAnalytics() {{
+        const det = document.querySelector("#studentAnalytics");
+        if (det) det.open = !det.open;
       }},
       async writeMemo() {{
         const data = await callApi("/api/write-memo", {{
