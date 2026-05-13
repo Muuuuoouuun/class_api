@@ -5,6 +5,7 @@ venv/
 .env
 .env.*
 config.yaml
+profile.local.yaml
 samples/incoming/
 reports_out/
 local_data/

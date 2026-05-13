@@ -16,6 +16,8 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
+import yaml
+
 from .config import AppConfig, DEFAULT_CONFIG_PATH, load_config
 from .notify.dispatcher import load_notification_history, notification_history_path
 from .pipelines.daily import render_daily
@@ -84,19 +86,37 @@ def create_app(
             return {"ok": False, "items": [], "error": error}
         return {"ok": True, "items": _connection_payload(cfg)}
 
+    @app.get("/api/profile")
+    async def api_profile_get() -> dict:
+        return _profile_payload(state)
+
+    @app.post("/api/profile")
+    async def api_profile_post(request: Request) -> JSONResponse:
+        payload = await _json_payload(request)
+        saved = _save_profile(state, payload)
+        return _ok("프로필이 저장되었습니다. 변경된 자격증명은 다음 실행부터 반영됩니다.", profile=saved)
+
     @app.get("/api/missing-homework")
     async def api_missing_homework(
         window_hours: int = 24,
         lesson_id: str | None = None,
+        course_id: str | None = None,
     ) -> dict:
         if state.demo:
             return _demo_missing_homework_payload()
         cfg = _require_config(state)
+        lesson_filter = (lesson_id or "").strip() or None
+        course_filter = (course_id or "").strip() or None
         rows = query_missing_homework(
             cfg,
             window_hours=window_hours,
-            lesson_id=(lesson_id or "").strip() or None,
+            lesson_id=lesson_filter,
         )
+        if course_filter:
+            rows = [
+                row for row in rows
+                if str(row.get("course_classin_id") or "") == course_filter
+            ]
         history = load_notification_history(cfg, limit=300)
         report_contexts = build_report_contexts(cfg, rows)
         return _missing_homework_payload(
@@ -459,6 +479,114 @@ def _status_payload(
         },
         "connections": _connection_payload(cfg),
     }
+
+
+PROFILE_FIELDS = (
+    "academy_name",
+    "classin_school_id",
+    "classin_secret_key",
+    "classin_webhook_secret",
+    "notion_token",
+    "anthropic_api_key",
+    "aligo_api_key",
+    "aligo_user_id",
+    "aligo_sender",
+    "notify_mode",
+)
+SECRET_FIELDS = {
+    "classin_secret_key",
+    "classin_webhook_secret",
+    "notion_token",
+    "anthropic_api_key",
+    "aligo_api_key",
+}
+
+
+def _profile_path(state: "_ConfigState") -> Path:
+    base = state.config_path.parent if state.config_path else Path.cwd()
+    return base / "profile.local.yaml"
+
+
+def _read_profile(state: "_ConfigState") -> dict[str, str]:
+    path = _profile_path(state)
+    if not path.exists():
+        return {}
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {key: str(data.get(key) or "") for key in PROFILE_FIELDS if data.get(key)}
+
+
+def _mask_secret(value: str) -> str:
+    s = (value or "").strip()
+    if not s:
+        return ""
+    if len(s) <= 6:
+        return "•" * len(s)
+    return s[:3] + "•" * max(4, len(s) - 6) + s[-3:]
+
+
+def _profile_defaults_from_config(cfg: AppConfig | None) -> dict[str, str]:
+    if not cfg:
+        return {}
+    return {
+        "academy_name": cfg.academy.name,
+        "classin_school_id": cfg.classin.school_id,
+        "classin_secret_key": cfg.classin.secret_key,
+        "classin_webhook_secret": cfg.classin.webhook_secret,
+        "notion_token": cfg.notion.token,
+        "anthropic_api_key": cfg.anthropic.api_key,
+        "aligo_api_key": cfg.notify.aligo.api_key,
+        "aligo_user_id": cfg.notify.aligo.user_id,
+        "aligo_sender": cfg.notify.aligo.sender,
+        "notify_mode": cfg.notify.mode,
+    }
+
+
+def _profile_payload(state: "_ConfigState") -> dict[str, Any]:
+    saved = _read_profile(state)
+    if not saved:
+        cfg, _ = state.load()
+        saved = _profile_defaults_from_config(cfg)
+    masked: dict[str, str] = {}
+    filled: dict[str, bool] = {}
+    for key in PROFILE_FIELDS:
+        value = (saved.get(key) or "").strip()
+        filled[key] = bool(value)
+        if key in SECRET_FIELDS:
+            masked[key] = _mask_secret(value)
+        else:
+            masked[key] = value
+    return {
+        "ok": True,
+        "path": str(_profile_path(state)),
+        "exists": _profile_path(state).exists(),
+        "fields": masked,
+        "filled": filled,
+    }
+
+
+def _save_profile(state: "_ConfigState", payload: dict[str, Any]) -> dict[str, Any]:
+    path = _profile_path(state)
+    current = _read_profile(state)
+    next_values = dict(current)
+    for key in PROFILE_FIELDS:
+        if key not in payload:
+            continue
+        value = payload.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if not text:
+            next_values.pop(key, None)
+            continue
+        next_values[key] = text
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(next_values, allow_unicode=True, sort_keys=True), encoding="utf-8")
+    return _profile_payload(state)
 
 
 def _connection_payload(cfg: AppConfig | None) -> list[dict[str, Any]]:
@@ -2282,6 +2410,138 @@ def _render_shell(status: dict[str, Any]) -> str:
     @media (max-width: 760px) {{
       .msg-grid {{ grid-template-columns: 1fr; }}
     }}
+
+    /* Course combobox */
+    .combobox-label {{ position: relative; }}
+    .combobox {{
+      position: relative;
+      display: block;
+    }}
+    .combobox-clear {{
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+      width: 22px;
+      height: 22px;
+      min-height: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      border-radius: 50%;
+    }}
+    .combobox-clear:hover {{ background: var(--panel-soft); color: var(--text); }}
+    .combobox-menu {{
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 280px;
+      overflow-y: auto;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-soft);
+      z-index: 40;
+      padding: 4px;
+    }}
+    .combobox-item {{
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+      box-shadow: none;
+      min-height: 0;
+    }}
+    .combobox-item:hover {{ background: var(--panel-soft); }}
+    .combobox-item.selected {{ background: var(--primary-soft); border-color: var(--primary); }}
+    .combobox-item-title {{ font-size: 13.5px; font-weight: 600; }}
+    .combobox-item-sub {{ font-size: 11.5px; color: var(--muted); }}
+    .combobox-empty {{
+      padding: 12px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12.5px;
+    }}
+
+    /* Profile page */
+    .profile-panel {{ display: flex; flex-direction: column; gap: 16px; }}
+    .profile-status {{
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+    }}
+    .profile-status.ok {{ background: var(--primary-soft); color: var(--primary-strong); border: 1px solid var(--primary); }}
+    .profile-status.warn {{ background: #fff7e6; color: #92400e; border: 1px solid #f4c270; }}
+    .profile-section {{
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.7);
+      padding: 16px 18px;
+    }}
+    .profile-section-head {{ margin-bottom: 12px; }}
+    .profile-section-head h3 {{
+      margin: 0 0 4px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }}
+    .profile-section-head p {{
+      margin: 0;
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }}
+    .profile-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }}
+    @media (max-width: 720px) {{
+      .profile-grid {{ grid-template-columns: 1fr; }}
+    }}
+    .input-with-toggle {{
+      position: relative;
+      display: block;
+    }}
+    .input-with-toggle input {{ padding-right: 38px; }}
+    .input-toggle {{
+      position: absolute;
+      top: 50%;
+      right: 6px;
+      transform: translateY(-50%);
+      width: 26px;
+      height: 26px;
+      min-height: 0;
+      padding: 0;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      color: var(--muted);
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 50%;
+    }}
+    .input-toggle:hover {{ background: var(--panel-soft); color: var(--text); }}
+    .input-toggle.active {{ color: var(--primary-strong); }}
+    .profile-footnote {{
+      color: var(--muted);
+      font-size: 12px;
+      padding: 6px 4px 0;
+    }}
     label {{
       display: grid;
       gap: 6px;
@@ -3017,6 +3277,10 @@ def _render_shell(status: dict[str, Any]) -> str:
           <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14c3 0 6 1.8 6 5"/></svg></span>
           <span class="nav-label">학생</span>
         </button>
+        <button data-tab="profile">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></span>
+          <span class="nav-label">내 설정</span>
+        </button>
       </nav>
       <div class="sidebar-profile">
         <span class="profile-avatar" aria-hidden="true">{title_initial}</span>
@@ -3195,7 +3459,14 @@ def _render_shell(status: dict[str, Any]) -> str:
           </div>
           <div class="control-grid">
             <label>조회 시간(시간)<input id="windowHours" type="number" min="1" step="1" value="24"></label>
-            <label>수업 ID<input id="lessonId" type="text" placeholder="예: LSN-2026-04-21-1"></label>
+            <label class="combobox-label">코스
+              <div class="combobox" id="lessonCombobox">
+                <input id="lessonComboboxInput" type="search" placeholder="코스명 또는 ID로 검색 (전체 = 비움)" autocomplete="off">
+                <input id="lessonId" type="hidden">
+                <button type="button" class="combobox-clear" id="lessonComboboxClear" aria-label="선택 해제" hidden>×</button>
+                <div class="combobox-menu" id="lessonComboboxMenu" hidden role="listbox"></div>
+              </div>
+            </label>
             <button data-action="refreshMissing" class="secondary">조건으로 검색</button>
             <button data-action="resetBulkFilters" class="secondary">조건 초기화</button>
           </div>
@@ -3508,6 +3779,99 @@ def _render_shell(status: dict[str, Any]) -> str:
         <div id="studentCards" class="student-card-grid"></div>
       </div>
     </section>
+
+    <section id="tab-profile" class="tab-view">
+      <header class="page-head">
+        <div>
+          <div class="page-eyebrow">개인 설정</div>
+          <h2 class="page-title">내 ClassIn 자격증명</h2>
+          <div class="page-sub">UID·시크릿·연동 키를 로컬에 저장합니다. <code id="profilePath">profile.local.yaml</code></div>
+        </div>
+        <div class="page-actions">
+          <button class="secondary" data-action="loadProfile">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 5v5h-5"/></svg>
+            다시 불러오기
+          </button>
+          <button data-action="saveProfile" id="saveProfileBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+            저장
+          </button>
+        </div>
+      </header>
+
+      <div class="panel hero-panel profile-panel">
+        <div class="profile-status" id="profileStatus">불러오는 중...</div>
+
+        <div class="profile-section">
+          <div class="profile-section-head">
+            <h3>학원 정보</h3>
+            <p>리포트·메시지 서명에 사용됩니다.</p>
+          </div>
+          <div class="profile-grid">
+            <label>학원 이름<input id="pf_academy_name" type="text" placeholder="예: 수원 그린에듀 학원"></label>
+          </div>
+        </div>
+
+        <div class="profile-section">
+          <div class="profile-section-head">
+            <h3>ClassIn API 자격증명</h3>
+            <p>eeo.cn 관리자 콘솔의 SID와 v2 서명 시크릿을 입력하세요.</p>
+          </div>
+          <div class="profile-grid">
+            <label>School ID (UID)<input id="pf_classin_school_id" type="text" placeholder="예: 123456" autocomplete="off"></label>
+            <label>Secret Key
+              <span class="input-with-toggle">
+                <input id="pf_classin_secret_key" type="password" placeholder="저장된 값은 가려져 표시됩니다" autocomplete="off">
+                <button type="button" class="input-toggle" data-toggle-target="pf_classin_secret_key" aria-label="비밀 표시 토글">👁</button>
+              </span>
+            </label>
+            <label>Webhook Secret (SafeKey)
+              <span class="input-with-toggle">
+                <input id="pf_classin_webhook_secret" type="password" placeholder="Datasub SafeKey" autocomplete="off">
+                <button type="button" class="input-toggle" data-toggle-target="pf_classin_webhook_secret" aria-label="비밀 표시 토글">👁</button>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="profile-section">
+          <div class="profile-section-head">
+            <h3>외부 연동 (선택)</h3>
+            <p>비워두면 기존 config.yaml 값이 그대로 사용됩니다.</p>
+          </div>
+          <div class="profile-grid">
+            <label>Notion 토큰
+              <span class="input-with-toggle">
+                <input id="pf_notion_token" type="password" placeholder="secret_..." autocomplete="off">
+                <button type="button" class="input-toggle" data-toggle-target="pf_notion_token">👁</button>
+              </span>
+            </label>
+            <label>Anthropic API Key
+              <span class="input-with-toggle">
+                <input id="pf_anthropic_api_key" type="password" placeholder="sk-ant-..." autocomplete="off">
+                <button type="button" class="input-toggle" data-toggle-target="pf_anthropic_api_key">👁</button>
+              </span>
+            </label>
+            <label>알림 모드<select id="pf_notify_mode">
+              <option value="dry_run">dry_run (미발송)</option>
+              <option value="live">live (실발송)</option>
+            </select></label>
+            <label>알리고 API Key
+              <span class="input-with-toggle">
+                <input id="pf_aligo_api_key" type="password" placeholder="알리고 인증키" autocomplete="off">
+                <button type="button" class="input-toggle" data-toggle-target="pf_aligo_api_key">👁</button>
+              </span>
+            </label>
+            <label>알리고 User ID<input id="pf_aligo_user_id" type="text" placeholder="알리고 가입 ID" autocomplete="off"></label>
+            <label>알리고 발신번호<input id="pf_aligo_sender" type="text" placeholder="01012345678" autocomplete="off"></label>
+          </div>
+        </div>
+
+        <div class="profile-footnote">
+          저장 위치: <code id="profilePathFoot">profile.local.yaml</code> · 비밀 필드는 가려서 표시되며 입력값이 비어 있으면 기존 값을 유지합니다.
+        </div>
+      </div>
+    </section>
       </main>
     </section>
   </div>
@@ -3523,6 +3887,28 @@ def _render_shell(status: dict[str, Any]) -> str:
     let courseOptions = [];
     let studentOptions = [];
     let optionSearchTimer = null;
+    let lessonCourseValue = "";
+    let lessonComboboxOpen = false;
+    const PROFILE_FIELDS = [
+      "academy_name",
+      "classin_school_id",
+      "classin_secret_key",
+      "classin_webhook_secret",
+      "notion_token",
+      "anthropic_api_key",
+      "aligo_api_key",
+      "aligo_user_id",
+      "aligo_sender",
+      "notify_mode",
+    ];
+    const PROFILE_SECRET_FIELDS = new Set([
+      "classin_secret_key",
+      "classin_webhook_secret",
+      "notion_token",
+      "anthropic_api_key",
+      "aligo_api_key",
+    ]);
+    let profileFilled = {{}};
 
     const ACADEMY_NAME = (status && status.academy) ? status.academy : "Classin++ 학원";
     const BULK_TEMPLATES = {{
@@ -3722,8 +4108,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
       const params = new URLSearchParams();
       params.set("window_hours", document.querySelector("#windowHours").value || "24");
-      const lessonId = document.querySelector("#lessonId").value.trim();
-      if (lessonId) params.set("lesson_id", lessonId);
+      const courseId = (document.querySelector("#lessonId").value || "").trim();
+      if (courseId) params.set("course_id", courseId);
 
       const missingResponse = await fetch(`/api/missing-homework?${{params.toString()}}`);
       const missingData = await missingResponse.json();
@@ -3769,6 +4155,111 @@ def _render_shell(status: dict[str, Any]) -> str:
       ];
       select.innerHTML = rows.join("");
       select.value = [...select.options].some((option) => option.value === current) ? current : "";
+      syncLessonComboboxFromState();
+    }}
+
+    function lessonOptionLabel(item) {{
+      if (!item) return "";
+      return item.label || item.course_name || item.course_id || "";
+    }}
+
+    function findCourseOption(id) {{
+      if (!id) return null;
+      return courseOptions.find((opt) => String(opt.course_id) === String(id)) || null;
+    }}
+
+    function syncLessonComboboxFromState() {{
+      const input = document.querySelector("#lessonComboboxInput");
+      const hidden = document.querySelector("#lessonId");
+      const clear = document.querySelector("#lessonComboboxClear");
+      if (!input || !hidden) return;
+      hidden.value = lessonCourseValue;
+      const opt = findCourseOption(lessonCourseValue);
+      if (lessonCourseValue) {{
+        input.value = opt ? lessonOptionLabel(opt) : lessonCourseValue;
+        if (clear) clear.hidden = false;
+      }} else {{
+        if (document.activeElement !== input) input.value = "";
+        if (clear) clear.hidden = true;
+      }}
+    }}
+
+    function setLessonCourse(courseId) {{
+      lessonCourseValue = courseId || "";
+      lessonComboboxOpen = false;
+      const menu = document.querySelector("#lessonComboboxMenu");
+      if (menu) menu.hidden = true;
+      syncLessonComboboxFromState();
+    }}
+
+    function clearLessonCourse() {{
+      setLessonCourse("");
+    }}
+
+    function renderLessonComboboxMenu(query) {{
+      const menu = document.querySelector("#lessonComboboxMenu");
+      if (!menu) return;
+      const needle = (query || "").trim().toLowerCase();
+      const matches = (courseOptions || []).filter((opt) => {{
+        if (!needle) return true;
+        const hay = `${{opt.course_id || ""}} ${{lessonOptionLabel(opt)}}`.toLowerCase();
+        return hay.includes(needle);
+      }}).slice(0, 12);
+      if (!matches.length) {{
+        menu.innerHTML = `<div class="combobox-empty">${{courseOptions.length ? "일치하는 코스가 없습니다." : "아직 동기화된 코스가 없습니다."}}</div>`;
+      }} else {{
+        menu.innerHTML = matches.map((opt) => {{
+          const selected = String(opt.course_id) === String(lessonCourseValue);
+          const sub = [opt.lesson_count ? `${{opt.lesson_count}}회 수업` : "", opt.latest_date ? `최근 ${{escapeHtml(formatDate(opt.latest_date))}}` : ""].filter(Boolean).join(" · ");
+          return `
+            <button type="button" class="combobox-item ${{selected ? "selected" : ""}}" role="option" data-course-id="${{escapeHtml(opt.course_id)}}">
+              <span class="combobox-item-title">${{escapeHtml(lessonOptionLabel(opt))}}</span>
+              ${{sub ? `<span class="combobox-item-sub">${{sub}}</span>` : ""}}
+            </button>`;
+        }}).join("");
+      }}
+      menu.hidden = false;
+      lessonComboboxOpen = true;
+    }}
+
+    async function loadProfile() {{
+      const response = await fetch("/api/profile");
+      const data = await response.json();
+      if (!response.ok || data.ok === false) {{
+        throw new Error(data.detail || "프로필을 불러오지 못했습니다.");
+      }}
+      applyProfileToForm(data);
+      return data;
+    }}
+
+    function applyProfileToForm(data) {{
+      const fields = data.fields || {{}};
+      profileFilled = data.filled || {{}};
+      PROFILE_FIELDS.forEach((field) => {{
+        const el = document.querySelector(`#pf_${{field}}`);
+        if (!el) return;
+        const value = fields[field] || "";
+        if (PROFILE_SECRET_FIELDS.has(field)) {{
+          el.value = "";
+          el.placeholder = profileFilled[field] ? `저장된 값: ${{value}} (비워두면 유지)` : el.dataset.placeholderDefault || el.placeholder;
+        }} else {{
+          el.value = value;
+        }}
+      }});
+      const status = document.querySelector("#profileStatus");
+      if (status) {{
+        if (data.exists) {{
+          status.textContent = `${{data.path}} 에 저장된 값으로 채워졌습니다.`;
+          status.className = "profile-status ok";
+        }} else {{
+          status.textContent = "아직 저장된 프로필이 없습니다. 값을 입력하고 [저장]을 눌러주세요.";
+          status.className = "profile-status warn";
+        }}
+      }}
+      const path = document.querySelector("#profilePath");
+      const foot = document.querySelector("#profilePathFoot");
+      if (path) path.textContent = data.path || "profile.local.yaml";
+      if (foot) foot.textContent = data.path || "profile.local.yaml";
     }}
 
     function renderStudentSelect(selected) {{
@@ -4443,7 +4934,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         }}
         const payload = {{
           window_hours: document.querySelector("#windowHours").value,
-          lesson_id: document.querySelector("#lessonId").value,
+          course_id: document.querySelector("#lessonId").value,
           template,
           preset: bulkPreset,
           channel: bulkChannel,
@@ -4462,11 +4953,26 @@ def _render_shell(status: dict[str, Any]) -> str:
       async resetBulkFilters() {{
         const win = document.querySelector("#windowHours");
         if (win) win.value = 24;
-        const lesson = document.querySelector("#lessonId");
-        if (lesson) lesson.value = "";
+        clearLessonCourse();
         activeMissingFilter = "all";
         bulkSelection.clear();
         renderMissing(missingState);
+      }},
+      async loadProfile() {{
+        await loadProfile();
+      }},
+      async saveProfile() {{
+        const payload = {{}};
+        PROFILE_FIELDS.forEach((field) => {{
+          const el = document.querySelector(`#pf_${{field}}`);
+          if (!el) return;
+          const value = (el.value || "").trim();
+          if (PROFILE_SECRET_FIELDS.has(field) && !value) return;
+          payload[field] = value;
+        }});
+        const data = await callApi("/api/profile", payload);
+        writeLog(data.message, data);
+        if (data.profile) applyProfileToForm(data.profile);
       }},
       async aiSuggestTemplate() {{
         const items = (missingState.items || []).filter(itemMatchesFilter);
@@ -4582,6 +5088,7 @@ def _render_shell(status: dict[str, Any]) -> str:
           schedule: "스케줄 자동 등록",
           report: "리포트 빌더",
           students: "학생",
+          profile: "내 설정",
         }};
         document.querySelectorAll(".sidenav button[data-tab]").forEach((item) => {{
           item.classList.toggle("active", item.dataset.tab === targetTab);
@@ -4593,6 +5100,13 @@ def _render_shell(status: dict[str, Any]) -> str:
         if (targetTab === "students") {{
           try {{
             await loadDashboard();
+          }} catch (error) {{
+            writeLog(error.message);
+          }}
+        }}
+        if (targetTab === "profile") {{
+          try {{
+            await loadProfile();
           }} catch (error) {{
             writeLog(error.message);
           }}
@@ -4651,6 +5165,69 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     document.querySelector("#dashboardDays").addEventListener("change", () => {{
       loadDashboard().catch((error) => writeLog(error.message));
+    }});
+
+    const lessonComboboxInput = document.querySelector("#lessonComboboxInput");
+    const lessonComboboxMenu = document.querySelector("#lessonComboboxMenu");
+    const lessonComboboxClear = document.querySelector("#lessonComboboxClear");
+    if (lessonComboboxInput) {{
+      lessonComboboxInput.addEventListener("focus", () => {{
+        renderLessonComboboxMenu(lessonComboboxInput.value);
+      }});
+      lessonComboboxInput.addEventListener("input", (event) => {{
+        renderLessonComboboxMenu(event.target.value);
+        clearTimeout(optionSearchTimer);
+        optionSearchTimer = setTimeout(() => {{
+          loadDashboardOptions("course", event.target.value).then(() => {{
+            if (lessonComboboxOpen) renderLessonComboboxMenu(lessonComboboxInput.value);
+          }}).catch((error) => writeLog(error.message));
+        }}, 220);
+      }});
+      lessonComboboxInput.addEventListener("blur", () => {{
+        setTimeout(() => {{
+          const menu = document.querySelector("#lessonComboboxMenu");
+          if (menu) menu.hidden = true;
+          lessonComboboxOpen = false;
+          syncLessonComboboxFromState();
+        }}, 150);
+      }});
+      lessonComboboxInput.addEventListener("keydown", (event) => {{
+        if (event.key === "Escape") {{
+          event.target.blur();
+        }} else if (event.key === "Enter") {{
+          event.preventDefault();
+          const first = document.querySelector("#lessonComboboxMenu .combobox-item");
+          if (first) first.click();
+        }}
+      }});
+    }}
+    if (lessonComboboxMenu) {{
+      lessonComboboxMenu.addEventListener("mousedown", (event) => {{
+        event.preventDefault();
+      }});
+      lessonComboboxMenu.addEventListener("click", (event) => {{
+        const item = event.target.closest(".combobox-item");
+        if (!item) return;
+        setLessonCourse(item.dataset.courseId);
+        const refreshAction = actions.refreshMissing;
+        if (refreshAction) refreshAction().catch((error) => writeLog(error.message));
+      }});
+    }}
+    if (lessonComboboxClear) {{
+      lessonComboboxClear.addEventListener("click", () => {{
+        clearLessonCourse();
+        const refreshAction = actions.refreshMissing;
+        if (refreshAction) refreshAction().catch((error) => writeLog(error.message));
+      }});
+    }}
+
+    document.addEventListener("click", (event) => {{
+      const toggle = event.target.closest("[data-toggle-target]");
+      if (!toggle) return;
+      const target = document.querySelector(`#${{toggle.dataset.toggleTarget}}`);
+      if (!target) return;
+      target.type = target.type === "password" ? "text" : "password";
+      toggle.classList.toggle("active", target.type === "text");
     }});
 
     const templatePresetsEl = document.querySelector("#templatePresets");
@@ -4712,8 +5289,12 @@ def _render_shell(status: dict[str, Any]) -> str:
     Promise.all([
       loadDashboardOptions("course", ""),
       loadDashboardOptions("student", ""),
-    ]).then(() => loadDashboard()).catch((error) => writeLog(error.message));
+    ]).then(() => {{
+      syncLessonComboboxFromState();
+      return loadDashboard();
+    }}).catch((error) => writeLog(error.message));
     loadSituation().catch((error) => writeLog(error.message));
+    syncLessonComboboxFromState();
   </script>
 </body>
 </html>"""
