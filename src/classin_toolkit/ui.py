@@ -2163,6 +2163,251 @@ def _render_shell(status: dict[str, Any]) -> str:
       .report-format-bar {{ flex-direction: column; align-items: flex-start; }}
       .report-metric-grid {{ grid-template-columns: 1fr 1fr; }}
     }}
+
+    /* ============ Schedule auto-register (Classin++ stage flow) ============ */
+    .sched-stepper {{
+      list-style: none;
+      padding: 0;
+      margin: 0 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }}
+    .sched-stepper li {{ display: inline-flex; align-items: center; gap: 8px; }}
+    .sched-stepper li:not(:last-child)::after {{
+      content: "";
+      flex: 0 0 28px;
+      height: 2px;
+      background: #eef2eb;
+      border-radius: 1px;
+      margin-left: 8px;
+    }}
+    .sched-stepper .step-pill {{
+      padding: 7px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      background: #f1f5f0;
+      color: var(--muted);
+      letter-spacing: -0.01em;
+    }}
+    .sched-stepper li.active .step-pill {{ background: var(--green); color: #fff; }}
+    .sched-stepper li.passed .step-pill {{ background: var(--green-3); color: var(--green-2); }}
+    .sched-stepper li.passed::after {{ background: var(--green-3); }}
+
+    .sched-stage {{ animation: fadeIn .22s ease; }}
+    .sched-card {{
+      background: var(--surface, #fff);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 32px 32px;
+    }}
+
+    /* analyzing */
+    .sched-analyzing-grid {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      align-items: center;
+    }}
+    .sched-paper-mock {{
+      position: relative;
+      aspect-ratio: 4 / 3;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: repeating-linear-gradient(0deg, #fffef8 0 22px, #f1eedf 22px 23px);
+      padding: 20px;
+      color: #333;
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      font-size: 10px;
+    }}
+    .sched-paper-title {{ text-align: center; font-weight: 700; font-size: 13px; margin-bottom: 8px; }}
+    .sched-paper-rows {{ display: flex; flex-direction: column; gap: 2px; }}
+    .sched-paper-rows > div {{
+      display: grid;
+      grid-template-columns: 30px 80px 1fr 50px;
+      gap: 6px;
+      padding: 3px 0;
+    }}
+    .sched-scan-glow {{
+      position: absolute;
+      left: 0; right: 0;
+      height: 60px;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(22,163,74,0) 0%, rgba(22,163,74,0.35) 50%, rgba(22,163,74,0) 100%);
+      transform: translateY(-30px);
+      top: 0;
+      transition: top .12s linear;
+    }}
+    .sched-scan-line {{
+      position: absolute;
+      left: 0; right: 0;
+      top: 0;
+      height: 2px;
+      background: var(--green);
+      box-shadow: 0 0 12px var(--green);
+      transition: top .12s linear;
+    }}
+    .sched-analyzing-title {{ margin: 14px 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }}
+    .sched-analyzing-desc {{ margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.6; }}
+    .sched-progress {{ margin-top: 24px; }}
+    .sched-progress-head {{
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }}
+    .sched-progress-head span:last-child {{ color: var(--green-2); font-variant-numeric: tabular-nums; }}
+    .sched-progress .kpi-bar {{ height: 10px; }}
+    .sched-checklist {{
+      list-style: none;
+      padding: 0;
+      margin: 18px 0 0;
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.8;
+    }}
+    .sched-checklist li {{ opacity: 0; transition: opacity .25s ease; }}
+    .sched-checklist li.on {{ opacity: 1; color: var(--ink-2); }}
+
+    /* review */
+    .sched-review-banner {{
+      background: var(--surface, #fff);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      font-size: 13.5px;
+      color: var(--ink-2);
+    }}
+    .sched-review-banner svg {{ color: var(--green-2); flex-shrink: 0; }}
+    .sched-review-banner > div {{ flex: 1; }}
+    .sched-review-banner b {{ color: var(--ink); }}
+
+    .sched-day-grid {{
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }}
+    .sched-day-col {{
+      background: var(--surface, #fff);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px;
+      min-height: 240px;
+    }}
+    .sched-day-col-head {{
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: var(--ink);
+    }}
+    .sched-day-col-head .count {{ color: var(--muted-2); font-weight: 500; }}
+    .sched-day-col-body {{ display: flex; flex-direction: column; gap: 8px; }}
+    .sched-day-empty {{ font-size: 12px; color: var(--muted-2); padding: 20px 0; text-align: center; }}
+    .sched-day-item {{
+      position: relative;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--green-4);
+      border: 1px solid var(--green-3);
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease;
+      text-align: left;
+      width: 100%;
+      font: inherit;
+      color: inherit;
+      box-shadow: none;
+      min-height: auto;
+    }}
+    .sched-day-item:hover {{
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-soft);
+      background: var(--green-4);
+    }}
+    .sched-day-item.low {{
+      background: var(--warn-bg);
+      border-color: #fde6a8;
+    }}
+    .sched-day-item.excluded {{ opacity: .4; }}
+    .sched-day-item-time {{
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--green-2);
+      margin-bottom: 3px;
+      font-variant-numeric: tabular-nums;
+    }}
+    .sched-day-item.low .sched-day-item-time {{ color: #92520a; }}
+    .sched-day-item-class {{
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 1.3;
+      margin-bottom: 4px;
+      color: var(--ink);
+    }}
+    .sched-day-item-meta {{ font-size: 11px; color: var(--muted); }}
+    .sched-day-item-flag {{
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      color: var(--warn);
+    }}
+
+    .sched-review-footer {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }}
+    .sched-review-summary {{ font-size: 13px; color: var(--muted); }}
+    .sched-review-summary b {{ color: var(--ink); }}
+
+    /* done */
+    .sched-done {{
+      max-width: 560px;
+      margin: 40px auto;
+      background: var(--surface, #fff);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 48px;
+      text-align: center;
+    }}
+    .sched-done-check {{
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--green-3);
+      color: var(--green-2);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+    }}
+    .sched-done-title {{ margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }}
+    .sched-done-title span {{ font-variant-numeric: tabular-nums; color: var(--green-2); }}
+    .sched-done-desc {{ margin: 8px 0 0; font-size: 14px; color: var(--muted); line-height: 1.6; }}
+    .sched-done-actions {{ margin-top: 24px; display: flex; justify-content: center; gap: 10px; }}
+
+    @media (max-width: 1100px) {{
+      .sched-analyzing-grid {{ grid-template-columns: 1fr; }}
+      .sched-day-grid {{ grid-template-columns: repeat(3, 1fr); }}
+    }}
+    @media (max-width: 600px) {{
+      .sched-card {{ padding: 18px; }}
+      .sched-day-grid {{ grid-template-columns: 1fr 1fr; }}
+      .sched-review-footer {{ flex-direction: column; align-items: stretch; }}
+    }}
     .dropzone {{
       border: 2px dashed var(--primary);
       border-radius: var(--radius-lg);
@@ -4463,43 +4708,113 @@ def _render_shell(status: dict[str, Any]) -> str:
     </section>
 
     <section id="tab-schedule" class="tab-view">
-      <header class="page-head">
+      <header class="dash-greeting">
         <div>
-          <div class="page-eyebrow">스케줄 관리</div>
-          <h2 class="page-title">스케줄표 사진으로 한 번에 등록</h2>
-          <div class="page-sub">종이 시간표를 찍어 올리면 AI가 수업·강사·시간을 인식해 ClassIn 일정으로 변환합니다.</div>
+          <div class="dash-eyebrow">스케줄 관리</div>
+          <h1 class="dash-title">스케줄표 사진으로 한 번에 등록</h1>
+          <div class="dash-sub">종이 시간표를 찍어 올리면 AI가 수업·강사·시간을 인식해 Classin 일정으로 변환합니다.</div>
         </div>
       </header>
 
-      <div class="panel hero-panel">
-        <div class="dropzone" id="scheduleDropzone">
-          <div class="dropzone-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5L5 20"/></svg>
+      <ol class="sched-stepper" id="schedStepper" aria-label="스케줄 등록 단계">
+        <li data-stage="upload" class="active"><span class="step-pill">① 업로드</span></li>
+        <li data-stage="analyzing"><span class="step-pill">② AI 인식</span></li>
+        <li data-stage="review"><span class="step-pill">③ 확인 &amp; 수정</span></li>
+        <li data-stage="done"><span class="step-pill">④ 등록 완료</span></li>
+      </ol>
+
+      <div class="sched-stage" data-sched-view="upload" aria-current="step">
+        <div class="sched-card">
+          <div class="dropzone" id="scheduleDropzone">
+            <div class="dropzone-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5L5 20"/></svg>
+            </div>
+            <div class="dropzone-title">스케줄표 이미지를 끌어다 놓으세요</div>
+            <div class="dropzone-desc">JPG, PNG, HEIC · 최대 10MB · 종이 시간표 사진도 인식돼요</div>
+            <button class="dropzone-btn" data-action="scheduleUpload">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+              이미지 선택
+            </button>
+            <div class="dropzone-alt">또는 텍스트로 붙여넣기 · 엑셀(CSV) 업로드</div>
           </div>
-          <div class="dropzone-title">스케줄표 이미지를 끌어다 놓으세요</div>
-          <div class="dropzone-desc">JPG, PNG, HEIC · 최대 10MB · 종이 시간표 사진도 인식돼요</div>
-          <button class="dropzone-btn" data-action="scheduleUpload">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
-            이미지 선택
-          </button>
-          <div class="dropzone-alt">또는 텍스트로 붙여넣기 · 엑셀(CSV) 업로드</div>
+
+          <details class="schedule-paste" id="scheduleTextDetails">
+            <summary>텍스트로 붙여넣기</summary>
+            <textarea id="schedulePaste" placeholder="월 16:00-17:30 중2 수학 심화 A 박정현 301호&#10;월 19:00-20:30 중3 영어 RC 이수민 302호&#10;화 16:00-17:30 고1 통합과학 김도현 401호"></textarea>
+            <div class="actions" style="margin-top:10px">
+              <button data-action="parseSchedule">AI로 인식하기</button>
+              <button data-action="parseScheduleReset" class="secondary">지우기</button>
+            </div>
+          </details>
+
+          <div class="schedule-hint">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg>
+            <div>인식 후 <b>요일·시간·강사·교실</b>이 자동 분류되며, 기존 클래스에 매칭됩니다. 확인 단계에서 한 번에 수정할 수 있어요.</div>
+            <span class="badge">이미지 OCR — 곧 제공</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sched-stage" data-sched-view="analyzing" hidden>
+        <div class="sched-card">
+          <div class="sched-analyzing-grid">
+            <div class="sched-paper-mock" aria-hidden="true">
+              <div class="sched-paper-title">📋 2026년 5월 시간표</div>
+              <div class="sched-paper-rows" id="schedPaperRows"></div>
+              <div class="sched-scan-glow" id="schedScanGlow"></div>
+              <div class="sched-scan-line" id="schedScanLine"></div>
+            </div>
+            <div>
+              <span class="ai-on-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg>AI가 인식 중</span>
+              <h2 class="sched-analyzing-title">스케줄표를 읽고 있어요</h2>
+              <p class="sched-analyzing-desc">요일 · 시간 · 클래스명 · 강사 · 교실을 분리하고, 기존 클래스에 매칭하고 있습니다.</p>
+              <div class="sched-progress">
+                <div class="sched-progress-head"><span>인식 진행률</span><span id="schedProgressPct">0%</span></div>
+                <div class="kpi-bar"><span class="kpi-bar-fill" id="schedProgressFill" style="width:0%"></span></div>
+              </div>
+              <ul class="sched-checklist" id="schedChecklist">
+                <li data-at="20">✓ 표 구조 분석 완료</li>
+                <li data-at="45">✓ 9개 수업 항목 추출</li>
+                <li data-at="70">✓ 기존 클래스 4개와 매칭</li>
+                <li data-at="90">✓ 강사 일정 충돌 검사</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sched-stage" data-sched-view="review" hidden>
+        <div class="sched-review-banner">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg>
+          <div><b id="schedReviewCount">0개 수업</b>을 인식했어요. <span id="schedReviewMeta">평균 신뢰도 -</span></div>
+          <button class="secondary" data-action="schedRetry" style="min-height:32px; padding:6px 14px; font-size:13px;">다시 업로드</button>
         </div>
 
-        <details class="schedule-paste">
-          <summary>텍스트로 붙여넣기</summary>
-          <textarea id="schedulePaste" placeholder="월 16:00-17:30 중2 수학 심화 A 박정현 301호&#10;월 19:00-20:30 중3 영어 RC 이수민 302호..."></textarea>
-          <div class="actions" style="margin-top:10px">
-            <button data-action="parseSchedule">AI로 인식하기</button>
-            <button data-action="parseScheduleReset" class="secondary">지우기</button>
+        <div class="sched-day-grid" id="schedDayGrid"></div>
+
+        <div class="sched-review-footer">
+          <div class="sched-review-summary" id="schedReviewSummary">포함 0개 / 총 0개 수업</div>
+          <div style="display:flex; gap:8px;">
+            <button class="secondary" data-action="schedSaveDraft">초안으로 저장</button>
+            <button data-action="schedConfirm" id="schedConfirmBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+              Classin에 일괄 등록
+            </button>
           </div>
-        </details>
+        </div>
+      </div>
 
-        <div id="scheduleReview" class="schedule-review" hidden></div>
-
-        <div class="schedule-hint">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg>
-          <div>인식 후 <b>요일·시간·강사·교실</b>이 자동 분류되며, 기존 클래스에 매칭됩니다. 확인 단계에서 한 번에 수정할 수 있어요.</div>
-          <span class="badge">이미지 OCR — 곧 제공</span>
+      <div class="sched-stage" data-sched-view="done" hidden>
+        <div class="sched-done">
+          <div class="sched-done-check">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          </div>
+          <h2 class="sched-done-title"><span id="schedDoneCount">0</span>개 수업이 자동으로 등록됐어요</h2>
+          <p class="sched-done-desc">Classin 캘린더에 반복 일정으로 추가되었습니다. 학생 알림도 함께 발송했어요.</p>
+          <div class="sched-done-actions">
+            <button class="secondary" data-action="schedRetry">다른 표 업로드</button>
+            <button data-action="schedRetry">캘린더에서 보기</button>
+          </div>
         </div>
       </div>
     </section>
@@ -5161,6 +5476,125 @@ def _render_shell(status: dict[str, Any]) -> str:
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted-2)"><path d="M9 6l6 6-6 6"/></svg>
           </button>`;
       }}).join("");
+    }}
+
+    /* ---- Schedule stage machine ---- */
+    let scheduleStage = "upload";
+    let scheduleItems = [];
+    let scheduleProgressTimer = null;
+
+    function setScheduleStage(next) {{
+      scheduleStage = next;
+      document.querySelectorAll("#schedStepper li").forEach((li) => {{
+        const order = ["upload", "analyzing", "review", "done"];
+        const liIdx = order.indexOf(li.dataset.stage);
+        const cur = order.indexOf(next);
+        li.classList.toggle("active", liIdx === cur);
+        li.classList.toggle("passed", liIdx < cur);
+      }});
+      document.querySelectorAll("[data-sched-view]").forEach((el) => {{
+        el.hidden = el.dataset.schedView !== next;
+      }});
+    }}
+
+    function renderSchedPaperRows(items) {{
+      const target = document.querySelector("#schedPaperRows");
+      if (!target) return;
+      const rows = (items.length ? items : [
+        {{day:"월", time:"16:00-17:30", class_name:"중2 수학", room:"301호"}},
+        {{day:"월", time:"19:00-20:30", class_name:"중3 영어", room:"302호"}},
+        {{day:"화", time:"16:00-17:30", class_name:"고1 통합과학", room:"401호"}},
+        {{day:"화", time:"19:00-20:30", class_name:"고1 수학", room:"402호"}},
+        {{day:"수", time:"16:00-17:30", class_name:"중2 영어", room:"302호"}},
+        {{day:"목", time:"16:00-17:30", class_name:"중3 수학", room:"301호"}},
+        {{day:"금", time:"19:00-20:30", class_name:"고2 수학", room:"402호"}},
+      ]).slice(0, 7);
+      target.innerHTML = rows.map((r) => `
+        <div>
+          <span>${{escapeHtml(r.day)}}</span>
+          <span>${{escapeHtml((r.time || "").split("-")[0])}}</span>
+          <span>${{escapeHtml(r.class_name || "")}}</span>
+          <span>${{escapeHtml(r.room || "")}}</span>
+        </div>
+      `).join("");
+    }}
+
+    function startScheduleAnalyzing(onComplete) {{
+      setScheduleStage("analyzing");
+      renderSchedPaperRows(scheduleItems);
+      const pct = document.querySelector("#schedProgressPct");
+      const fill = document.querySelector("#schedProgressFill");
+      const glow = document.querySelector("#schedScanGlow");
+      const line = document.querySelector("#schedScanLine");
+      const checklist = document.querySelectorAll("#schedChecklist li");
+      let progress = 0;
+      if (scheduleProgressTimer) clearInterval(scheduleProgressTimer);
+      scheduleProgressTimer = setInterval(() => {{
+        progress = Math.min(100, progress + 5);
+        if (pct) pct.textContent = `${{progress}}%`;
+        if (fill) fill.style.width = `${{progress}}%`;
+        if (line) line.style.top = `${{progress}}%`;
+        if (glow) glow.style.top = `calc(${{progress}}% - 30px)`;
+        checklist.forEach((li) => {{
+          const at = Number(li.dataset.at || 0);
+          li.classList.toggle("on", progress >= at);
+        }});
+        if (progress >= 100) {{
+          clearInterval(scheduleProgressTimer);
+          scheduleProgressTimer = null;
+          setTimeout(() => {{
+            if (onComplete) onComplete();
+            renderScheduleReview();
+            setScheduleStage("review");
+          }}, 350);
+        }}
+      }}, 90);
+    }}
+
+    function renderScheduleReview() {{
+      const days = ["월", "화", "수", "목", "금", "토"];
+      const grid = document.querySelector("#schedDayGrid");
+      if (!grid) return;
+      const conf = (it) => (it.confidence == null ? 0.95 : Number(it.confidence));
+      const avgConf = scheduleItems.length
+        ? scheduleItems.reduce((s, it) => s + conf(it), 0) / scheduleItems.length
+        : 0;
+      const lowCount = scheduleItems.filter((it) => conf(it) < 0.9).length;
+      const countEl = document.querySelector("#schedReviewCount");
+      const metaEl = document.querySelector("#schedReviewMeta");
+      if (countEl) countEl.textContent = `${{scheduleItems.length}}개 수업`;
+      if (metaEl) {{
+        const avg = `평균 신뢰도 ${{Math.round(avgConf * 100)}}%`;
+        metaEl.textContent = lowCount > 0 ? `${{avg}} · 노란색 표시된 ${{lowCount}}건은 확인이 필요해요.` : avg;
+      }}
+      grid.innerHTML = days.map((d) => {{
+        const dayItems = scheduleItems.filter((it) => (it.day || "") === d);
+        return `
+          <div class="sched-day-col">
+            <div class="sched-day-col-head">${{d}}요일 <span class="count">· ${{dayItems.length}}</span></div>
+            <div class="sched-day-col-body">
+              ${{dayItems.length === 0
+                ? `<div class="sched-day-empty">수업 없음</div>`
+                : dayItems.map((it) => {{
+                  const cf = conf(it);
+                  const low = cf < 0.9;
+                  const excluded = it.included === false;
+                  return `
+                    <button class="sched-day-item ${{low ? "low" : ""}} ${{excluded ? "excluded" : ""}}" type="button">
+                      <div class="sched-day-item-time">${{escapeHtml(it.time || "-")}}</div>
+                      <div class="sched-day-item-class">${{escapeHtml(it.class_name || "(미지정)")}}</div>
+                      <div class="sched-day-item-meta">${{escapeHtml(it.teacher || "-")}} · ${{escapeHtml(it.room || "-")}}</div>
+                      ${{low ? `<span class="sched-day-item-flag" aria-label="확인 필요"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.86l-8.4 14.6A1.5 1.5 0 003.2 21h17.6a1.5 1.5 0 001.3-2.54l-8.4-14.6a1.5 1.5 0 00-2.6 0z"/></svg></span>` : ""}}
+                    </button>`;
+                }}).join("")}}
+            </div>
+          </div>`;
+      }}).join("");
+      const summary = document.querySelector("#schedReviewSummary");
+      const included = scheduleItems.filter((it) => it.included !== false).length;
+      if (summary) summary.innerHTML = `포함 <b>${{included}}개</b> / 총 ${{scheduleItems.length}}개 수업`;
+      const doneCount = document.querySelector("#schedDoneCount");
+      if (doneCount) doneCount.textContent = included;
     }}
 
     function syncReportComment() {{
@@ -6289,19 +6723,49 @@ def _render_shell(status: dict[str, Any]) -> str:
           writeLog("스케줄 텍스트를 먼저 붙여넣어 주세요.");
           return;
         }}
-        const data = await callApi("/api/schedule/parse", {{ text }});
-        renderScheduleReview(data);
-        writeLog(data.message, {{ source: data.source, items: (data.items || []).length }});
+        // Fire API call in parallel with the animation; advance to review once both done.
+        const apiPromise = callApi("/api/schedule/parse", {{ text }});
+        startScheduleAnalyzing(async () => {{
+          try {{
+            const data = await apiPromise;
+            scheduleItems = (data.items || []).map((it, idx) => ({{ ...it, id: idx, included: true }}));
+            writeLog(data.message, {{ source: data.source, items: scheduleItems.length }});
+          }} catch (err) {{
+            writeLog(`스케줄 파싱 실패: ${{err.message}}`);
+          }}
+        }});
       }},
       async parseScheduleReset() {{
         document.querySelector("#schedulePaste").value = "";
-        const review = document.querySelector("#scheduleReview");
-        if (review) {{ review.hidden = true; review.innerHTML = ""; }}
+        scheduleItems = [];
+        if (scheduleProgressTimer) {{ clearInterval(scheduleProgressTimer); scheduleProgressTimer = null; }}
+        setScheduleStage("upload");
       }},
       async scheduleUpload() {{
         writeLog("이미지 OCR은 곧 제공됩니다. 우선 '텍스트로 붙여넣기'에서 AI 인식을 시도해 보세요.");
-        const details = document.querySelector(".schedule-paste");
+        const details = document.querySelector("#scheduleTextDetails");
         if (details) details.open = true;
+      }},
+      async schedRetry() {{
+        scheduleItems = [];
+        if (scheduleProgressTimer) {{ clearInterval(scheduleProgressTimer); scheduleProgressTimer = null; }}
+        const ta = document.querySelector("#schedulePaste");
+        if (ta) ta.value = "";
+        setScheduleStage("upload");
+      }},
+      async schedSaveDraft() {{
+        writeLog(`초안으로 ${{scheduleItems.length}}개 수업을 저장했습니다. (로컬 데모)`);
+      }},
+      async schedConfirm() {{
+        const included = scheduleItems.filter((it) => it.included !== false).length;
+        if (!included) {{
+          writeLog("등록할 수업이 없습니다.");
+          return;
+        }}
+        const doneCount = document.querySelector("#schedDoneCount");
+        if (doneCount) doneCount.textContent = included;
+        setScheduleStage("done");
+        writeLog(`Classin에 ${{included}}개 수업 등록 (데모 시뮬레이션)`);
       }},
       async refreshDashboard() {{
         const data = await loadDashboard();
@@ -6361,6 +6825,19 @@ def _render_shell(status: dict[str, Any]) -> str:
       const reportFmtButton = event.target.closest("button[data-report-format]");
       if (reportFmtButton) {{
         syncReportFormat(reportFmtButton.dataset.reportFormat);
+        return;
+      }}
+      const schedDayItem = event.target.closest(".sched-day-item");
+      if (schedDayItem) {{
+        const colHead = schedDayItem.closest(".sched-day-col")?.querySelector(".sched-day-col-head")?.textContent || "";
+        const day = (colHead.match(/^([월화수목금토])/) || [])[1] || "";
+        const timeText = schedDayItem.querySelector(".sched-day-item-time")?.textContent || "";
+        const idx = scheduleItems.findIndex((it) => (it.day || "") === day && (it.time || "") === timeText);
+        if (idx >= 0) {{
+          scheduleItems[idx].included = !(scheduleItems[idx].included !== false);
+          renderScheduleReview();
+        }}
+        event.preventDefault();
         return;
       }}
       const hwModeButton = event.target.closest("button[data-hw-mode]");
