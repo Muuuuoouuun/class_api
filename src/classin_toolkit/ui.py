@@ -2408,6 +2408,303 @@ def _render_shell(status: dict[str, Any]) -> str:
       .sched-day-grid {{ grid-template-columns: 1fr 1fr; }}
       .sched-review-footer {{ flex-direction: column; align-items: stretch; }}
     }}
+
+    /* ============ Topbar search + notification panel ============ */
+    .topbar-search {{ position: relative; }}
+    .search-clear {{
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: none;
+      background: var(--panel-soft);
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+      min-height: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: none;
+    }}
+    .search-clear:hover {{ background: var(--line); color: var(--text); }}
+    .search-results {{
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      max-height: 360px;
+      overflow-y: auto;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-pop);
+      z-index: 25;
+    }}
+    .search-results-group {{
+      padding: 6px 0;
+      border-bottom: 1px solid var(--line-2);
+    }}
+    .search-results-group:last-child {{ border-bottom: none; }}
+    .search-results-group-head {{
+      padding: 6px 14px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }}
+    .search-results-item {{
+      width: 100%;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+      color: var(--ink);
+      min-height: auto;
+      box-shadow: none;
+    }}
+    .search-results-item:hover, .search-results-item.focused {{
+      background: var(--green-4);
+      transform: none;
+      box-shadow: none;
+    }}
+    .search-results-item .sr-name {{ flex: 1; min-width: 0; }}
+    .search-results-item .sr-title {{ font-size: 13.5px; font-weight: 600; }}
+    .search-results-item .sr-sub {{ font-size: 11.5px; color: var(--muted); margin-top: 1px; }}
+    .search-results-item .sr-pill {{
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--panel-soft);
+      color: var(--muted);
+      font-weight: 700;
+    }}
+    .search-results-empty {{
+      padding: 14px 16px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }}
+
+    .bell-wrap {{ position: relative; }}
+    .bell-count {{
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: var(--warn);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 16px;
+      text-align: center;
+      border: 2px solid #fff;
+      font-variant-numeric: tabular-nums;
+    }}
+    .notif-panel {{
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 340px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-pop);
+      z-index: 25;
+      overflow: hidden;
+    }}
+    .notif-panel-head {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line-2);
+      background: var(--green-4);
+    }}
+    .notif-panel-head strong {{ font-size: 13px; color: var(--ink); }}
+    .notif-panel-head .link-btn {{
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--green-2);
+      background: transparent;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      min-height: auto;
+      box-shadow: none;
+    }}
+    .notif-panel-body {{
+      max-height: 360px;
+      overflow-y: auto;
+    }}
+    .notif-row {{
+      display: grid;
+      grid-template-columns: 28px 1fr auto;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line-2);
+      align-items: center;
+      cursor: pointer;
+      background: transparent;
+      border-left: none;
+      border-right: none;
+      border-top: none;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      color: inherit;
+      min-height: auto;
+      box-shadow: none;
+    }}
+    .notif-row:hover {{ background: var(--green-4); transform: none; box-shadow: none; }}
+    .notif-row:last-child {{ border-bottom: none; }}
+    .notif-row-icon {{
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }}
+    .notif-row-icon.danger {{ background: #fdecec; color: var(--danger); }}
+    .notif-row-icon.warn   {{ background: var(--warn-bg); color: #92520a; }}
+    .notif-row-icon.info   {{ background: #dbeafe; color: #1e40af; }}
+    .notif-row-text {{ font-size: 13px; line-height: 1.4; color: var(--ink-2); }}
+    .notif-row-pill {{
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--warn-bg);
+      color: #92520a;
+    }}
+    .notif-empty {{
+      padding: 28px 16px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+
+    /* ============ Modal system ============ */
+    .modal-root {{
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      animation: fadeIn .18s ease;
+    }}
+    .modal-root[hidden] {{ display: none; }}
+    .modal-scrim {{
+      position: absolute;
+      inset: 0;
+      background: rgba(11, 22, 18, .42);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }}
+    .modal-shell {{
+      position: relative;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 24px 60px -16px rgba(15, 23, 17, .25);
+      width: 100%;
+      max-width: 560px;
+      max-height: calc(100vh - 48px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: modalIn .22s cubic-bezier(.16, 1, .3, 1);
+    }}
+    .modal-shell.size-lg {{ max-width: 720px; }}
+    @keyframes modalIn {{
+      from {{ opacity: 0; transform: translateY(8px) scale(.98); }}
+      to {{ opacity: 1; transform: none; }}
+    }}
+    .modal-head {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 20px 24px 12px;
+      border-bottom: 1px solid var(--line-2);
+    }}
+    .modal-head h2 {{ margin: 0; font-size: 17px; font-weight: 700; color: var(--ink); }}
+    .modal-head p {{ margin: 6px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5; }}
+    .modal-x {{
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+      min-height: 0;
+      flex-shrink: 0;
+      box-shadow: none;
+    }}
+    .modal-x:hover {{ background: var(--panel-soft); color: var(--ink); transform: none; box-shadow: none; }}
+    .modal-body {{
+      padding: 20px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }}
+    .modal-foot {{
+      padding: 14px 24px;
+      border-top: 1px solid var(--line-2);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      background: var(--green-4);
+    }}
+    .modal-foot:empty {{ display: none; }}
+    @media (max-width: 600px) {{
+      .modal-shell {{ max-width: 100%; max-height: calc(100vh - 24px); }}
+      .modal-head, .modal-body, .modal-foot {{ padding-left: 18px; padding-right: 18px; }}
+    }}
+    /* Template picker cards inside template modal */
+    .report-tpl-card {{
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color .14s ease, background .14s ease;
+      min-height: auto;
+      box-shadow: none;
+      font: inherit;
+      color: inherit;
+    }}
+    .report-tpl-card:hover {{
+      border-color: var(--green);
+      background: var(--green-4);
+      transform: none;
+      box-shadow: none;
+    }}
+    .report-tpl-card.active {{
+      border-color: var(--green);
+      background: var(--green-4);
+    }}
     .dropzone {{
       border: 2px dashed var(--primary);
       border-radius: var(--radius-lg);
@@ -4376,14 +4673,26 @@ def _render_shell(status: dict[str, Any]) -> str:
           <span class="crumb-current" id="crumbCurrent">홈</span>
         </div>
         <div class="topbar-actions">
-          <div class="topbar-search">
+          <div class="topbar-search" id="topbarSearch">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-            <input placeholder="학생, 클래스, 활동 검색..." aria-label="검색">
+            <input id="globalSearchInput" type="search" placeholder="학생, 클래스, 활동 검색..." aria-label="검색" autocomplete="off">
+            <button class="search-clear" id="globalSearchClear" type="button" aria-label="검색 지우기" hidden>×</button>
+            <div class="search-results" id="globalSearchResults" hidden role="listbox" aria-label="검색 결과"></div>
           </div>
-          <button class="topbar-bell" aria-label="알림">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1112 0c0 7 3 7 3 9H3c0-2 3-2 3-9z"/><path d="M10 21a2 2 0 004 0"/></svg>
-            <span class="dot"></span>
-          </button>
+          <div class="bell-wrap">
+            <button class="topbar-bell" id="notifBell" aria-label="알림 (대기 0건)" aria-expanded="false" aria-controls="notifPanel">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1112 0c0 7 3 7 3 9H3c0-2 3-2 3-9z"/><path d="M10 21a2 2 0 004 0"/></svg>
+              <span class="dot" id="notifDot" hidden></span>
+              <span class="bell-count" id="notifCount" hidden>0</span>
+            </button>
+            <div class="notif-panel" id="notifPanel" hidden role="dialog" aria-label="알림">
+              <div class="notif-panel-head">
+                <strong>알림 · 처리 대기</strong>
+                <button class="link-btn" data-tab="homework" type="button">전체 보기 →</button>
+              </div>
+              <div class="notif-panel-body" id="notifPanelBody"></div>
+            </div>
+          </div>
         </div>
       </div>
       <main class="app-body">
@@ -4835,7 +5144,7 @@ def _render_shell(status: dict[str, Any]) -> str:
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
             <span id="reportDownloadLabel">PDF 다운로드</span>
           </button>
-          <button data-action="generateWeekly">
+          <button data-action="openSendModal">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
             학부모에게 발송
           </button>
@@ -5199,6 +5508,21 @@ def _render_shell(status: dict[str, Any]) -> str:
     </section>
   </div>
 
+  <div class="modal-root" id="modalRoot" hidden>
+    <div class="modal-scrim" data-modal-close></div>
+    <div class="modal-shell" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <header class="modal-head">
+        <div>
+          <h2 id="modalTitle">모달</h2>
+          <p id="modalSub"></p>
+        </div>
+        <button class="modal-x" data-modal-close type="button" aria-label="닫기">×</button>
+      </header>
+      <div class="modal-body" id="modalBody"></div>
+      <footer class="modal-foot" id="modalFoot"></footer>
+    </div>
+  </div>
+
   <script id="initial-status" type="application/json">{status_json}</script>
   <script>
     const log = document.querySelector("#log");
@@ -5476,6 +5800,148 @@ def _render_shell(status: dict[str, Any]) -> str:
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted-2)"><path d="M9 6l6 6-6 6"/></svg>
           </button>`;
       }}).join("");
+    }}
+
+    /* ---- Modal system ---- */
+    function openModal({{ title, sub, body, footer, size }} = {{}}) {{
+      const root = document.querySelector("#modalRoot");
+      if (!root) return;
+      const shell = root.querySelector(".modal-shell");
+      if (shell) shell.classList.toggle("size-lg", size === "lg");
+      document.querySelector("#modalTitle").textContent = title || "";
+      const subEl = document.querySelector("#modalSub");
+      if (subEl) {{
+        subEl.textContent = sub || "";
+        subEl.style.display = sub ? "" : "none";
+      }}
+      document.querySelector("#modalBody").innerHTML = body || "";
+      document.querySelector("#modalFoot").innerHTML = footer || "";
+      root.hidden = false;
+      // focus first focusable
+      setTimeout(() => {{
+        const focusable = root.querySelector("button, input, select, textarea");
+        if (focusable) focusable.focus();
+      }}, 80);
+    }}
+    function closeModal() {{
+      const root = document.querySelector("#modalRoot");
+      if (root) root.hidden = true;
+    }}
+
+    /* ---- Global search ---- */
+    let searchTimer = null;
+    let searchIndex = []; // search index entries
+    function buildSearchIndex() {{
+      searchIndex = [];
+      // Students
+      (studentOptions || []).forEach((s) => {{
+        searchIndex.push({{
+          kind: "학생",
+          label: s.label || s.student_name || s.student_classin_id,
+          sub: s.student_classin_id || "",
+          tab: "students",
+        }});
+      }});
+      // Courses
+      (courseOptions || []).forEach((c) => {{
+        searchIndex.push({{
+          kind: "코스",
+          label: c.label || c.course_id,
+          sub: c.course_id || "",
+          tab: "students",
+        }});
+      }});
+      // Missing-homework students
+      (missingState.items || []).forEach((it) => {{
+        searchIndex.push({{
+          kind: "미제출",
+          label: it.student_name || "(학생)",
+          sub: `${{it.class_name || ""}} · ${{it.lesson_classin_id || ""}}`,
+          tab: "homework",
+        }});
+      }});
+      // Actions
+      ["스케줄 자동 등록", "리포트 빌더", "내 설정"].forEach((label) => {{
+        const tab = label.startsWith("스케줄") ? "schedule" : label.startsWith("리포트") ? "report" : "profile";
+        searchIndex.push({{ kind: "메뉴", label, sub: "이동", tab }});
+      }});
+    }}
+
+    function runSearch(q) {{
+      const target = document.querySelector("#globalSearchResults");
+      if (!target) return;
+      const clearBtn = document.querySelector("#globalSearchClear");
+      if (clearBtn) clearBtn.hidden = !q;
+      if (!q) {{
+        target.hidden = true;
+        target.innerHTML = "";
+        return;
+      }}
+      buildSearchIndex();
+      const lower = q.toLowerCase();
+      const hits = searchIndex
+        .filter((row) => (row.label || "").toLowerCase().includes(lower) || (row.sub || "").toLowerCase().includes(lower))
+        .slice(0, 12);
+      if (!hits.length) {{
+        target.hidden = false;
+        target.innerHTML = `<div class="search-results-empty">"${{escapeHtml(q)}}"에 대한 결과 없음</div>`;
+        return;
+      }}
+      const grouped = {{}};
+      hits.forEach((h) => {{ (grouped[h.kind] = grouped[h.kind] || []).push(h); }});
+      target.hidden = false;
+      target.innerHTML = Object.entries(grouped).map(([kind, rows]) => `
+        <div class="search-results-group">
+          <div class="search-results-group-head">${{escapeHtml(kind)}}</div>
+          ${{rows.map((r) => `
+            <button class="search-results-item" data-search-tab="${{escapeHtml(r.tab)}}" type="button">
+              <span class="sr-name">
+                <div class="sr-title">${{escapeHtml(r.label)}}</div>
+                ${{r.sub ? `<div class="sr-sub">${{escapeHtml(r.sub)}}</div>` : ""}}
+              </span>
+              <span class="sr-pill">${{escapeHtml(kind)}}</span>
+            </button>
+          `).join("")}}
+        </div>
+      `).join("");
+    }}
+
+    /* ---- Notification bell ---- */
+    function renderNotifPanel() {{
+      const body = document.querySelector("#notifPanelBody");
+      if (!body) return;
+      const items = (missingState.items || [])
+        .filter((it) => it.action_required && it.action_required !== "done")
+        .sort((a, b) => actionRank(a) - actionRank(b))
+        .slice(0, 8);
+      if (!items.length) {{
+        body.innerHTML = `<div class="notif-empty">처리할 알림이 없습니다.</div>`;
+        return;
+      }}
+      const iconCls = (a) => a === "needs_phone" || a === "needs_retry" ? "danger" : a === "needs_message" ? "warn" : "info";
+      body.innerHTML = items.map((it) => `
+        <button class="notif-row" data-tab="homework" type="button">
+          <span class="notif-row-icon ${{iconCls(it.action_required)}}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.86l-8.4 14.6A1.5 1.5 0 003.2 21h17.6a1.5 1.5 0 001.3-2.54l-8.4-14.6a1.5 1.5 0 00-2.6 0z"/></svg>
+          </span>
+          <span class="notif-row-text"><b>${{escapeHtml(it.student_name || "학생")}}</b> · ${{escapeHtml(actionLabel(it.action_required))}}</span>
+          ${{it.is_repeat ? `<span class="notif-row-pill">반복 ${{it.missing_count}}회</span>` : `<span class="notif-row-pill">신규</span>`}}
+        </button>
+      `).join("");
+    }}
+
+    function updateNotifBadge() {{
+      const items = (missingState.items || []);
+      const pending = items.filter((it) => it.action_required && it.action_required !== "done").length;
+      const dot = document.querySelector("#notifDot");
+      const count = document.querySelector("#notifCount");
+      if (dot) dot.hidden = pending === 0;
+      if (count) {{
+        count.hidden = pending === 0;
+        count.textContent = pending > 99 ? "99+" : String(pending);
+      }}
+      const bell = document.querySelector("#notifBell");
+      if (bell) bell.setAttribute("aria-label", `알림 (대기 ${{pending}}건)`);
     }}
 
     /* ---- Schedule stage machine ---- */
@@ -6228,6 +6694,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       if (modeCount) modeCount.textContent = `${{summary.total_missing || 0}}명`;
       renderHomeDashboard(summary);
       renderHomeworkToday(data.items || []);
+      updateNotifBadge();
+      renderNotifPanel();
       document.querySelector("#noPhoneCount").textContent = summary.no_parent_phone || 0;
       document.querySelector("#dryRunCount").textContent = summary.dry_run || 0;
       document.querySelector("#sentCount").textContent = summary.sent || 0;
@@ -6776,7 +7244,82 @@ def _render_shell(status: dict[str, Any]) -> str:
         if (det) det.open = !det.open;
       }},
       async openTemplateModal() {{
-        writeLog("템플릿 설정 모달은 곧 제공됩니다. 현재는 기본 '데이터 카드' 레이아웃이 적용됩니다.");
+        openModal({{
+          title: "리포트 템플릿 설정",
+          sub: "학원 양식을 업로드하면 동일한 디자인으로 자동 생성됩니다.",
+          size: "lg",
+          body: `
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 18px;">
+              <button class="report-tpl-card active" type="button" data-tpl="cards">
+                <div style="font-size:13.5px; font-weight:700;">데이터 카드</div>
+                <div style="font-size:11.5px; color:var(--muted); margin-top:2px;">그래프 중심</div>
+                <span class="kpi-pill ok" style="margin-top:8px; font-size:11px;">현재 사용 중</span>
+              </button>
+              <button class="report-tpl-card" type="button" data-tpl="magazine">
+                <div style="font-size:13.5px; font-weight:700;">매거진</div>
+                <div style="font-size:11.5px; color:var(--muted); margin-top:2px;">강조 + 코멘트</div>
+              </button>
+              <button class="report-tpl-card" type="button" data-tpl="print">
+                <div style="font-size:13.5px; font-weight:700;">인쇄형</div>
+                <div style="font-size:11.5px; color:var(--muted); margin-top:2px;">전통 성적표</div>
+              </button>
+            </div>
+            <div style="font-size:13px; font-weight:700; margin-bottom:6px;">학원 자체 양식 업로드</div>
+            <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">한글(.hwp), PDF, 이미지, 엑셀(.xlsx) 모두 가능 · AI가 양식을 분석해 자동으로 채워줍니다.</div>
+            <div class="dropzone" style="padding: 24px 18px; border-radius: 10px;" id="tplDropzone">
+              <div class="dropzone-icon" style="width:48px; height:48px;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+              </div>
+              <div class="dropzone-title" style="font-size:14px;">양식 파일을 끌어다 놓으세요</div>
+              <div class="dropzone-desc">최대 10MB · .hwp .pdf .xlsx .png .jpg</div>
+            </div>
+          `,
+          footer: `
+            <button class="ghost" type="button" data-modal-close>기본 템플릿 사용</button>
+            <button type="button" data-action="confirmTemplate">저장</button>
+          `,
+        }});
+      }},
+      async confirmTemplate() {{
+        const pill = document.querySelector("#reportTemplatePill");
+        const name = document.querySelector("#reportTemplateName");
+        if (pill && name) {{
+          name.textContent = "GreenEdu_월간리포트_v2";
+          pill.hidden = false;
+        }}
+        closeModal();
+        writeLog("리포트 템플릿이 저장됐습니다. (데모)");
+      }},
+      async openSendModal() {{
+        const target = 18; // demo target count
+        openModal({{
+          title: "학부모에게 발송",
+          sub: `총 ${{target}}명에게 동일 양식의 리포트를 보냅니다.`,
+          body: `
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+              ${{[
+                {{l: "채널", v: "Classin 알림 + 카카오톡"}},
+                {{l: "형식", v: "개별 PDF 첨부"}},
+                {{l: "발송 시각", v: "즉시"}},
+                {{l: "열람 확인", v: "가능"}},
+              ]
+                .map((f) => `<div style="padding:10px 12px; background:var(--green-4); border-radius:8px;"><div style="font-size:11px; color:var(--muted); margin-bottom:4px;">${{f.l}}</div><div style="font-size:13px; font-weight:600;">${{f.v}}</div></div>`)
+                .join("")}}
+            </div>
+            <div style="padding:12px 14px; border:1px solid var(--line); border-radius:8px; font-size:13px; color:var(--ink-2); line-height:1.6;">
+              안녕하세요 학부모님, ${{escapeHtml(ACADEMY_NAME || "학원")}}입니다.<br>
+              이번달 학습 리포트를 첨부드립니다. 자세한 내용은 첨부 PDF를 확인해주세요.
+            </div>
+          `,
+          footer: `
+            <button class="secondary" type="button" data-modal-close>취소</button>
+            <button type="button" data-action="confirmSend">${{target}}건 발송</button>
+          `,
+        }});
+      }},
+      async confirmSend() {{
+        closeModal();
+        writeLog("18건 리포트 발송을 demo 모드로 시뮬레이션했습니다.");
       }},
       async aiPolishComment() {{
         const ta = document.querySelector("#reportComment");
@@ -6822,6 +7365,60 @@ def _render_shell(status: dict[str, Any]) -> str:
       const tabButton = event.target.closest("button[data-tab]");
       const modeButton = event.target.closest("button[data-mode]");
       const subtabButton = event.target.closest("button[data-subtab]");
+      // Modal scrim/close
+      if (event.target.closest("[data-modal-close]")) {{
+        closeModal();
+        return;
+      }}
+      // Template picker cards inside modal
+      const tplCard = event.target.closest(".report-tpl-card");
+      if (tplCard) {{
+        tplCard.parentElement.querySelectorAll(".report-tpl-card").forEach((c) => c.classList.toggle("active", c === tplCard));
+        return;
+      }}
+      // Notification bell toggle
+      const bell = event.target.closest("#notifBell");
+      if (bell) {{
+        const panel = document.querySelector("#notifPanel");
+        if (panel) {{
+          const open = !panel.hidden;
+          panel.hidden = open;
+          bell.setAttribute("aria-expanded", String(!open));
+          if (!open) renderNotifPanel();
+        }}
+        event.stopPropagation();
+        return;
+      }}
+      // Click outside notif panel closes it
+      if (!event.target.closest(".bell-wrap")) {{
+        const panel = document.querySelector("#notifPanel");
+        if (panel && !panel.hidden) {{ panel.hidden = true; document.querySelector("#notifBell")?.setAttribute("aria-expanded", "false"); }}
+      }}
+      // Search clear
+      if (event.target.closest("#globalSearchClear")) {{
+        const input = document.querySelector("#globalSearchInput");
+        if (input) {{ input.value = ""; input.focus(); }}
+        runSearch("");
+        return;
+      }}
+      // Search result item
+      const searchItem = event.target.closest(".search-results-item");
+      if (searchItem) {{
+        const tab = searchItem.dataset.searchTab;
+        const input = document.querySelector("#globalSearchInput");
+        if (input) input.value = "";
+        runSearch("");
+        if (tab) {{
+          const trigger = document.querySelector(`.sidenav button[data-tab="${{tab}}"]`);
+          if (trigger) trigger.click();
+        }}
+        return;
+      }}
+      // Click outside search hides results
+      if (!event.target.closest("#topbarSearch")) {{
+        const results = document.querySelector("#globalSearchResults");
+        if (results && !results.hidden) results.hidden = true;
+      }}
       const reportFmtButton = event.target.closest("button[data-report-format]");
       if (reportFmtButton) {{
         syncReportFormat(reportFmtButton.dataset.reportFormat);
@@ -7095,6 +7692,37 @@ def _render_shell(status: dict[str, Any]) -> str:
       reportCommentEl.addEventListener("input", syncReportComment);
       syncReportComment();
     }}
+
+    /* Global search input */
+    const globalSearchInput = document.querySelector("#globalSearchInput");
+    if (globalSearchInput) {{
+      globalSearchInput.addEventListener("input", (event) => {{
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => runSearch(event.target.value.trim()), 140);
+      }});
+      globalSearchInput.addEventListener("focus", () => {{
+        if (globalSearchInput.value.trim()) runSearch(globalSearchInput.value.trim());
+      }});
+      globalSearchInput.addEventListener("keydown", (event) => {{
+        if (event.key === "Escape") {{
+          globalSearchInput.value = "";
+          runSearch("");
+          globalSearchInput.blur();
+        }}
+      }});
+    }}
+
+    /* ESC closes modal + search */
+    document.addEventListener("keydown", (event) => {{
+      if (event.key !== "Escape") return;
+      const modalOpen = !document.querySelector("#modalRoot")?.hidden;
+      if (modalOpen) {{ closeModal(); return; }}
+      const panel = document.querySelector("#notifPanel");
+      if (panel && !panel.hidden) {{
+        panel.hidden = true;
+        document.querySelector("#notifBell")?.setAttribute("aria-expanded", "false");
+      }}
+    }});
 
     renderStatus(status);
     syncDashboardMode();
