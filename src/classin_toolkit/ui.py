@@ -1111,7 +1111,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 16px;
-      align-items: stretch;
+      align-items: start;
     }}
     .action-controls .panel {{ margin-top: 0; }}
     .action-button {{
@@ -1427,17 +1427,24 @@ def _render_shell(status: dict[str, Any]) -> str:
       .brand {{ height: auto; padding: 14px 16px; }}
       .sidebar .tabs {{
         flex-direction: row;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 6px;
+        padding: 10px 12px;
+        overflow-x: auto;
+        scrollbar-width: none;
       }}
-      .sidebar .tab-button {{ width: auto; }}
+      .sidebar .tabs::-webkit-scrollbar {{ display: none; }}
+      .sidebar .tab-button {{
+        width: auto;
+        flex: 0 0 auto;
+      }}
       .nav-sep {{ display: none; }}
       .sidebar-footer {{ display: none; }}
       .topbar {{
         height: auto;
         flex-wrap: wrap;
         align-items: flex-start;
-        padding: 12px 16px;
+        padding: 12px 14px;
       }}
       .topbar-title {{
         width: 100%;
@@ -1450,9 +1457,18 @@ def _render_shell(status: dict[str, Any]) -> str:
         width: 100%;
         margin-left: 0;
         justify-content: flex-start;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }}
+      .topbar .inline-actions::-webkit-scrollbar {{ display: none; }}
+      .topbar .status-pill,
+      .topbar button {{
+        flex: 0 0 auto;
       }}
       .topbar-user {{
-        margin-left: auto;
+        display: none;
       }}
       .status-strip {{ flex-wrap: nowrap; }}
       .grid, .actions, .actions.compact, .action-layout, .action-controls, .mini-grid,
@@ -2303,6 +2319,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       document.querySelectorAll(".tab-button").forEach((button) => {{
         button.classList.toggle("active", button.dataset.tab === tab);
       }});
+      const activeButton = document.querySelector(`.tab-button[data-tab="${{tab}}"]`);
+      activeButton?.scrollIntoView({{ block: "nearest", inline: "center" }});
       document.querySelectorAll(".tab-panel").forEach((panel) => {{
         panel.classList.toggle("active", panel.id === `tab-${{tab}}`);
       }});

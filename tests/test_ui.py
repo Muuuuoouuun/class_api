@@ -81,7 +81,7 @@ def test_ui_shell_wires_buttons_tabs_and_api_routes(tmp_path):
     actions = set(re.findall(r'data-action="([^"]+)"', shell))
     action_block = shell.split("const actions = {", 1)[1].split("};", 1)[0]
     handlers = set(re.findall(r"\n\s*async\s+([A-Za-z0-9_]+)\s*\(", action_block))
-    tabs = set(re.findall(r'data-tab="([^"]+)"', shell))
+    tabs = set(re.findall(r'<button[^>]+data-tab="([^"]+)"', shell))
     panels = {
         panel.replace("tab-", "")
         for panel in re.findall(r'id="(tab-[^"]+)"', shell)
