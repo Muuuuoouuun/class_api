@@ -1738,8 +1738,10 @@ def _render_shell(status: dict[str, Any]) -> str:
             <label>반<input id="examClassName" type="text"></label>
             <label class="checkbox-field">Dry-run<input id="examDryRun" type="checkbox" checked></label>
           </div>
+          <input id="examFile" type="file" accept=".csv,.tsv,.txt">
           <label>시험 CSV<textarea id="examCsvText" class="large"></textarea></label>
           <div class="inline-actions">
+            <button data-action="readExamFile" class="secondary">파일 읽기</button>
             <button data-action="downloadExamTemplate" class="secondary">시험 템플릿</button>
             <button data-action="importExamResults">시험 결과 가져오기</button>
           </div>
@@ -2562,6 +2564,21 @@ def _render_shell(status: dict[str, Any]) -> str:
       writeLog("가져오기 파일을 읽었습니다.", {{ name: file.name, size: file.size }});
     }}
 
+    async function readExamFile() {{
+      const input = document.querySelector("#examFile");
+      const file = input.files && input.files[0];
+      if (!file) throw new Error("읽을 시험 파일을 선택하세요.");
+      const text = await file.text();
+      document.querySelector("#examCsvText").value = text;
+      const parsed = inspectDelimited(text);
+      document.querySelector("#examPreview").innerHTML =
+        `<strong>${{escapeHtml(file.name)}}</strong>` +
+        `형식: ${{escapeHtml(parsed.delimiter)}}\\n` +
+        `행: ${{parsed.rows}}\\n` +
+        `헤더: ${{escapeHtml(parsed.headers.join(", ") || "-")}}`;
+      writeLog("시험 파일을 읽었습니다.", {{ name: file.name, size: file.size }});
+    }}
+
     function csvEscape(value) {{
       const text = String(value ?? "");
       return /[",\\n\\r]/.test(text) ? `"${{text.replaceAll('"', '""')}}"` : text;
@@ -2830,6 +2847,9 @@ def _render_shell(status: dict[str, Any]) -> str:
       }},
       async readSelectedFile() {{
         await readSelectedFile();
+      }},
+      async readExamFile() {{
+        await readExamFile();
       }},
       async downloadScheduleTemplate() {{
         downloadScheduleTemplate();

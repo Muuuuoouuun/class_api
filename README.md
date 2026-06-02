@@ -61,7 +61,7 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 | 점검 | `classin-toolkit check-ready --mode local-demo` | 테스트 단계별 API 키·DB ID 누락 확인 |
 | 점검 | `classin-toolkit diagnose-apis [--live]` | ClassIn/Notion/Claude/Aligo 연결을 비파괴 probe로 확인 |
 | 수동 (Agent) | `classin-toolkit agent` | 원장/교사 자연어 질문 → Claude tool-use (미제출·미응시 조회 포함) |
-| 수동 (UI) | `classin-toolkit ui` | 로컬 브라우저에서 리포트·sweep·메모·AI 질문 실행 |
+| 수동 (UI) | `classin-toolkit ui` | 로컬 브라우저에서 상태 점검, 미제출 선택 발송, 스케줄 생성, 리포트, 시험 CSV import, 메모·AI 질문 실행 |
 
 ## MVP 상태
 

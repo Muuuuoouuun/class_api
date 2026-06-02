@@ -68,6 +68,8 @@ def test_ui_home_renders_with_config(tmp_path):
     assert "CSV 내보내기" in res.text
     assert "전체 주간 드래프트" in res.text
     assert "시험 결과 가져오기" in res.text
+    assert "readExamFile" in res.text
+    assert "examFile" in res.text
 
 
 def test_ui_shell_wires_buttons_tabs_and_api_routes(tmp_path):
