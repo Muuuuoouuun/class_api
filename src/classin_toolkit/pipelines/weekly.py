@@ -45,6 +45,7 @@ def generate_drafts(
     *,
     reference: datetime | None = None,
     class_name: str | None = None,
+    student_classin_ids: list[str] | None = None,
 ) -> int:
     ref = reference or datetime.now(tz=timezone.utc)
     this_start = (ref - timedelta(days=ref.weekday())).replace(
@@ -59,12 +60,16 @@ def generate_drafts(
     students = repo.list_active_students()
     if class_name:
         students = [student for student in students if student.class_name == class_name]
+    if student_classin_ids is not None:
+        selected_ids = set(student_classin_ids)
+        students = [student for student in students if student.classin_id in selected_ids]
     log.info(
-        "weekly drafts for %d students (%s ~ %s, class=%s)",
+        "weekly drafts for %d students (%s ~ %s, class=%s, selected=%s)",
         len(students),
         this_start,
         this_end,
         class_name or "all",
+        len(student_classin_ids) if student_classin_ids is not None else "all",
     )
 
     drafts: list[DraftRecord] = []
@@ -205,5 +210,11 @@ def run_weekly_reports(
     *,
     reference: datetime | None = None,
     class_name: str | None = None,
+    student_classin_ids: list[str] | None = None,
 ) -> int:
-    return generate_drafts(cfg, reference=reference, class_name=class_name)
+    return generate_drafts(
+        cfg,
+        reference=reference,
+        class_name=class_name,
+        student_classin_ids=student_classin_ids,
+    )

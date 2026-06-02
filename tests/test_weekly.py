@@ -65,6 +65,7 @@ def test_generate_drafts_filters_students_by_class_name(monkeypatch, tmp_path):
         _cfg(tmp_path),
         reference=datetime.fromisoformat("2026-04-20T12:00:00+00:00"),
         class_name="고2-A",
+        student_classin_ids=["10001"],
     )
 
     assert count == 1

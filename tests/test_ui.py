@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from classin_toolkit.config import AppConfig
+from classin_toolkit.storage.notion_repo import StudentRecord
 from classin_toolkit.ui import create_app
 
 
@@ -48,15 +49,19 @@ def test_ui_home_renders_with_config(tmp_path):
     res = client.get("/")
 
     assert res.status_code == 200
-    assert "ClassIn Toolkit UI" in res.text
+    assert "ClassIn 운영 콘솔" in res.text
     assert "테스트학원" in res.text
     assert "API 연결 점검" in res.text
     assert "data-tab=\"schedule\"" in res.text
     assert "data-tab=\"actions\"" in res.text
     assert "핵심 기능" in res.text
-    assert "숙제 미제출 전체 문자 발송" in res.text
+    assert "선택 문자 발송" in res.text
     assert "스케줄표로 수업·숙제 생성" in res.text
     assert "반별 리포트 생성" in res.text
+    assert "오늘 0시 이후" in res.text
+    assert "반 선택" in res.text
+    assert "전체 반" in res.text
+    assert "반 목록 새로고침" in res.text
     assert "스케줄 표" in res.text
 
 
@@ -257,13 +262,52 @@ def test_ui_create_schedule_can_run_live_after_review(monkeypatch, tmp_path):
     assert body["dry_run"] is False
 
 
+def test_ui_sweep_missing_homework_accepts_selection_keys(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_sweep_missing_homework(cfg, *, window_hours, lesson_id, selection_keys=None):
+        captured["academy"] = cfg.academy.name
+        captured["window_hours"] = window_hours
+        captured["lesson_id"] = lesson_id
+        captured["selection_keys"] = selection_keys
+        return 1
+
+    monkeypatch.setattr("classin_toolkit.ui.sweep_missing_homework", fake_sweep_missing_homework)
+    client = TestClient(create_app(config=_cfg(tmp_path)))
+
+    res = client.post(
+        "/api/sweep-missing-homework",
+        json={
+            "window_hours": 4,
+            "lesson_id": "lesson-1",
+            "selection_keys": ["10001::lesson-1::2026-04-24T10:00:00+00:00"],
+        },
+    )
+
+    assert res.status_code == 200
+    assert captured == {
+        "academy": "테스트학원",
+        "window_hours": 4,
+        "lesson_id": "lesson-1",
+        "selection_keys": ["10001::lesson-1::2026-04-24T10:00:00+00:00"],
+    }
+    assert res.json()["count"] == 1
+
+
 def test_ui_generate_class_reports_wraps_weekly_drafts(monkeypatch, tmp_path):
     captured = {}
 
-    def fake_generate_drafts(cfg, *, reference=None, class_name=None):
+    def fake_generate_drafts(
+        cfg,
+        *,
+        reference=None,
+        class_name=None,
+        student_classin_ids=None,
+    ):
         captured["academy"] = cfg.academy.name
         captured["reference"] = reference.date().isoformat()
         captured["class_name"] = class_name
+        captured["student_classin_ids"] = student_classin_ids
         return 7
 
     monkeypatch.setattr("classin_toolkit.ui.generate_drafts", fake_generate_drafts)
@@ -271,7 +315,11 @@ def test_ui_generate_class_reports_wraps_weekly_drafts(monkeypatch, tmp_path):
 
     res = client.post(
         "/api/generate-class-reports",
-        json={"class_name": "고2-A", "week": "2026-04-20"},
+        json={
+            "class_name": "고2-A",
+            "week": "2026-04-20",
+            "student_classin_ids": ["10001", "10002"],
+        },
     )
 
     assert res.status_code == 200
@@ -279,11 +327,42 @@ def test_ui_generate_class_reports_wraps_weekly_drafts(monkeypatch, tmp_path):
         "academy": "테스트학원",
         "reference": "2026-04-20",
         "class_name": "고2-A",
+        "student_classin_ids": ["10001", "10002"],
     }
     body = res.json()
     assert body["message"] == "고2-A 리포트 드래프트 7건을 생성했습니다."
     assert body["count"] == 7
+    assert body["selected"] == 2
     assert body["includes"] == ["출결", "숙제", "시험 점수"]
+
+
+def test_ui_report_targets_filters_by_class(monkeypatch, tmp_path):
+    class FakeRepo:
+        def list_active_students(self):
+            return [
+                StudentRecord("page-1", "10001", "홍길동", "01012345678", "고2-A"),
+                StudentRecord("page-2", "10002", "김영희", "", "고2-B"),
+            ]
+
+    monkeypatch.setattr(
+        "classin_toolkit.ui.NotionRepo.from_config",
+        staticmethod(lambda _cfg: FakeRepo()),
+    )
+    client = TestClient(create_app(config=_cfg(tmp_path)))
+
+    res = client.get("/api/report-targets?class_name=고2-A")
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["summary"] == {"total": 1, "classes": 1, "with_parent_phone": 1}
+    assert body["items"] == [
+        {
+            "student_classin_id": "10001",
+            "student_name": "홍길동",
+            "class_name": "고2-A",
+            "has_parent_phone": True,
+        }
+    ]
 
 
 def test_ui_import_exam_results_accepts_csv_text(monkeypatch, tmp_path):
@@ -441,4 +520,5 @@ def test_ui_missing_homework_includes_notification_status(monkeypatch, tmp_path)
         "failed": 0,
     }
     assert body["items"][0]["notification_status"] == "dry_run"
+    assert body["items"][0]["selection_key"] == "10001::lesson-1::2026-04-24T10:00:00+00:00"
     assert body["items"][1]["notification_status"] == "pending"

@@ -22,10 +22,17 @@ log = logging.getLogger(__name__)
 
 
 def sweep_missing_homework(
-    cfg: AppConfig, *, window_hours: int = 24, lesson_id: str | None = None
+    cfg: AppConfig,
+    *,
+    window_hours: int = 24,
+    lesson_id: str | None = None,
+    selection_keys: list[str] | None = None,
 ) -> int:
     repo = NotionRepo.from_config(cfg)
     rows = query_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id, repo=repo)
+    if selection_keys is not None:
+        selected = set(selection_keys)
+        rows = [row for row in rows if missing_homework_selection_key(row) in selected]
     if not rows:
         log.info("no missing homework in window")
         return 0
@@ -54,3 +61,13 @@ def query_missing_homework(
     repo = repo or NotionRepo.from_config(cfg)
     since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
     return repo.find_missing_homework(since=since, lesson_id=lesson_id)
+
+
+def missing_homework_selection_key(row: dict) -> str:
+    return "::".join(
+        [
+            str(row.get("student_classin_id") or ""),
+            str(row.get("lesson_classin_id") or ""),
+            str(row.get("date") or ""),
+        ]
+    )
