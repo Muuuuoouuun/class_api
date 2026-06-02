@@ -1092,7 +1092,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     .core-button:hover {{ background: var(--panel); filter: none; border-color: var(--primary); box-shadow: var(--shadow-md); transform: translateY(-2px); }}
     .core-button strong {{ display: block; min-width: 0; overflow-wrap: anywhere; font-size: 15px; font-weight: 700; line-height: 1.3; }}
     .core-button span {{ display: block; color: var(--muted); font-size: 12.5px; line-height: 1.45; font-weight: 500; }}
-    .core-number {{
+    .core-button .core-number {{
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -1104,6 +1104,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       color: #fff;
       font-size: 17px;
       font-weight: 800;
+      line-height: 1;
     }}
 
     .action-controls {{
@@ -1177,6 +1178,16 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     /* ── Forms ─────────────────────────── */
     label {{ display: grid; gap: 6px; color: var(--muted); font-size: 12.5px; font-weight: 600; line-height: 1.3; }}
+    .checkbox-field {{
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      min-height: 48px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+    }}
     input, select, textarea {{
       width: 100%;
       min-height: 38px;
@@ -1196,6 +1207,12 @@ def _render_shell(status: dict[str, Any]) -> str:
       box-shadow: 0 0 0 3px var(--primary-soft);
     }}
     input[type="file"] {{ padding: 7px 12px; }}
+    .checkbox-field input[type="checkbox"] {{
+      width: 18px;
+      min-height: 18px;
+      padding: 0;
+      accent-color: var(--primary);
+    }}
 
     .panel-head, .inline-actions {{ }}
     .inline-actions {{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }}
@@ -1416,6 +1433,27 @@ def _render_shell(status: dict[str, Any]) -> str:
       .sidebar .tab-button {{ width: auto; }}
       .nav-sep {{ display: none; }}
       .sidebar-footer {{ display: none; }}
+      .topbar {{
+        height: auto;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        padding: 12px 16px;
+      }}
+      .topbar-title {{
+        width: 100%;
+        gap: 10px;
+      }}
+      .topbar-title h2 {{
+        white-space: nowrap;
+      }}
+      .topbar .inline-actions {{
+        width: 100%;
+        margin-left: 0;
+        justify-content: flex-start;
+      }}
+      .topbar-user {{
+        margin-left: auto;
+      }}
       .status-strip {{ flex-wrap: nowrap; }}
       .grid, .actions, .actions.compact, .action-layout, .action-controls, .mini-grid,
       .diagnostic-summary, .schedule-summary, .core-grid {{ grid-template-columns: 1fr; }}
@@ -1619,7 +1657,10 @@ def _render_shell(status: dict[str, Any]) -> str:
       <div class="panel">
         <div class="panel-head">
           <h2>스케줄 표</h2>
-          <button data-action="refreshSchedule" class="secondary">스케줄 새로고침</button>
+          <div class="inline-actions">
+            <button data-action="refreshSchedule" class="secondary">스케줄 새로고침</button>
+            <button data-action="exportScheduleCsv" class="secondary">CSV 내보내기</button>
+          </div>
         </div>
         <div class="actions compact">
           <label>시작일<input id="scheduleStart" type="date" value="{week_start}"></label>
@@ -1641,6 +1682,7 @@ def _render_shell(status: dict[str, Any]) -> str:
               <div class="inline-actions">
                 <button data-action="focusMissingCore" class="secondary">문자 발송으로 이동</button>
                 <button data-action="refreshMissing" class="secondary">미제출 조회</button>
+                <button data-action="exportMissingCsv" class="secondary">CSV 내보내기</button>
               </div>
             </div>
             <div id="missingTable" style="margin-top:12px"></div>
@@ -1663,7 +1705,29 @@ def _render_shell(status: dict[str, Any]) -> str:
         <div class="inline-actions">
           <label>일자<input id="dailyDate" type="date" value="{today}"></label>
           <button data-action="renderDaily">일일 현황 생성</button>
+          <button data-action="generateWeekly" class="secondary">전체 주간 드래프트</button>
           <button data-action="focusReportCore" class="secondary">반별 리포트 선택</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>시험 결과 가져오기</h2>
+          <span class="badge">CSV</span>
+        </div>
+        <div class="stack">
+          <div class="actions compact">
+            <label>시험명<input id="examName" type="text"></label>
+            <label>시험일<input id="examDate" type="date" value="{today}"></label>
+            <label>반<input id="examClassName" type="text"></label>
+            <label class="checkbox-field">Dry-run<input id="examDryRun" type="checkbox" checked></label>
+          </div>
+          <label>시험 CSV<textarea id="examCsvText" class="large"></textarea></label>
+          <div class="inline-actions">
+            <button data-action="downloadExamTemplate" class="secondary">시험 템플릿</button>
+            <button data-action="importExamResults">시험 결과 가져오기</button>
+          </div>
+          <div id="examPreview" class="action-preview">시험 CSV를 붙여넣고 먼저 dry-run으로 학생 매칭을 확인하세요.</div>
         </div>
       </div>
     </section>
@@ -2582,6 +2646,29 @@ def _render_shell(status: dict[str, Any]) -> str:
       writeLog("스케줄 템플릿을 만들었습니다.");
     }}
 
+    function downloadExamTemplate() {{
+      const headers = [
+        "student_name",
+        "student_classin_id",
+        "class_name",
+        "subject",
+        "score",
+        "max_score",
+        "attended",
+      ];
+      const rows = [[
+        "홍길동",
+        "10001",
+        "고2-A",
+        "수학",
+        "92",
+        "100",
+        "응시",
+      ]];
+      downloadCsv("exam-results-template.csv", headers, rows);
+      writeLog("시험 템플릿을 만들었습니다.");
+    }}
+
     function renderDryRunResult(title, data) {{
       const summary = data.summary || {{}};
       const errors = data.errors || [];
@@ -2598,9 +2685,8 @@ def _render_shell(status: dict[str, Any]) -> str:
     async function runScheduleImportDryRun() {{
       const text = document.querySelector("#importText").value.trim();
       if (!text) throw new Error("스케줄 dry-run에 사용할 CSV / 표 데이터가 필요합니다.");
-      const data = await callApi("/api/create-schedule", {{
+      const data = await callApi("/api/parse-schedule-dry-run", {{
         schedule_text: text,
-        dry_run: true,
       }});
       renderDryRunResult("스케줄 검토", data);
       writeLog(data.message, data.summary);
@@ -2634,6 +2720,39 @@ def _render_shell(status: dict[str, Any]) -> str:
       }});
       document.querySelector("#reportPreview").innerHTML =
         `<strong>선택 리포트 생성</strong>선택: ${{selected.length}}명\\n${{escapeHtml(data.message)}}`;
+      writeLog(data.message, data);
+      await refreshStatus();
+    }}
+
+    function renderExamImportResult(data) {{
+      const summary = data.summary || {{}};
+      const errors = data.errors || [];
+      document.querySelector("#examPreview").innerHTML =
+        `<strong>${{escapeHtml(data.dry_run ? "시험 결과 dry-run" : "시험 결과 가져오기")}}</strong>` +
+        Object.entries(summary)
+          .map(([key, value]) => `${{escapeHtml(key)}}: ${{escapeHtml(value)}}`)
+          .join("\\n") +
+        (errors.length
+          ? `\\n\\n오류\\n${{escapeHtml(errors.slice(0, 8).join("\\n"))}}`
+          : "");
+    }}
+
+    async function importExamResults() {{
+      const csvText = document.querySelector("#examCsvText").value.trim();
+      if (!csvText) throw new Error("가져올 시험 CSV가 필요합니다.");
+      const dryRun = document.querySelector("#examDryRun").checked;
+      if (!dryRun) {{
+        const ok = window.confirm("Notion 시험 DB에 시험 결과를 실제로 저장합니다.");
+        if (!ok) return;
+      }}
+      const data = await callApi("/api/import-exam-results", {{
+        csv_text: csvText,
+        exam_name: document.querySelector("#examName").value,
+        exam_date: document.querySelector("#examDate").value,
+        class_name: document.querySelector("#examClassName").value,
+        dry_run: dryRun,
+      }});
+      renderExamImportResult(data);
       writeLog(data.message, data);
       await refreshStatus();
     }}
@@ -2697,8 +2816,14 @@ def _render_shell(status: dict[str, Any]) -> str:
       async downloadScheduleTemplate() {{
         downloadScheduleTemplate();
       }},
+      async downloadExamTemplate() {{
+        downloadExamTemplate();
+      }},
       async runScheduleImportDryRun() {{
         await runScheduleImportDryRun();
+      }},
+      async importExamResults() {{
+        await importExamResults();
       }},
       async renderDaily() {{
         const data = await callApi("/api/render-daily", {{
@@ -2718,14 +2843,6 @@ def _render_shell(status: dict[str, Any]) -> str:
         }});
         writeLog(data.message, data);
         await refreshStatus();
-      }},
-      async sweepMissing() {{
-        const data = await callApi("/api/sweep-missing-homework", {{
-          window_hours: document.querySelector("#windowHours").value,
-          lesson_id: document.querySelector("#lessonId").value,
-        }});
-        writeLog(data.message, data);
-        await loadSituation();
       }},
       async refreshMissing() {{
         const data = await loadDiagnostics(false);

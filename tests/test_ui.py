@@ -1,3 +1,5 @@
+import re
+
 from fastapi.testclient import TestClient
 
 from classin_toolkit.config import AppConfig
@@ -63,6 +65,44 @@ def test_ui_home_renders_with_config(tmp_path):
     assert "전체 반" in res.text
     assert "반 목록 새로고침" in res.text
     assert "스케줄 표" in res.text
+    assert "CSV 내보내기" in res.text
+    assert "전체 주간 드래프트" in res.text
+    assert "시험 결과 가져오기" in res.text
+
+
+def test_ui_shell_wires_buttons_tabs_and_api_routes(tmp_path):
+    app = create_app(config=_cfg(tmp_path))
+    client = TestClient(app)
+
+    res = client.get("/")
+
+    assert res.status_code == 200
+    shell = res.text
+    actions = set(re.findall(r'data-action="([^"]+)"', shell))
+    action_block = shell.split("const actions = {", 1)[1].split("};", 1)[0]
+    handlers = set(re.findall(r"\n\s*async\s+([A-Za-z0-9_]+)\s*\(", action_block))
+    tabs = set(re.findall(r'data-tab="([^"]+)"', shell))
+    panels = {
+        panel.replace("tab-", "")
+        for panel in re.findall(r'id="(tab-[^"]+)"', shell)
+    }
+    frontend_paths = {
+        path.split("?", 1)[0].split("${", 1)[0]
+        for path in re.findall(r'(?:fetch|callApi)\((?:`|")([^`"]+)', shell)
+        if path.startswith("/api/")
+    }
+    backend_paths = {
+        route.path
+        for route in app.routes
+        if getattr(route, "path", "").startswith("/api/")
+    }
+
+    assert actions - handlers == set()
+    assert handlers - actions == set()
+    assert tabs - panels == set()
+    assert panels - tabs == set()
+    assert frontend_paths - backend_paths == set()
+    assert backend_paths - frontend_paths == set()
 
 
 def test_ui_diagnostics_endpoint_returns_offline_probe_results(tmp_path):
