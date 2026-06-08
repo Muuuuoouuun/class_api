@@ -71,6 +71,17 @@ PROP_EXAM_PERCENT = "백분율"
 PROP_EXAM_SOURCE = "데이터 출처"
 PROP_EXAM_EXTERNAL_ID = "외부 시험 ID"
 
+PROP_CAREER_STUDENT = "학생"
+PROP_CAREER_TARGET_MAJOR = "목표 대학/학과"
+PROP_CAREER_FIT_SCORE = "최신 적합도 점수"
+PROP_CAREER_CONSENT = "동의 상태"
+PROP_CAREER_CONSENT_AT = "동의일시"
+
+PROP_CORPUS_ID = "코퍼스 ID"
+PROP_CORPUS_TRACK = "계열/학과 태그"
+PROP_CORPUS_OUTCOME = "결과 라벨"
+PROP_CORPUS_CONSENT_REF = "동의 근거"
+
 
 class NotionRepo:
     def __init__(
@@ -81,6 +92,8 @@ class NotionRepo:
         reports_db: str,
         memos_db: str | None = None,
         exams_db: str | None = None,
+        career_db: str | None = None,
+        corpus_db: str | None = None,
     ):
         self._nc = Client(auth=token)
         self.students_db = students_db
@@ -88,6 +101,8 @@ class NotionRepo:
         self.reports_db = reports_db
         self.memos_db = memos_db
         self.exams_db = exams_db
+        self.career_db = career_db
+        self.corpus_db = corpus_db
         self._data_source_ids: dict[str, str] = {}
 
     @classmethod
@@ -99,6 +114,8 @@ class NotionRepo:
             reports_db=cfg.notion.databases.reports,
             memos_db=cfg.notion.databases.memos,
             exams_db=cfg.notion.databases.exams,
+            career_db=cfg.notion.databases.career,
+            corpus_db=cfg.notion.databases.corpus,
         )
 
     # ============== Student ==============
@@ -741,6 +758,44 @@ class NotionRepo:
         if tag:
             props[PROP_MEMO_TAG] = {"select": {"name": tag}}
         page = self._nc.pages.create(parent={"database_id": self.memos_db}, properties=props)
+        return page["id"]
+
+    # ============== 진로 프로필 (DB6) / 진학 코퍼스 (DB7) ==============
+
+    def upsert_career_profile(
+        self, *, student_page_id: str, target_major: str,
+        fit_score: float, consent_label: str,
+    ) -> str:
+        """진로 프로필(DB6) 생성. 페이지 id 반환."""
+        if not self.career_db:
+            raise ValueError("career_db 미설정 (config.notion.databases.career)")
+        props = {
+            PROP_CAREER_STUDENT: {"relation": [{"id": student_page_id}]},
+            PROP_CAREER_TARGET_MAJOR: {"rich_text": [{"text": {"content": target_major}}]},
+            PROP_CAREER_FIT_SCORE: {"number": fit_score},
+            PROP_CAREER_CONSENT: {"select": {"name": consent_label}},
+            PROP_CAREER_CONSENT_AT: {"date": {"start": datetime.now(timezone.utc).isoformat()}},
+        }
+        page = self._nc.pages.create(
+            parent={"database_id": self.career_db}, properties=props
+        )
+        return page["id"]
+
+    def add_corpus_entry(
+        self, *, corpus_id: str, track_tags: list[str], consent_ref: str,
+    ) -> str:
+        """비식별 코퍼스(DB7) 적재. 결과 라벨은 '미정'으로 시작."""
+        if not self.corpus_db:
+            raise ValueError("corpus_db 미설정 (config.notion.databases.corpus)")
+        props = {
+            PROP_CORPUS_ID: {"title": [{"text": {"content": corpus_id}}]},
+            PROP_CORPUS_TRACK: {"multi_select": [{"name": t} for t in track_tags]},
+            PROP_CORPUS_OUTCOME: {"select": {"name": "미정"}},
+            PROP_CORPUS_CONSENT_REF: {"rich_text": [{"text": {"content": consent_ref}}]},
+        }
+        page = self._nc.pages.create(
+            parent={"database_id": self.corpus_db}, properties=props
+        )
         return page["id"]
 
 

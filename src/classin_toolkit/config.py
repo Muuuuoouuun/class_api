@@ -31,6 +31,8 @@ class NotionDatabases(BaseModel):
     reports: str
     memos: str | None = None
     exams: str | None = None
+    career: str | None = None    # DB6 진로 프로필
+    corpus: str | None = None    # DB7 진학 코퍼스 (비식별)
 
 
 class NotionConfig(BaseModel):
