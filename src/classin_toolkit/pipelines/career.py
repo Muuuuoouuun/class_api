@@ -7,6 +7,7 @@ Notion 아카이브/코퍼스 적재는 원장 승인 후 호출하도록 분리
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from ..config import AppConfig
@@ -21,6 +22,8 @@ from ..intelligence.fit_scorer import ScoreItem, score_fit
 from ..intelligence.rubric_builder import build_rubric
 from ..intelligence.saenggibu_parser import parse_saenggibu
 from ..intelligence.saenggibu_schema import StructuredSaenggibu
+
+log = logging.getLogger(__name__)
 
 
 def guard_consent(status: ConsentStatus) -> None:
@@ -68,8 +71,13 @@ def archive_corpus_if_consented(
     """원장 승인 후 호출. 코퍼스활용 동의 시에만 비식별 적재."""
     if not can_add_to_corpus(consent):
         return None
-    _clean = deidentify(result.saenggibu, names=student_names, schools=schools)  # noqa: F841 (비식별 단계 — page children 직렬화는 후속 작업)
-    # _clean(비식별 구조화 생기부)은 page children 블록으로 첨부 — repo 메서드에서 처리
-    return repo.add_corpus_entry(
+    # 비식별화는 지금 수행하되(개인정보 보호 단계), DB7 적재는 아직 메타데이터만 지원.
+    # TODO(phase-2): _clean 구조화 생기부를 add_corpus_entry의 page children 블록으로 직렬화.
+    _clean = deidentify(result.saenggibu, names=student_names, schools=schools)  # noqa: F841
+    page_id = repo.add_corpus_entry(
         corpus_id=corpus_id, track_tags=track_tags, consent_ref=consent_ref
     )
+    log.warning(
+        "코퍼스 항목 %s 생성 — 생기부 본문 미적재(phase-1 스텁, 메타데이터만 저장됨)", corpus_id
+    )
+    return page_id
