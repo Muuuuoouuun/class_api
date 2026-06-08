@@ -25,7 +25,7 @@ def deidentify(
         for d in g.subject_details:
             d.text = _scrub(d.text, names, schools)
         g.creative_activities = [
-            _scrub(a, names, schools) or "" for a in g.creative_activities
+            _scrub(a, names, schools) or a for a in g.creative_activities
         ]
         g.behavior_notes = _scrub(g.behavior_notes, names, schools)
     return clean

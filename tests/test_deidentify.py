@@ -16,7 +16,8 @@ def test_removes_student_and_school_names():
     joined = " ".join(clean.all_evidence())
     assert "홍길동" not in joined
     assert "한빛고" not in joined
-    assert "[학생]" in joined or "성실" in joined
+    assert "[학생]" in joined
+    assert "[학교]" in joined
 
 
 def test_original_object_not_mutated():
