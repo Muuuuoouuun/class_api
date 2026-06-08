@@ -23,3 +23,4 @@ def test_corpus_consent_allows_both():
 def test_from_label_maps_korean():
     assert ConsentStatus.from_label("코퍼스활용") is ConsentStatus.CORPUS
     assert ConsentStatus.from_label("미동의") is ConsentStatus.NONE
+    assert ConsentStatus.from_label("내부분석") is ConsentStatus.INTERNAL
