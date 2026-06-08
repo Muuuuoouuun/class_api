@@ -21,3 +21,14 @@ def test_hallucinated_citation_flagged():
     by_key = {i.key: i for i in checked}
     assert by_key["탐구역량"].citation_verified is True
     assert by_key["리더십"].citation_verified is False
+
+
+def test_short_or_empty_citation_not_verified():
+    items = [
+        ScoreItem(key="A", score=1, citation="작성"),   # 2글자 — 의미 없는 단편
+        ScoreItem(key="B", score=0, citation=""),       # 빈 인용 (모델이 근거 없음을 인정)
+    ]
+    checked = validate_citations(items, _sg())
+    by = {i.key: i for i in checked}
+    assert by["A"].citation_verified is False
+    assert by["B"].citation_verified is False
