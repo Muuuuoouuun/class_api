@@ -762,11 +762,11 @@ class NotionRepo:
 
     # ============== 진로 프로필 (DB6) / 진학 코퍼스 (DB7) ==============
 
-    def upsert_career_profile(
+    def create_career_profile(
         self, *, student_page_id: str, target_major: str,
         fit_score: float, consent_label: str,
     ) -> str:
-        """진로 프로필(DB6) 생성. 페이지 id 반환."""
+        """진로 프로필(DB6) 신규 생성. 페이지 id 반환. (학생당 1개 보장 upsert는 Phase-2 follow-up)"""
         # fail-loud: 선택적 sweep DB와 달리, career_db 미설정 시 계산된 결과가 조용히 유실되는 것을 방지
         if not self.career_db:
             raise ValueError("career_db 미설정 (config.notion.databases.career)")
