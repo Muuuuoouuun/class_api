@@ -18,6 +18,10 @@ def test_valid_saenggibu_parses():
     sg = StructuredSaenggibu.model_validate(data)
     assert sg.grade_records[0].grade == 2
     assert sg.grade_records[0].subject_details[0].subject == "물리학I"
+    evidence = sg.all_evidence()
+    assert "역학 탐구 보고서 작성" in evidence
+    assert "과학 동아리 부장" in evidence
+    assert "성실함" in evidence
 
 
 def test_failed_parse_item_marked_null():
