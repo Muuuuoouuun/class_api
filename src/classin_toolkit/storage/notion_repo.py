@@ -767,11 +767,12 @@ class NotionRepo:
         fit_score: float, consent_label: str,
     ) -> str:
         """진로 프로필(DB6) 생성. 페이지 id 반환."""
+        # fail-loud: 선택적 sweep DB와 달리, career_db 미설정 시 계산된 결과가 조용히 유실되는 것을 방지
         if not self.career_db:
             raise ValueError("career_db 미설정 (config.notion.databases.career)")
         props = {
             PROP_CAREER_STUDENT: {"relation": [{"id": student_page_id}]},
-            PROP_CAREER_TARGET_MAJOR: {"rich_text": [{"text": {"content": target_major}}]},
+            PROP_CAREER_TARGET_MAJOR: {"rich_text": [{"text": {"content": target_major[:2000]}}]},
             PROP_CAREER_FIT_SCORE: {"number": fit_score},
             PROP_CAREER_CONSENT: {"select": {"name": consent_label}},
             PROP_CAREER_CONSENT_AT: {"date": {"start": datetime.now(timezone.utc).isoformat()}},
@@ -785,13 +786,14 @@ class NotionRepo:
         self, *, corpus_id: str, track_tags: list[str], consent_ref: str,
     ) -> str:
         """비식별 코퍼스(DB7) 적재. 결과 라벨은 '미정'으로 시작."""
+        # fail-loud: corpus_db 미설정 시 비식별 적재 누락을 조용히 넘기지 않음
         if not self.corpus_db:
             raise ValueError("corpus_db 미설정 (config.notion.databases.corpus)")
         props = {
             PROP_CORPUS_ID: {"title": [{"text": {"content": corpus_id}}]},
             PROP_CORPUS_TRACK: {"multi_select": [{"name": t} for t in track_tags]},
             PROP_CORPUS_OUTCOME: {"select": {"name": "미정"}},
-            PROP_CORPUS_CONSENT_REF: {"rich_text": [{"text": {"content": consent_ref}}]},
+            PROP_CORPUS_CONSENT_REF: {"rich_text": [{"text": {"content": consent_ref[:2000]}}]},
         }
         page = self._nc.pages.create(
             parent={"database_id": self.corpus_db}, properties=props
