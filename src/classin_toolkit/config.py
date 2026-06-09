@@ -68,6 +68,11 @@ class AnthropicConfig(BaseModel):
     report_model: str = "claude-opus-4-7"
 
 
+class NeisConfig(BaseModel):
+    api_key: str
+    base_url: str = "https://open.neis.go.kr/hub"
+
+
 class AligoConfig(BaseModel):
     api_key: str = ""
     user_id: str = ""
@@ -97,6 +102,7 @@ class AppConfig(BaseModel):
     classin: ClassInConfig
     notion: NotionConfig
     anthropic: AnthropicConfig
+    neis: NeisConfig | None = None
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
     webhook: WebhookConfig = Field(default_factory=WebhookConfig)
     reports: ReportsConfig = Field(default_factory=ReportsConfig)

@@ -40,6 +40,9 @@ anthropic:
   model: "claude-sonnet-4-6"
   report_model: "claude-opus-4-7"
 
+neis:
+  api_key: "REPLACE_ME_NEIS_KEY"
+
 notify:
   mode: "dry_run"
   provider: "aligo"
