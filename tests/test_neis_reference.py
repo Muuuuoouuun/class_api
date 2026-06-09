@@ -22,3 +22,14 @@ def test_extract_rows_error_raises():
     payload = {"RESULT": {"CODE": "ERROR-300", "MESSAGE": "필수 값 누락"}}
     with pytest.raises(NeisError):
         extract_rows("schoolMajorinfo", payload)
+
+
+def test_extract_rows_error_inside_envelope_raises():
+    payload = {
+        "schoolMajorinfo": [
+            {"head": [{"list_total_count": 0},
+                      {"RESULT": {"CODE": "ERROR-300", "MESSAGE": "잘못된 인증키"}}]},
+        ]
+    }
+    with pytest.raises(NeisError):
+        extract_rows("schoolMajorinfo", payload)

@@ -38,6 +38,14 @@ def extract_rows(service: str, payload: dict) -> list[dict]:
         for block in blocks:
             if isinstance(block, dict) and "row" in block:
                 return block["row"]
+        # row 블록이 없으면 head의 RESULT를 확인 — 봉투 내부 에러를 [] 로 삼키지 않음
+        for block in blocks:
+            if isinstance(block, dict) and "head" in block:
+                entry = next((e for e in block["head"] if isinstance(e, dict) and "RESULT" in e), {})
+                result = entry.get("RESULT", {})
+                code = result.get("CODE", "")
+                if code and code not in ("INFO-000", _NO_DATA):
+                    raise NeisError(f"NEIS {service} 오류: {code} {result.get('MESSAGE', '')}")
         return []
     result = payload.get("RESULT", {})
     code = result.get("CODE", "")
@@ -47,6 +55,7 @@ def extract_rows(service: str, payload: dict) -> list[dict]:
 
 
 def _get(cfg: NeisConfig, service: str, params: dict) -> list[dict]:
+    # NOTE: 단일 페이지. NEIS 학교 단위 데이터셋(학과/계열/일정)은 실무상 100행 미만.
     q = {"KEY": cfg.api_key, "Type": "json", "pIndex": 1, "pSize": 100, **params}
     url = f"{cfg.base_url}/{service}"
     resp = httpx.get(url, params=q, timeout=10.0)
