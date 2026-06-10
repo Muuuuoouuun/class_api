@@ -19,6 +19,7 @@
 - `HomeworkSubmit`          : 숙제 제출 (학생별)
 - `HomeworkScore`           : 숙제 채점 (학생별)
 - `ExamScore`               : 시험 점수
+- `AnswerSheetScore`        : 답안지/OMR 점수
 - `Rating`                  : 교사↔학생 상호평가
 - `Record`, `Upload`        : 녹화본 URL
 - `ChatContent`             : 채팅 로그 zip URL
@@ -29,7 +30,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # -------------- common base --------------
 
@@ -41,6 +42,7 @@ class _BaseEvent(BaseModel):
     Cmd: str
     ClassID: int | None = None
     CourseID: int | None = None
+    CourseName: str | None = None
     ActionTime: int | None = None
     TimeStamp: int | None = None
     SafeKey: str | None = None
@@ -169,6 +171,18 @@ class HomeworkParty(BaseModel):
     Name: str | None = None
     Account: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_official_lms_keys(cls, data: Any) -> Any:
+        """Normalize official LMS keys like StudentUid/TeacherUid to Uid."""
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        out.setdefault("Uid", out.get("StudentUid") or out.get("TeacherUid"))
+        out.setdefault("Name", out.get("StudentName") or out.get("TeacherName"))
+        out.setdefault("Account", out.get("StudentAccount") or out.get("TeacherAccount"))
+        return out
+
 
 class HomeworkSubmitData(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -224,6 +238,87 @@ class HomeworkScoreEvent(_BaseEvent):
     Data: HomeworkScoreData
 
 
+# -------------- AnswerSheetScore --------------
+
+
+class ScoreTopicDetail(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    TopicId: int | None = None
+    TopicType: str | None = None
+    TopicResult: int | list[int] | None = None
+    TopicScore: float | None = None
+    TopicMaxScore: float | None = None
+    SubTopicDetails: list["ScoreTopicDetail"] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_subtopic_keys(cls, data: Any) -> Any:
+        """Normalize official SubTopic* fields to the same shape as Topic* fields."""
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        out.setdefault("TopicId", out.get("SubTopicId"))
+        out.setdefault("TopicType", out.get("SubTopicType"))
+        out.setdefault("TopicResult", out.get("SubTopicResult"))
+        out.setdefault("TopicScore", out.get("SubTopicScore"))
+        out.setdefault("TopicMaxScore", out.get("SubTopicMaxScore"))
+        return out
+
+    def earned_score(self) -> float:
+        if self.SubTopicDetails:
+            return sum(topic.earned_score() for topic in self.SubTopicDetails)
+        return float(self.TopicScore or 0)
+
+    def max_score(self) -> float:
+        if self.SubTopicDetails:
+            return sum(topic.max_score() for topic in self.SubTopicDetails)
+        return float(self.TopicMaxScore or 0)
+
+
+class AnswerSheetScoreData(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    UnitId: int | None = None
+    UnitName: str | None = None
+    ActivityId: int
+    ActivityName: str | None = None
+    ClassId: int | None = None
+    Score: float | None = None
+    MaximumScore: float | None = None
+    StudentInfo: HomeworkParty | None = None
+    TeacherInfo: HomeworkParty | None = None
+    SubmissionTime: int | None = None
+    AnswerDuration: int | None = None
+    CorrectionTime: int | None = None
+    StudentScoringRate: float | None = None
+    TopicDetails: list[ScoreTopicDetail] = Field(default_factory=list)
+
+    def earned_score(self) -> float | None:
+        topic_score = sum(topic.earned_score() for topic in self.TopicDetails)
+        if topic_score:
+            return round(topic_score, 2)
+        max_score = self.max_score()
+        if max_score is not None and self.StudentScoringRate is not None:
+            return round(float(max_score) * float(self.StudentScoringRate), 2)
+        return None
+
+    def max_score(self) -> float | None:
+        if self.MaximumScore is not None:
+            return float(self.MaximumScore)
+        topic_max = sum(topic.max_score() for topic in self.TopicDetails)
+        if topic_max:
+            return round(topic_max, 2)
+        if self.Score is not None:
+            return float(self.Score)
+        return None
+
+
+class AnswerSheetScoreEvent(_BaseEvent):
+    Cmd: Literal["AnswerSheetScore"]
+    Data: AnswerSheetScoreData
+
+
 # -------------- Generic (우리가 모르는 Cmd) --------------
 
 
@@ -235,7 +330,14 @@ class GenericEvent(_BaseEvent):
 # -------------- Discriminated union --------------
 
 ClassInEvent = Annotated[
-    Union[AttendanceEvent, EndEvent, HomeworkSubmitEvent, HomeworkScoreEvent, GenericEvent],
+    Union[
+        AttendanceEvent,
+        EndEvent,
+        HomeworkSubmitEvent,
+        HomeworkScoreEvent,
+        AnswerSheetScoreEvent,
+        GenericEvent,
+    ],
     Field(discriminator="Cmd"),
 ]
 
@@ -252,6 +354,7 @@ _KNOWN: dict[str, type[_BaseEvent]] = {
     "End": EndEvent,
     "HomeworkSubmit": HomeworkSubmitEvent,
     "HomeworkScore": HomeworkScoreEvent,
+    "AnswerSheetScore": AnswerSheetScoreEvent,
 }
 
 

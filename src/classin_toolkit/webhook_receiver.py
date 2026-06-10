@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 
 from .classin.signing import verify_webhook_safekey
 from .classin.webhook_schemas import (
+    AnswerSheetScoreEvent,
     AttendanceEvent,
     EndEvent,
     HomeworkScoreEvent,
@@ -27,6 +28,7 @@ from .classin.webhook_schemas import (
 )
 from .config import AppConfig, load_config
 from .pipelines.ingest import (
+    ingest_answer_sheet_score,
     ingest_attendance,
     ingest_end_summary,
     ingest_homework_score,
@@ -50,6 +52,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         "End": _wrap(ingest_end_summary, EndEvent),
         "HomeworkSubmit": _wrap(ingest_homework_submit, HomeworkSubmitEvent),
         "HomeworkScore": _wrap(ingest_homework_score, HomeworkScoreEvent),
+        "AnswerSheetScore": _wrap(ingest_answer_sheet_score, AnswerSheetScoreEvent),
     }
 
     @app.get("/health")

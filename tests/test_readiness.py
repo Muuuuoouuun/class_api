@@ -19,6 +19,7 @@ def _cfg(**overrides) -> AppConfig:
                 "lessons": "lessons_db",
                 "reports": "reports_db",
                 "memos": "memos_db",
+                "exams": "exams_db",
             },
         },
         "anthropic": {"api_key": "sk-ant-test"},
@@ -59,6 +60,7 @@ def test_local_demo_flags_placeholder_values(tmp_path: Path) -> None:
                     "lessons": "lessons_db",
                     "reports": "reports_db",
                     "memos": "memos_db",
+                    "exams": "exams_db",
                 },
             }
         ),
@@ -72,23 +74,19 @@ def test_local_demo_flags_placeholder_values(tmp_path: Path) -> None:
     assert any(item.label.startswith("샘플 페이로드") for item in report.blockers)
 
 
-def test_local_demo_treats_local_demo_classin_keys_as_warning(tmp_path: Path) -> None:
+def test_local_demo_requires_exam_db_id(tmp_path: Path) -> None:
     samples = tmp_path / "samples"
     samples.mkdir()
     for name in _SAMPLE_PAYLOADS:
         (samples / name).write_text("{}", encoding="utf-8")
 
     report = check_readiness(
-        _cfg(classin={"school_id": "LOCAL_DEMO", "secret_key": "LOCAL_DEMO"}),
+        _cfg(notion={"databases": {"exams": "REPLACE_ME_EXAMS_DB_ID"}}),
         mode="local-demo",
         project_root=tmp_path,
     )
 
-    assert report.ready
-    assert any(
-        item.label == "ClassIn API 키" and item.status == "warn"
-        for item in report.items
-    )
+    assert any(item.label == "시험 DB ID" for item in report.blockers)
 
 
 def test_classin_live_requires_webhook_secret(tmp_path: Path) -> None:
@@ -104,6 +102,21 @@ def test_classin_live_requires_webhook_secret(tmp_path: Path) -> None:
     )
 
     assert any(item.label == "Webhook SafeKey secret" for item in report.blockers)
+
+
+def test_classin_live_lms_requires_teacher_uid_mapping(tmp_path: Path) -> None:
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    for name in _SAMPLE_PAYLOADS:
+        (samples / name).write_text("{}", encoding="utf-8")
+
+    report = check_readiness(
+        _cfg(classin={"schedule_api": "lms", "teacher_uids": {}, "default_teacher_uid": None}),
+        mode="classin-live",
+        project_root=tmp_path,
+    )
+
+    assert any(item.label == "ClassIn 교사 UID 매핑" for item in report.blockers)
 
 
 def test_kakao_live_is_blocked_until_dispatcher_is_implemented(tmp_path: Path) -> None:

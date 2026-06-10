@@ -1,0 +1,3 @@
+student_classin_id,student_name,class_name,exam_name,exam_date,subject,score,max_score,attended,source
+10001,홍길동,고2-A,4월 월말평가,2026-04-24,수학,92,100,true,sample
+10002,김영희,고2-A,4월 월말평가,2026-04-24,수학,,100,false,sample

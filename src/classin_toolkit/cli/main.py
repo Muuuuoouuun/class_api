@@ -9,10 +9,12 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from ..api_diagnostics import DiagnosticItem, diagnose_apis
 from ..config import AppConfig, load_config
 from ..pipelines.core_engine import run_core_engine
 from ..pipelines.daily import render_daily
 from ..pipelines.demo_seed import seed_demo_data
+from ..pipelines.exams import create_answer_sheet_activity, import_exam_results, sweep_missing_exam
 from ..pipelines.missing_homework import sweep_missing_homework
 from ..pipelines.weekly import approve_all, generate_drafts, run_weekly_reports
 from ..readiness import ReadinessItem, check_readiness
@@ -51,6 +53,7 @@ def replay_webhook(
     import asyncio
 
     from ..classin.webhook_schemas import (
+        AnswerSheetScoreEvent,
         AttendanceEvent,
         EndEvent,
         HomeworkScoreEvent,
@@ -58,6 +61,7 @@ def replay_webhook(
         parse_event,
     )
     from ..pipelines.ingest import (
+        ingest_answer_sheet_score,
         ingest_attendance,
         ingest_end_summary,
         ingest_homework_score,
@@ -73,6 +77,7 @@ def replay_webhook(
         EndEvent: ingest_end_summary,
         HomeworkSubmitEvent: ingest_homework_submit,
         HomeworkScoreEvent: ingest_homework_score,
+        AnswerSheetScoreEvent: ingest_answer_sheet_score,
     }
     for etype, fn in handlers.items():
         if isinstance(event, etype):
@@ -91,6 +96,97 @@ def sweep_missing(
     cfg = load_config(config)
     n = sweep_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id)
     console.print(f"[green]dispatched {n} messages[/green]")
+
+
+@app.command("import-exam-results")
+def import_exam_results_cmd(
+    path: Path = typer.Argument(..., exists=True, readable=True),
+    exam_name: str | None = typer.Option(None, "--exam-name"),
+    exam_date: str | None = typer.Option(None, "--exam-date", help="YYYY-MM-DD"),
+    class_name: str | None = typer.Option(None, "--class-name"),
+    source: str | None = typer.Option("academy-db", "--source"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Notion DB에 쓰지 않고 매칭만 확인"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """시험 결과 CSV/JSON 을 학생 Master 와 병합해 Notion 시험 DB 에 적재."""
+    cfg = load_config(config)
+    result = import_exam_results(
+        cfg,
+        path=path,
+        exam_name=exam_name,
+        exam_date=exam_date,
+        class_name=class_name,
+        source=source,
+        dry_run=dry_run,
+    )
+    verb = "would merge" if result.dry_run else "merged"
+    console.print(
+        "[green]{verb} {merged} / {total} rows[/green] "
+        "(unresolved={unresolved}, skipped={skipped})".format(
+            verb=verb,
+            merged=result.merged_rows,
+            total=result.total_rows,
+            unresolved=result.unresolved_rows,
+            skipped=result.skipped_rows,
+        )
+    )
+    for error in result.errors[:20]:
+        console.print(f"[yellow]- {error}[/yellow]")
+
+
+@app.command("sweep-missing-exam")
+def sweep_missing_exam_cmd(
+    exam_name: str = typer.Option(..., "--exam-name"),
+    exam_date: str = typer.Option(..., "--exam-date", help="YYYY-MM-DD"),
+    class_name: str | None = typer.Option(None, "--class-name"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """특정 시험의 미응시 학생을 찾아 알림 문구를 일괄 발송한다."""
+    cfg = load_config(config)
+    n = sweep_missing_exam(
+        cfg,
+        exam_name=exam_name,
+        exam_date=exam_date,
+        class_name=class_name,
+    )
+    console.print(f"[green]dispatched {n} messages[/green]")
+
+
+@app.command("create-answer-sheet")
+def create_answer_sheet_cmd(
+    course_id: str = typer.Option(..., "--course-id", help="ClassIn Course ID"),
+    unit_id: str = typer.Option(..., "--unit-id", help="ClassIn LMS Unit ID"),
+    name: str = typer.Option(..., "--name", help="답안지/OMR 활동명"),
+    teacher_uid: str | None = typer.Option(None, "--teacher-uid"),
+    start_at: str | None = typer.Option(None, "--start", help="ISO datetime 또는 epoch seconds"),
+    end_at: str | None = typer.Option(None, "--end", help="ISO datetime 또는 epoch seconds"),
+    release: bool = typer.Option(False, "--release", help="생성 후 바로 게시"),
+    dry_run: bool = typer.Option(True, "--dry-run/--live"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """ClassIn LMS Answer Sheet(OMR/답안지) activity 초안을 생성한다."""
+    cfg = load_config(config)
+    result = create_answer_sheet_activity(
+        cfg,
+        course_id=course_id,
+        unit_id=unit_id,
+        name=name,
+        teacher_uid=teacher_uid,
+        start_at=_parse_datetime_option(start_at),
+        end_at=_parse_datetime_option(end_at),
+        release=release,
+        dry_run=dry_run,
+    )
+    if result.dry_run:
+        console.print(
+            "[yellow]dry-run[/yellow] would create Answer Sheet "
+            f"name={result.name!r} course={course_id} unit={unit_id} release={release}"
+        )
+        return
+    console.print(
+        f"[green]created answer sheet[/green] activity_id={result.activity_id} "
+        f"released={result.released}"
+    )
 
 
 @app.command("weekly-reports")
@@ -185,7 +281,7 @@ def sso_link(
     url = get_login_linked(
         base_url=cfg.classin.base_url,
         sid=cfg.classin.school_id,
-        safe_key=cfg.classin.secret_key,
+        secret_key=cfg.classin.secret_key,
         uid=uid,
         course_id=course_id,
         class_id=class_id,
@@ -250,6 +346,53 @@ def check_ready_cmd(
         return
 
     console.print(f"[red]not ready[/red] 해결 필요한 항목 {len(report.blockers)}개")
+    raise typer.Exit(1)
+
+
+@app.command("diagnose-apis")
+def diagnose_apis_cmd(
+    live: bool = typer.Option(
+        False,
+        "--live",
+        help="실제 외부 API에 비파괴 probe를 보냅니다.",
+    ),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """ClassIn/Notion/Claude/Aligo API 연결 상태를 한 번에 진단."""
+    try:
+        cfg = load_config(config)
+    except FileNotFoundError as e:
+        console.print(f"[red]config not found[/red] {e}")
+        raise typer.Exit(1) from e
+
+    report = diagnose_apis(cfg, live=live)
+
+    table = Table(
+        title=f"ClassIn Toolkit API diagnostics: {'live' if report.live else 'offline'}"
+    )
+    table.add_column("상태", no_wrap=True)
+    table.add_column("서비스", no_wrap=True)
+    table.add_column("점검")
+    table.add_column("내용")
+    table.add_column("다음 조치")
+
+    for item in report.items:
+        table.add_row(
+            _diagnostic_status_label(item),
+            item.service,
+            item.check,
+            item.detail,
+            item.next_step or "-",
+        )
+    console.print(table)
+
+    if report.ready:
+        console.print("[green]api diagnostics passed[/green]")
+        if report.warnings:
+            console.print(f"[yellow]warnings[/yellow] {len(report.warnings)}개는 확인하세요.")
+        return
+
+    console.print(f"[red]api diagnostics failed[/red] 해결 필요한 항목 {len(report.blockers)}개")
     raise typer.Exit(1)
 
 
@@ -341,6 +484,31 @@ def _status_label(item: ReadinessItem) -> str:
         "blocked": "[magenta]BLOCKED[/magenta]",
     }
     return labels[item.status]
+
+
+def _diagnostic_status_label(item: DiagnosticItem) -> str:
+    labels = {
+        "ok": "[green]OK[/green]",
+        "warn": "[yellow]WARN[/yellow]",
+        "missing": "[red]MISSING[/red]",
+        "failed": "[red]FAILED[/red]",
+        "skipped": "[cyan]SKIP[/cyan]",
+    }
+    return labels[item.status]
+
+
+def _parse_datetime_option(value: str | None):
+    if not value:
+        return None
+    from datetime import datetime, timezone
+
+    text = value.strip()
+    if text.isdigit():
+        return datetime.fromtimestamp(int(text), tz=timezone.utc)
+    parsed = datetime.fromisoformat(text)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 def _load_config_for_optional_token(path: Path) -> AppConfig:

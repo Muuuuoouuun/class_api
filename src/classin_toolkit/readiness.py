@@ -104,6 +104,12 @@ def _local_demo_items(cfg: AppConfig, project_root: Path) -> list[ReadinessItem]
         ),
         _required(
             "local-demo",
+            "시험 DB ID",
+            cfg.notion.databases.exams,
+            "시험 import/sweep 기능을 쓰려면 notion.databases.exams 를 채우세요.",
+        ),
+        _required(
+            "local-demo",
             "Claude API 키",
             cfg.anthropic.api_key,
             "anthropic.api_key 를 채우세요.",
@@ -188,6 +194,26 @@ def _classin_live_items(cfg: AppConfig) -> list[ReadinessItem]:
             "classin.webhook_secret 값을 확정해 넣으세요.",
         ),
     ]
+    if cfg.classin.schedule_api == "lms":
+        if cfg.classin.teacher_uids or cfg.classin.default_teacher_uid:
+            items.append(
+                ReadinessItem(
+                    "classin-live",
+                    "ClassIn 교사 UID 매핑",
+                    "ok",
+                    "LMS 스케줄 생성용 교사 UID 입력됨",
+                )
+            )
+        else:
+            items.append(
+                ReadinessItem(
+                    "classin-live",
+                    "ClassIn 교사 UID 매핑",
+                    "missing",
+                    "LMS createClass 는 teacherUid 가 필수입니다.",
+                    "classin.teacher_uids 또는 classin.default_teacher_uid 를 채우세요.",
+                )
+            )
     if cfg.output.daily.public_url_base:
         items.append(
             ReadinessItem(

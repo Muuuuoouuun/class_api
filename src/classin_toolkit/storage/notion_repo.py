@@ -32,7 +32,6 @@ PROP_STUDENT_CLASSIN_ID = "ClassIn ID"
 PROP_STUDENT_PARENT_PHONE = "학부모 연락처"
 PROP_STUDENT_CLASS = "반"
 
-PROP_LESSON_TITLE = "기록"
 PROP_LESSON_STUDENT = "학생"
 PROP_LESSON_DATE = "수업일시"
 PROP_LESSON_ATTEND = "출석 여부"
@@ -48,7 +47,6 @@ PROP_LESSON_ACTIVITY_ID = "ClassIn 숙제 ID"
 PROP_LESSON_CLASSIN_LESSON_ID = "ClassIn 수업 ID"
 PROP_LESSON_CLASSIN_COURSE_ID = "ClassIn 반 ID"
 
-PROP_REPORT_TITLE = "리포트명"
 PROP_REPORT_STUDENT = "학생"
 PROP_REPORT_PERIOD = "리포트 기간"
 PROP_REPORT_SUMMARY = "학부모 발송 문구"
@@ -61,6 +59,29 @@ PROP_MEMO_DATE = "일자"
 PROP_MEMO_TAG = "태그"
 PROP_MEMO_TEXT = "내용"
 
+PROP_EXAM_NAME = "시험명"
+PROP_EXAM_STUDENT = "학생"
+PROP_EXAM_DATE = "시험일"
+PROP_EXAM_CLASS = "반"
+PROP_EXAM_SUBJECT = "과목"
+PROP_EXAM_ATTENDED = "응시 여부"
+PROP_EXAM_SCORE = "원점수"
+PROP_EXAM_MAX_SCORE = "만점"
+PROP_EXAM_PERCENT = "백분율"
+PROP_EXAM_SOURCE = "데이터 출처"
+PROP_EXAM_EXTERNAL_ID = "외부 시험 ID"
+
+PROP_CAREER_STUDENT = "학생"
+PROP_CAREER_TARGET_MAJOR = "목표 대학/학과"
+PROP_CAREER_FIT_SCORE = "최신 적합도 점수"
+PROP_CAREER_CONSENT = "동의 상태"
+PROP_CAREER_CONSENT_AT = "동의일시"
+
+PROP_CORPUS_ID = "코퍼스 ID"
+PROP_CORPUS_TRACK = "계열/학과 태그"
+PROP_CORPUS_OUTCOME = "결과 라벨"
+PROP_CORPUS_CONSENT_REF = "동의 근거"
+
 
 class NotionRepo:
     def __init__(
@@ -70,14 +91,19 @@ class NotionRepo:
         lessons_db: str,
         reports_db: str,
         memos_db: str | None = None,
+        exams_db: str | None = None,
+        career_db: str | None = None,
+        corpus_db: str | None = None,
     ):
         self._nc = Client(auth=token)
         self.students_db = students_db
         self.lessons_db = lessons_db
         self.reports_db = reports_db
         self.memos_db = memos_db
-        self._source_cache: dict[str, str] = {}
-        self._student_cache: dict[str, StudentRecord | None] = {}
+        self.exams_db = exams_db
+        self.career_db = career_db
+        self.corpus_db = corpus_db
+        self._data_source_ids: dict[str, str] = {}
 
     @classmethod
     def from_config(cls, cfg: AppConfig) -> "NotionRepo":
@@ -87,16 +113,16 @@ class NotionRepo:
             lessons_db=cfg.notion.databases.lessons,
             reports_db=cfg.notion.databases.reports,
             memos_db=cfg.notion.databases.memos,
+            exams_db=cfg.notion.databases.exams,
+            career_db=cfg.notion.databases.career,
+            corpus_db=cfg.notion.databases.corpus,
         )
 
     # ============== Student ==============
 
     def find_student_by_classin_id(self, classin_id: str) -> StudentRecord | None:
-        classin_id = str(classin_id)
-        if classin_id in self._student_cache:
-            return self._student_cache[classin_id]
-        res = self._query_source(
-            self.students_db,
+        res = self._query_database(
+            database_id=self.students_db,
             filter={
                 "property": PROP_STUDENT_CLASSIN_ID,
                 "rich_text": {"equals": str(classin_id)},
@@ -105,11 +131,8 @@ class NotionRepo:
         )
         items = res.get("results", [])
         if not items:
-            self._student_cache[classin_id] = None
             return None
-        student = _student_from_page(items[0], classin_id=str(classin_id))
-        self._student_cache[classin_id] = student
-        return student
+        return _student_from_page(items[0], classin_id=str(classin_id))
 
     def resolve_students(self, classin_ids: Iterable[str]) -> dict[str, StudentRecord]:
         out: dict[str, StudentRecord] = {}
@@ -141,38 +164,47 @@ class NotionRepo:
         existing = self.find_student_by_classin_id(classin_id)
         if existing:
             self._nc.pages.update(page_id=existing.page_id, properties=props)
-            student = StudentRecord(
-                page_id=existing.page_id,
-                classin_id=str(classin_id),
-                name=name,
-                parent_phone=parent_phone,
-                class_name=class_name,
-            )
-            self._student_cache[str(classin_id)] = student
-            return student
-        page = self._nc.pages.create(
-            parent={"data_source_id": self._data_source_id(self.students_db)},
-            properties=props,
-        )
-        student = StudentRecord(
+            return existing
+        page = self._nc.pages.create(parent=self._page_parent(self.students_db), properties=props)
+        return StudentRecord(
             page_id=page["id"],
             classin_id=str(classin_id),
             name=name,
             parent_phone=parent_phone,
             class_name=class_name,
         )
-        self._student_cache[str(classin_id)] = student
-        return student
 
     def list_active_students(self) -> list[StudentRecord]:
         out: list[StudentRecord] = []
-        for page in self._query_all(self.students_db):
-            props = page["properties"]
-            cid = _plain(props.get(PROP_STUDENT_CLASSIN_ID))
-            if not cid:
-                continue
-            out.append(_student_from_page(page, classin_id=cid))
+        cursor: str | None = None
+        while True:
+            kwargs: dict = {"database_id": self.students_db, "page_size": 100}
+            if cursor:
+                kwargs["start_cursor"] = cursor
+            res = self._query_database(**kwargs)
+            for page in res.get("results", []):
+                props = page["properties"]
+                cid = _plain(props.get(PROP_STUDENT_CLASSIN_ID))
+                if not cid:
+                    continue
+                out.append(_student_from_page(page, classin_id=cid))
+            if not res.get("has_more"):
+                break
+            cursor = res.get("next_cursor")
         return out
+
+    def find_students_by_name(
+        self, name: str, *, class_name: str | None = None
+    ) -> list[StudentRecord]:
+        target = name.strip()
+        if not target:
+            return []
+        students = self.list_active_students()
+        return [
+            student
+            for student in students
+            if student.name.strip() == target and (class_name is None or student.class_name == class_name)
+        ]
 
     # ============== Lesson record upsert ==============
 
@@ -195,7 +227,6 @@ class NotionRepo:
 
         existing = self._find_lesson_row(lesson_id, student.page_id)
         props: dict = {
-            PROP_LESSON_TITLE: _title(f"{lesson_id} / {student.name}"),
             PROP_LESSON_CLASSIN_LESSON_ID: _rich(lesson_id),
             PROP_LESSON_CLASSIN_COURSE_ID: _rich(course_id),
             PROP_LESSON_STUDENT: {"relation": [{"id": student.page_id}]},
@@ -217,15 +248,14 @@ class NotionRepo:
             self._nc.pages.update(page_id=existing, properties=props)
             return existing
         page = self._nc.pages.create(
-            parent={"data_source_id": self._data_source_id(self.lessons_db)},
-            properties=props,
+            parent=self._page_parent(self.lessons_db), properties=props
         )
         return page["id"]
 
     def patch_lesson_record(
         self,
         *,
-        lesson_id: str,
+        lesson_id: str | None,
         student_classin_id: str,
         camera_minutes: float | None = None,
         hand_raise: int | None = None,
@@ -235,29 +265,27 @@ class NotionRepo:
         homework_submitted_late: bool | None = None,
         homework_score: float | None = None,
         homework_activity_id: str | None = None,
-        page_id: str | None = None,
     ) -> str | None:
-        student = None
-        if not page_id:
-            student = self.find_student_by_classin_id(student_classin_id)
-            if not student:
-                log.warning("patch skipped — no student for %s", student_classin_id)
-                return None
+        student = self.find_student_by_classin_id(student_classin_id)
+        if not student:
+            log.warning("patch skipped — no student for %s", student_classin_id)
+            return None
+        page_id = None
+        if lesson_id:
             page_id = self._find_lesson_row(lesson_id, student.page_id)
+        if not page_id and homework_activity_id:
+            page_id = self._find_lesson_row_by_homework_activity(
+                homework_activity_id, student.page_id
+            )
         if not page_id:
             # Attendance 가 아직 안 들어왔을 수 있다 (HomeworkSubmit 이 먼저 오는 경우).
             # 최소 필드로 새 row 생성.
-            student = student or self.find_student_by_classin_id(student_classin_id)
-            if not student:
-                return None
-            page = self._nc.pages.create(
-                parent={"data_source_id": self._data_source_id(self.lessons_db)},
-                properties={
-                    PROP_LESSON_TITLE: _title(f"{lesson_id} / {student.name}"),
-                    PROP_LESSON_CLASSIN_LESSON_ID: _rich(lesson_id),
-                    PROP_LESSON_STUDENT: {"relation": [{"id": student.page_id}]},
-                },
-            )
+            props = {PROP_LESSON_STUDENT: {"relation": [{"id": student.page_id}]}}
+            if lesson_id:
+                props[PROP_LESSON_CLASSIN_LESSON_ID] = _rich(lesson_id)
+            if homework_activity_id:
+                props[PROP_LESSON_ACTIVITY_ID] = _rich(homework_activity_id)
+            page = self._nc.pages.create(parent=self._page_parent(self.lessons_db), properties=props)
             page_id = page["id"]
 
         props: dict = {}
@@ -283,8 +311,8 @@ class NotionRepo:
         return page_id
 
     def _find_lesson_row(self, lesson_id: str, student_page_id: str) -> str | None:
-        res = self._query_source(
-            self.lessons_db,
+        res = self._query_database(
+            database_id=self.lessons_db,
             filter={
                 "and": [
                     {
@@ -297,6 +325,132 @@ class NotionRepo:
                     },
                 ]
             },
+            page_size=1,
+        )
+        items = res.get("results", [])
+        return items[0]["id"] if items else None
+
+    def _find_lesson_row_by_homework_activity(
+        self, homework_activity_id: str, student_page_id: str
+    ) -> str | None:
+        res = self._query_database(
+            database_id=self.lessons_db,
+            filter={
+                "and": [
+                    {
+                        "property": PROP_LESSON_ACTIVITY_ID,
+                        "rich_text": {"equals": str(homework_activity_id)},
+                    },
+                    {
+                        "property": PROP_LESSON_STUDENT,
+                        "relation": {"contains": student_page_id},
+                    },
+                ]
+            },
+            page_size=1,
+        )
+        items = res.get("results", [])
+        return items[0]["id"] if items else None
+
+    # ============== Exam record upsert ==============
+
+    def upsert_exam_result(
+        self,
+        *,
+        student_classin_id: str,
+        student: StudentRecord | None = None,
+        exam_name: str,
+        exam_date: datetime,
+        class_name: str | None = None,
+        subject: str | None = None,
+        attended: bool = True,
+        score: float | None = None,
+        max_score: float | None = None,
+        source: str | None = None,
+        external_exam_id: str | None = None,
+    ) -> str | None:
+        if not self.exams_db:
+            log.warning("exams_db not configured — skip upsert_exam_result")
+            return None
+
+        student = student or self.find_student_by_classin_id(student_classin_id)
+        if not student:
+            log.warning("exam merge skipped — no student for %s", student_classin_id)
+            return None
+
+        page_id = self._find_exam_row(
+            exam_name=exam_name,
+            exam_date=exam_date,
+            student_page_id=student.page_id,
+            subject=subject,
+        )
+        percent = (
+            round(float(score) / float(max_score) * 100, 1)
+            if score is not None and max_score not in (None, 0)
+            else None
+        )
+        props: dict[str, Any] = {
+            PROP_EXAM_NAME: {"title": [{"text": {"content": exam_name[:1900]}}]},
+            PROP_EXAM_STUDENT: {"relation": [{"id": student.page_id}]},
+            PROP_EXAM_DATE: {"date": {"start": exam_date.date().isoformat()}},
+            PROP_EXAM_ATTENDED: {"checkbox": bool(attended)},
+        }
+        if class_name or student.class_name:
+            props[PROP_EXAM_CLASS] = _rich(class_name or student.class_name or "")
+        if subject:
+            props[PROP_EXAM_SUBJECT] = _rich(subject)
+        if score is not None:
+            props[PROP_EXAM_SCORE] = {"number": float(score)}
+        if max_score is not None:
+            props[PROP_EXAM_MAX_SCORE] = {"number": float(max_score)}
+        if percent is not None:
+            props[PROP_EXAM_PERCENT] = {"number": percent}
+        if source:
+            props[PROP_EXAM_SOURCE] = _rich(source)
+        if external_exam_id:
+            props[PROP_EXAM_EXTERNAL_ID] = _rich(external_exam_id)
+
+        if page_id:
+            self._nc.pages.update(page_id=page_id, properties=props)
+            return page_id
+
+        page = self._nc.pages.create(parent=self._page_parent(self.exams_db), properties=props)
+        return page["id"]
+
+    def _find_exam_row(
+        self,
+        *,
+        exam_name: str,
+        exam_date: datetime,
+        student_page_id: str,
+        subject: str | None = None,
+    ) -> str | None:
+        if not self.exams_db:
+            return None
+        filters: list[dict[str, Any]] = [
+            {
+                "property": PROP_EXAM_STUDENT,
+                "relation": {"contains": student_page_id},
+            },
+            {
+                "property": PROP_EXAM_NAME,
+                "title": {"equals": exam_name},
+            },
+            {
+                "property": PROP_EXAM_DATE,
+                "date": {"equals": exam_date.date().isoformat()},
+            },
+        ]
+        if subject:
+            filters.append(
+                {
+                    "property": PROP_EXAM_SUBJECT,
+                    "rich_text": {"equals": subject},
+                }
+            )
+        res = self._query_database(
+            database_id=self.exams_db,
+            filter={"and": filters},
             page_size=1,
         )
         items = res.get("results", [])
@@ -329,7 +483,7 @@ class NotionRepo:
                 }
             )
         pages = self._query_all(
-            self.lessons_db, filter={"and": and_filters}
+            database_id=self.lessons_db, filter={"and": and_filters}
         )
         return self._attach_student_metadata(
             [_row_summary(p) for p in pages]
@@ -337,7 +491,7 @@ class NotionRepo:
 
     def lesson_records(self, *, since: datetime, until: datetime) -> list[dict]:
         pages = self._query_all(
-            self.lessons_db,
+            database_id=self.lessons_db,
             filter={
                 "and": [
                     {
@@ -360,7 +514,7 @@ class NotionRepo:
         self, *, student_page_id: str, since: datetime, until: datetime
     ) -> list[dict]:
         pages = self._query_all(
-            self.lessons_db,
+            database_id=self.lessons_db,
             filter={
                 "and": [
                     {
@@ -380,6 +534,115 @@ class NotionRepo:
         )
         return [_row_summary(p) for p in pages]
 
+    def student_exam_results(
+        self, *, student_page_id: str, since: datetime, until: datetime
+    ) -> list[dict]:
+        if not self.exams_db:
+            log.warning("exams_db not configured — skip student_exam_results")
+            return []
+
+        pages = self._query_all(
+            database_id=self.exams_db,
+            filter={
+                "and": [
+                    {
+                        "property": PROP_EXAM_STUDENT,
+                        "relation": {"contains": student_page_id},
+                    },
+                    {
+                        "property": PROP_EXAM_DATE,
+                        "date": {"on_or_after": since.date().isoformat()},
+                    },
+                    {
+                        "property": PROP_EXAM_DATE,
+                        "date": {"on_or_before": until.date().isoformat()},
+                    },
+                ]
+            },
+            sorts=[{"property": PROP_EXAM_DATE, "direction": "ascending"}],
+        )
+        return self._attach_student_metadata([_exam_row_summary(p) for p in pages])
+
+    def list_exam_results(
+        self,
+        *,
+        exam_name: str,
+        exam_date: datetime,
+        class_name: str | None = None,
+    ) -> list[dict]:
+        if not self.exams_db:
+            log.warning("exams_db not configured — skip list_exam_results")
+            return []
+
+        filters: list[dict[str, Any]] = [
+            {
+                "property": PROP_EXAM_NAME,
+                "title": {"equals": exam_name},
+            },
+            {
+                "property": PROP_EXAM_DATE,
+                "date": {"equals": exam_date.date().isoformat()},
+            },
+        ]
+        if class_name:
+            filters.append(
+                {
+                    "property": PROP_EXAM_CLASS,
+                    "rich_text": {"equals": class_name},
+                }
+            )
+        pages = self._query_all(
+            database_id=self.exams_db,
+            filter={"and": filters},
+            sorts=[{"property": PROP_EXAM_DATE, "direction": "ascending"}],
+        )
+        return self._attach_student_metadata([_exam_row_summary(p) for p in pages])
+
+    def find_missing_exam(
+        self,
+        *,
+        exam_name: str,
+        exam_date: datetime,
+        class_name: str | None = None,
+    ) -> list[dict]:
+        results = self.list_exam_results(
+            exam_name=exam_name,
+            exam_date=exam_date,
+            class_name=class_name,
+        )
+        active_students = self.list_active_students()
+        if class_name:
+            active_students = [student for student in active_students if student.class_name == class_name]
+
+        by_student_page_id = {
+            row["student_page_id"]: row
+            for row in results
+            if row.get("student_page_id")
+        }
+
+        missing: list[dict] = []
+        for student in active_students:
+            existing = by_student_page_id.get(student.page_id)
+            if existing and existing.get("attended") is True:
+                continue
+            base = {
+                "student_page_id": student.page_id,
+                "student_classin_id": student.classin_id,
+                "student_name": student.name,
+                "student_class_name": student.class_name,
+                "parent_phone": student.parent_phone,
+                "exam_name": exam_name,
+                "exam_date": exam_date.date().isoformat(),
+                "attended": existing.get("attended") if existing else None,
+                "subject": existing.get("subject") if existing else None,
+                "score": existing.get("score") if existing else None,
+                "max_score": existing.get("max_score") if existing else None,
+                "percent": existing.get("percent") if existing else None,
+                "source": existing.get("source") if existing else None,
+            }
+            missing.append(base)
+        return missing
+
     def _attach_student_metadata(self, rows: list[dict]) -> list[dict]:
         if not rows:
             return rows
@@ -394,7 +657,7 @@ class NotionRepo:
             row["parent_phone"] = student.parent_phone
         return rows
 
-    def _query_all(self, source_id: str, **kwargs: Any) -> list[dict]:
+    def _query_all(self, **kwargs: Any) -> list[dict]:
         results: list[dict] = []
         cursor: str | None = None
         while True:
@@ -402,38 +665,43 @@ class NotionRepo:
             query["page_size"] = 100
             if cursor:
                 query["start_cursor"] = cursor
-            res = self._query_source(source_id, **query)
+            res = self._query_database(**query)
             results.extend(res.get("results", []))
             if not res.get("has_more"):
                 return results
             cursor = res.get("next_cursor")
 
-    def _query_source(self, source_id: str, **kwargs: Any) -> dict:
-        query = {k: v for k, v in kwargs.items() if v is not None}
-        if hasattr(self._nc, "data_sources"):
-            return self._nc.data_sources.query(
-                data_source_id=self._data_source_id(source_id),
-                **query,
-            )
-        return self._nc.databases.query(database_id=source_id, **query)
+    def _query_database(self, *, database_id: str, **kwargs: Any) -> dict[str, Any]:
+        if hasattr(self._nc.databases, "query"):
+            return self._nc.databases.query(database_id=database_id, **kwargs)
+        data_source_id = self._data_source_id(database_id)
+        return self._nc.data_sources.query(data_source_id=data_source_id, **kwargs)
 
-    def _data_source_id(self, source_id: str) -> str:
-        if not hasattr(self._nc, "data_sources"):
-            return source_id
-        if source_id in self._source_cache:
-            return self._source_cache[source_id]
+    def _data_source_id(self, database_id: str) -> str:
+        cached = self._data_source_ids.get(database_id)
+        if cached:
+            return cached
+
+        data_source_id = database_id
         try:
-            self._nc.data_sources.retrieve(data_source_id=source_id)
-            self._source_cache[source_id] = source_id
-            return source_id
+            database = self._nc.databases.retrieve(database_id=database_id)
         except Exception:
-            db = self._nc.databases.retrieve(database_id=source_id)
-            data_sources = db.get("data_sources") or []
-            if not data_sources:
-                raise
-            resolved = data_sources[0]["id"]
-            self._source_cache[source_id] = resolved
-            return resolved
+            # New Notion SDKs query data sources, while older config files may
+            # still store database IDs. If this is already a data source ID,
+            # retrieve will fail but query can proceed with the original value.
+            pass
+        else:
+            data_sources = database.get("data_sources") or database.get("dataSources") or []
+            if data_sources:
+                data_source_id = str(data_sources[0]["id"])
+
+        self._data_source_ids[database_id] = data_source_id
+        return data_source_id
+
+    def _page_parent(self, database_id: str) -> dict[str, str]:
+        if hasattr(self._nc, "data_sources"):
+            return {"data_source_id": self._data_source_id(database_id)}
+        return {"database_id": database_id}
 
     # ============== Report ==============
 
@@ -448,9 +716,6 @@ class NotionRepo:
         html_url: str | None = None,
     ) -> str:
         props = {
-            PROP_REPORT_TITLE: _title(
-                f"{student.name} {period_start.date().isoformat()} 주간 리포트"
-            ),
             PROP_REPORT_STUDENT: {"relation": [{"id": student.page_id}]},
             PROP_REPORT_PERIOD: {
                 "date": {
@@ -465,7 +730,7 @@ class NotionRepo:
         if html_url:
             props[PROP_REPORT_HTML_URL] = {"url": html_url}
         page = self._nc.pages.create(
-            parent={"data_source_id": self._data_source_id(self.reports_db)},
+            parent=self._page_parent(self.reports_db),
             properties=props,
             children=_md_to_blocks(summary_md),
         )
@@ -497,9 +762,46 @@ class NotionRepo:
         }
         if tag:
             props[PROP_MEMO_TAG] = {"select": {"name": tag}}
+        page = self._nc.pages.create(parent=self._page_parent(self.memos_db), properties=props)
+        return page["id"]
+
+    # ============== 진로 프로필 (DB6) / 진학 코퍼스 (DB7) ==============
+
+    def create_career_profile(
+        self, *, student_page_id: str, target_major: str,
+        fit_score: float, consent_label: str,
+    ) -> str:
+        """진로 프로필(DB6) 신규 생성. 페이지 id 반환. (학생당 1개 보장 upsert는 Phase-2 follow-up)"""
+        # fail-loud: 선택적 sweep DB와 달리, career_db 미설정 시 계산된 결과가 조용히 유실되는 것을 방지
+        if not self.career_db:
+            raise ValueError("career_db 미설정 (config.notion.databases.career)")
+        props = {
+            PROP_CAREER_STUDENT: {"relation": [{"id": student_page_id}]},
+            PROP_CAREER_TARGET_MAJOR: {"rich_text": [{"text": {"content": target_major[:2000]}}]},
+            PROP_CAREER_FIT_SCORE: {"number": fit_score},
+            PROP_CAREER_CONSENT: {"select": {"name": consent_label}},
+            PROP_CAREER_CONSENT_AT: {"date": {"start": datetime.now(timezone.utc).isoformat()}},
+        }
         page = self._nc.pages.create(
-            parent={"data_source_id": self._data_source_id(self.memos_db)},
-            properties=props,
+            parent=self._page_parent(self.career_db), properties=props
+        )
+        return page["id"]
+
+    def add_corpus_entry(
+        self, *, corpus_id: str, track_tags: list[str], consent_ref: str,
+    ) -> str:
+        """비식별 코퍼스(DB7) 적재. 결과 라벨은 '미정'으로 시작."""
+        # fail-loud: corpus_db 미설정 시 비식별 적재 누락을 조용히 넘기지 않음
+        if not self.corpus_db:
+            raise ValueError("corpus_db 미설정 (config.notion.databases.corpus)")
+        props = {
+            PROP_CORPUS_ID: {"title": [{"text": {"content": corpus_id}}]},
+            PROP_CORPUS_TRACK: {"multi_select": [{"name": t} for t in track_tags]},
+            PROP_CORPUS_OUTCOME: {"select": {"name": "미정"}},
+            PROP_CORPUS_CONSENT_REF: {"rich_text": [{"text": {"content": consent_ref[:2000]}}]},
+        }
+        page = self._nc.pages.create(
+            parent=self._page_parent(self.corpus_db), properties=props
         )
         return page["id"]
 
@@ -520,10 +822,6 @@ def _student_from_page(page: dict, *, classin_id: str) -> StudentRecord:
 
 def _rich(text: str) -> dict:
     return {"rich_text": [{"text": {"content": str(text)}}]}
-
-
-def _title(text: str) -> dict:
-    return {"title": [{"text": {"content": str(text)}}]}
 
 
 def _plain(prop: Any) -> str:
@@ -589,6 +887,29 @@ def _row_summary(page: dict) -> dict:
         "homework_submitted": (p.get(PROP_LESSON_HOMEWORK) or {}).get("checkbox"),
         "homework_late": (p.get(PROP_LESSON_HOMEWORK_LATE) or {}).get("checkbox"),
         "homework_score": (p.get(PROP_LESSON_HOMEWORK_SCORE) or {}).get("number"),
+    }
+
+
+def _exam_row_summary(page: dict) -> dict:
+    p = page["properties"]
+    student_relation = (p.get(PROP_EXAM_STUDENT) or {}).get("relation") or []
+    student_page_id = student_relation[0]["id"] if student_relation else None
+    return {
+        "page_id": page["id"],
+        "student_page_id": student_page_id,
+        "student_classin_id": None,
+        "student_name": None,
+        "student_class_name": None,
+        "exam_name": _plain(p.get(PROP_EXAM_NAME)),
+        "exam_date": (p.get(PROP_EXAM_DATE) or {}).get("date", {}).get("start"),
+        "class_name": _plain(p.get(PROP_EXAM_CLASS)),
+        "subject": _plain(p.get(PROP_EXAM_SUBJECT)),
+        "attended": (p.get(PROP_EXAM_ATTENDED) or {}).get("checkbox"),
+        "score": (p.get(PROP_EXAM_SCORE) or {}).get("number"),
+        "max_score": (p.get(PROP_EXAM_MAX_SCORE) or {}).get("number"),
+        "percent": (p.get(PROP_EXAM_PERCENT) or {}).get("number"),
+        "source": _plain(p.get(PROP_EXAM_SOURCE)),
+        "external_exam_id": _plain(p.get(PROP_EXAM_EXTERNAL_ID)),
     }
 
 

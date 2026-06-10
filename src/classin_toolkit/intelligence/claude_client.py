@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from functools import lru_cache
@@ -71,3 +72,35 @@ def _strip_fence(text: str) -> str:
         if t.endswith("```"):
             t = t[:-3]
     return t.strip()
+
+
+def run_json_with_pdf(
+    cfg: AppConfig,
+    *,
+    system: str,
+    user: str,
+    pdf_bytes: bytes,
+    model: str | None = None,
+    max_tokens: int = 4096,
+) -> dict | list:
+    """PDF를 document 블록으로 첨부해 구조화 JSON을 받는다.
+
+    Claude 네이티브 PDF 지원 → 스캔본(이미지 PDF)도 비전으로 처리.
+    """
+    client = get_claude(cfg.anthropic.api_key)
+    b64 = base64.standard_b64encode(pdf_bytes).decode("ascii")
+    content = [
+        {
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": b64},
+        },
+        {"type": "text", "text": user},
+    ]
+    resp = client.messages.create(
+        model=model or cfg.anthropic.report_model,
+        max_tokens=max_tokens,
+        system=[{"type": "text", "text": system}],
+        messages=[{"role": "user", "content": content}],
+    )
+    text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
+    return json.loads(_strip_fence(text.strip()))

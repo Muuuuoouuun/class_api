@@ -33,6 +33,31 @@
 <p class="muted">이번 주 수업 기록이 없습니다.</p>
 {% endif %}
 
+<h2>시험 점수</h2>
+{% if exam_results %}
+<table>
+  <tr><th>시험일</th><th>시험명</th><th>과목</th><th>점수</th><th>응시</th></tr>
+  {% for e in exam_results %}
+  <tr>
+    <td>{{ e.exam_date or '-' }}</td>
+    <td>{{ e.exam_name or '-' }}</td>
+    <td>{{ e.subject or '-' }}</td>
+    <td>
+      {% if e.score is not none %}{{ e.score }}{% else %}-{% endif %}
+      {% if e.max_score is not none %} / {{ e.max_score }}{% endif %}
+    </td>
+    <td>
+      {% if e.attended %}<span class="badge badge-ok">응시</span>
+      {% elif e.attended == false %}<span class="badge badge-bad">미응시</span>
+      {% else %}<span class="muted">-</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">이번 주 시험 기록이 없습니다.</p>
+{% endif %}
+
 <h2>학부모 발송 문구 (초안)</h2>
 <div style="background:#fffbe6;padding:12px;border-radius:6px">
   {{ parent_message }}

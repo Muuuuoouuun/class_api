@@ -40,7 +40,13 @@ class DraftRecord:
     notion_page_id: str | None = None
 
 
-def generate_drafts(cfg: AppConfig, *, reference: datetime | None = None) -> int:
+def generate_drafts(
+    cfg: AppConfig,
+    *,
+    reference: datetime | None = None,
+    class_name: str | None = None,
+    student_classin_ids: list[str] | None = None,
+) -> int:
     ref = reference or datetime.now(tz=timezone.utc)
     this_start = (ref - timedelta(days=ref.weekday())).replace(
         hour=0, minute=0, second=0, microsecond=0
@@ -52,7 +58,19 @@ def generate_drafts(cfg: AppConfig, *, reference: datetime | None = None) -> int
     repo = NotionRepo.from_config(cfg)
     renderer = HtmlWeeklyRenderer()
     students = repo.list_active_students()
-    log.info("weekly drafts for %d students (%s ~ %s)", len(students), this_start, this_end)
+    if class_name:
+        students = [student for student in students if student.class_name == class_name]
+    if student_classin_ids is not None:
+        selected_ids = set(student_classin_ids)
+        students = [student for student in students if student.classin_id in selected_ids]
+    log.info(
+        "weekly drafts for %d students (%s ~ %s, class=%s, selected=%s)",
+        len(students),
+        this_start,
+        this_end,
+        class_name or "all",
+        len(student_classin_ids) if student_classin_ids is not None else "all",
+    )
 
     drafts: list[DraftRecord] = []
     for student in students:
@@ -126,6 +144,9 @@ def _one_student(
     prev = repo.weekly_student_stats(
         student_page_id=student.page_id, since=prev_start, until=prev_end
     )
+    exams = repo.student_exam_results(
+        student_page_id=student.page_id, since=this_start, until=this_end
+    )
     report = build_weekly_report(
         cfg=cfg,
         student=student,
@@ -133,6 +154,7 @@ def _one_student(
         period_end=this_end,
         lessons=lessons,
         prev_week_lessons=prev,
+        exam_results=exams,
     )
 
     inp = WeeklyRenderInput(
@@ -145,6 +167,7 @@ def _one_student(
         prev_week_lessons=prev,
         summary_markdown=report.summary_markdown,
         parent_message=report.parent_message,
+        exam_results=exams,
     )
 
     mode = cfg.output.weekly.mode
@@ -182,5 +205,16 @@ def _write_index_records(path: Path, drafts: list[DraftRecord]) -> None:
 
 
 # backward-compat: 기존 CLI 는 run_weekly_reports 를 호출
-def run_weekly_reports(cfg: AppConfig, *, reference: datetime | None = None) -> int:
-    return generate_drafts(cfg, reference=reference)
+def run_weekly_reports(
+    cfg: AppConfig,
+    *,
+    reference: datetime | None = None,
+    class_name: str | None = None,
+    student_classin_ids: list[str] | None = None,
+) -> int:
+    return generate_drafts(
+        cfg,
+        reference=reference,
+        class_name=class_name,
+        student_classin_ids=student_classin_ids,
+    )

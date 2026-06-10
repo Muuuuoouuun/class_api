@@ -14,6 +14,7 @@ from rich.markdown import Markdown
 
 from ..config import AppConfig
 from ..intelligence.claude_client import get_claude
+from ..pipelines.exams import query_missing_exam
 from ..pipelines.weekly import run_weekly_reports
 from ..storage.notion_repo import NotionRepo
 
@@ -48,6 +49,19 @@ TOOLS: list[dict] = [
                 "days": {"type": "integer", "description": "최근 N일 기준 (기본값: 7)"},
             },
             "required": ["student_name"],
+        },
+    },
+    {
+        "name": "query_missing_exam",
+        "description": "특정 시험의 미응시 학생 목록을 조회합니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "exam_name": {"type": "string", "description": "시험명"},
+                "exam_date": {"type": "string", "description": "시험일 YYYY-MM-DD"},
+                "class_name": {"type": "string", "description": "반 이름 (선택)"},
+            },
+            "required": ["exam_name", "exam_date"],
         },
     },
     {
@@ -114,6 +128,18 @@ def _execute_tool(name: str, tool_input: dict, repo: NotionRepo, cfg: AppConfig)
             "late": sum(1 for r in rows if r.get("attendance") == "지각"),
             "homework_submitted": sum(1 for r in rows if r.get("homework_submitted")),
         }
+
+    if name == "query_missing_exam":
+        exam_name: str = tool_input["exam_name"]
+        exam_date: str = tool_input["exam_date"]
+        class_name: str | None = tool_input.get("class_name")
+        return query_missing_exam(
+            cfg,
+            exam_name=exam_name,
+            exam_date=exam_date,
+            class_name=class_name,
+            repo=repo,
+        )
 
     if name == "list_students":
         students = repo.list_active_students()

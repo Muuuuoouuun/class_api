@@ -19,6 +19,10 @@ class ClassInConfig(BaseModel):
     secret_key: str
     webhook_secret: str = ""
     default_password: str = "Classin!2026"
+    schedule_api: Literal["lms", "legacy"] = "lms"
+    default_teacher_uid: str | None = None
+    teacher_uids: dict[str, str] = Field(default_factory=dict)
+    lms_unit_prefix: str = "API 스케줄"
 
 
 class NotionDatabases(BaseModel):
@@ -26,6 +30,9 @@ class NotionDatabases(BaseModel):
     lessons: str
     reports: str
     memos: str | None = None
+    exams: str | None = None
+    career: str | None = None    # DB6 진로 프로필
+    corpus: str | None = None    # DB7 진학 코퍼스 (비식별)
 
 
 class NotionConfig(BaseModel):
@@ -61,6 +68,11 @@ class AnthropicConfig(BaseModel):
     report_model: str = "claude-opus-4-7"
 
 
+class NeisConfig(BaseModel):
+    api_key: str
+    base_url: str = "https://open.neis.go.kr/hub"
+
+
 class AligoConfig(BaseModel):
     api_key: str = ""
     user_id: str = ""
@@ -90,6 +102,7 @@ class AppConfig(BaseModel):
     classin: ClassInConfig
     notion: NotionConfig
     anthropic: AnthropicConfig
+    neis: NeisConfig | None = None
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
     webhook: WebhookConfig = Field(default_factory=WebhookConfig)
     reports: ReportsConfig = Field(default_factory=ReportsConfig)

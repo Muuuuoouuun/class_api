@@ -6,19 +6,11 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 
 from ..config import AppConfig
+from ..notify.message import OutgoingMessage
 from ..storage.notion_repo import StudentRecord
 from .claude_client import load_prompt, run_json
-
-
-@dataclass
-class OutgoingMessage:
-    student_classin_id: str
-    student_name: str
-    parent_phone: str | None
-    message: str
 
 
 def compose_messages_from_rows(
