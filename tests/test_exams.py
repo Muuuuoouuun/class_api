@@ -1,15 +1,23 @@
+import asyncio
+import json
 from pathlib import Path
 from datetime import datetime, timezone
+from typing import Any
 
+from classin_toolkit.classin.webhook_schemas import parse_event
 from classin_toolkit.config import AppConfig
 from classin_toolkit.notify.message import OutgoingMessage
 from classin_toolkit.pipelines.exams import (
+    create_answer_sheet_activity,
     ExamImportRow,
     load_exam_rows,
     merge_exam_results,
     sweep_missing_exam,
 )
+from classin_toolkit.pipelines.ingest import ingest_answer_sheet_score
 from classin_toolkit.storage.notion_repo import StudentRecord
+
+SAMPLES = Path(__file__).resolve().parents[1] / "samples"
 
 
 def _cfg(tmp_path: Path) -> AppConfig:
@@ -164,6 +172,128 @@ def test_merge_exam_results_dry_run_does_not_write(tmp_path: Path) -> None:
     assert result.total_rows == 1
     assert result.merged_rows == 1
     assert result.skipped_rows == 0
+
+
+def test_create_answer_sheet_activity_dry_run_does_not_call_classin(
+    monkeypatch, tmp_path: Path
+) -> None:
+    def client_should_not_run(**_kwargs: Any):
+        raise AssertionError("dry-run must not instantiate ClassInClient")
+
+    monkeypatch.setattr("classin_toolkit.pipelines.exams.ClassInClient", client_should_not_run)
+
+    result = create_answer_sheet_activity(
+        _cfg(tmp_path),
+        course_id="414193",
+        unit_id="22360790",
+        name="  6월 OMR 답안지  ",
+        teacher_uid="1006368",
+        release=True,
+        dry_run=True,
+    )
+
+    assert result.activity_id is None
+    assert result.name == "6월 OMR 답안지"
+    assert result.released is True
+    assert result.dry_run is True
+
+
+def test_create_answer_sheet_activity_uses_activity_type_7_and_can_release(
+    monkeypatch, tmp_path: Path
+) -> None:
+    class FakeClassInClient:
+        instances: list["FakeClassInClient"] = []
+
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+            self.v2_calls: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
+            self.instances.append(self)
+
+        def __enter__(self) -> "FakeClassInClient":
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            return None
+
+        def call_v2(self, path: str, body: dict[str, Any], **kwargs: Any) -> Any:
+            self.v2_calls.append((path, body, kwargs))
+            if path == "/lms/activity/createActivityNoClass":
+                return {"activityId": 26019953}
+            if path == "/lms/activity/release":
+                return {"activityId": body["activityId"]}
+            return {}
+
+    monkeypatch.setattr("classin_toolkit.pipelines.exams.ClassInClient", FakeClassInClient)
+    cfg = _cfg(tmp_path)
+    cfg.classin.default_teacher_uid = "1006368"
+
+    result = create_answer_sheet_activity(
+        cfg,
+        course_id="414193",
+        unit_id="22360790",
+        name="6월 OMR 답안지",
+        start_at=datetime(2026, 6, 11, 9, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 6, 12, 9, 0, tzinfo=timezone.utc),
+        release=True,
+        dry_run=False,
+    )
+
+    client = FakeClassInClient.instances[-1]
+    assert result.activity_id == 26019953
+    assert result.released is True
+    assert client.kwargs["school_id"] == "sid"
+    assert client.v2_calls == [
+        (
+            "/lms/activity/createActivityNoClass",
+            {
+                "courseId": 414193,
+                "unitId": 22360790,
+                "activityType": 7,
+                "name": "6월 OMR 답안지",
+                "teacherUid": 1006368,
+                "startTime": 1781168400,
+                "endTime": 1781254800,
+            },
+            {},
+        ),
+        (
+            "/lms/activity/release",
+            {"courseId": 414193, "activityId": 26019953},
+            {},
+        ),
+    ]
+
+
+def test_ingest_answer_sheet_score_upserts_exam_result(monkeypatch, tmp_path: Path) -> None:
+    repo_calls: list[dict[str, Any]] = []
+
+    class FakeRepo:
+        def upsert_exam_result(self, **kwargs: Any) -> str:
+            repo_calls.append(kwargs)
+            return "exam-page-1"
+
+    monkeypatch.setattr(
+        "classin_toolkit.pipelines.ingest.NotionRepo.from_config",
+        staticmethod(lambda _cfg: FakeRepo()),
+    )
+    raw = json.loads((SAMPLES / "answer_sheet_score_sample.json").read_text(encoding="utf-8"))
+    event = parse_event(raw)
+
+    asyncio.run(ingest_answer_sheet_score(event, _cfg(tmp_path)))  # type: ignore[arg-type]
+
+    assert repo_calls == [
+        {
+            "student_classin_id": "10001",
+            "exam_name": "6월 OMR 답안지",
+            "exam_date": datetime(2026, 5, 1, 4, 50, tzinfo=timezone.utc),
+            "class_name": "고2-A",
+            "attended": True,
+            "score": 12,
+            "max_score": 14.0,
+            "source": "classin-answer-sheet",
+            "external_exam_id": "answer-sheet:99007:10001",
+        }
+    ]
 
 
 def test_sweep_missing_exam_dispatches_missing_exam_event(monkeypatch, tmp_path: Path) -> None:

@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..classin.ced import CEDClient
+from ..classin.client import ClassInClient
 from ..config import AppConfig
 from ..intelligence.missing_exam import compose_messages_from_rows
 from ..notify.dispatcher import dispatch_notifications
@@ -41,6 +43,71 @@ class ExamImportResult:
     skipped_rows: int
     errors: list[str]
     dry_run: bool = False
+
+
+@dataclass(frozen=True)
+class AnswerSheetActivityResult:
+    activity_id: int | None
+    name: str
+    released: bool
+    dry_run: bool
+
+
+def create_answer_sheet_activity(
+    cfg: AppConfig,
+    *,
+    course_id: str,
+    unit_id: str,
+    name: str,
+    teacher_uid: str | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    release: bool = False,
+    dry_run: bool = True,
+) -> AnswerSheetActivityResult:
+    resolved_teacher = teacher_uid or cfg.classin.default_teacher_uid or None
+    stripped_name = name.strip()
+    if not resolved_teacher:
+        raise ValueError("teacher_uid or classin.default_teacher_uid is required")
+    if not stripped_name:
+        raise ValueError("answer sheet name is required")
+    if len(stripped_name) > 50:
+        raise ValueError("answer sheet name must be 50 characters or fewer")
+    if start_at and end_at and end_at <= start_at:
+        raise ValueError("answer sheet end_at must be after start_at")
+
+    if dry_run:
+        return AnswerSheetActivityResult(
+            activity_id=None,
+            name=stripped_name,
+            released=release,
+            dry_run=True,
+        )
+
+    with ClassInClient(
+        base_url=cfg.classin.base_url,
+        school_id=cfg.classin.school_id,
+        secret_key=cfg.classin.secret_key,
+    ) as client:
+        ced = CEDClient(client)
+        activity_id = ced.create_non_class_activity(
+            course_id=course_id,
+            unit_id=unit_id,
+            name=stripped_name,
+            teacher_uid=resolved_teacher,
+            activity_type=7,
+            start_time=int(start_at.timestamp()) if start_at else None,
+            end_time=int(end_at.timestamp()) if end_at else None,
+        )
+        if release:
+            ced.release_activity(course_id=course_id, activity_ids=activity_id)
+
+    return AnswerSheetActivityResult(
+        activity_id=activity_id,
+        name=stripped_name,
+        released=release,
+        dry_run=False,
+    )
 
 
 def import_exam_results(

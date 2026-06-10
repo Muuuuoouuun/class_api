@@ -11,8 +11,10 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from ..classin.webhook_schemas import (
+    AnswerSheetScoreEvent,
     AttendanceEvent,
     EndEvent,
     HomeworkScoreEvent,
@@ -91,3 +93,38 @@ async def ingest_homework_score(event: HomeworkScoreEvent, cfg: AppConfig) -> No
         homework_score=event.Data.Score,
         homework_activity_id=str(event.Data.ActivityId),
     )
+
+
+async def ingest_answer_sheet_score(event: AnswerSheetScoreEvent, cfg: AppConfig) -> None:
+    repo = NotionRepo.from_config(cfg)
+    sid = event.Data.StudentInfo.Uid if event.Data.StudentInfo else None
+    if not sid:
+        log.warning("answer sheet score without StudentInfo.Uid event=%s", event.Cmd)
+        return
+    exam_name = event.Data.ActivityName or f"Answer Sheet {event.Data.ActivityId}"
+    exam_date = _event_datetime(
+        event.Data.SubmissionTime or event.Data.CorrectionTime or event.ActionTime or event.TimeStamp
+    )
+    page_id = repo.upsert_exam_result(
+        student_classin_id=str(sid),
+        exam_name=exam_name,
+        exam_date=exam_date,
+        class_name=event.CourseName,
+        attended=True,
+        score=event.Data.earned_score(),
+        max_score=event.Data.max_score(),
+        source="classin-answer-sheet",
+        external_exam_id=f"answer-sheet:{event.Data.ActivityId}:{sid}",
+    )
+    log.info(
+        "answer sheet score ingested activity=%s student=%s page=%s",
+        event.Data.ActivityId,
+        sid,
+        page_id,
+    )
+
+
+def _event_datetime(timestamp: int | None) -> datetime:
+    if not timestamp:
+        return datetime.now(timezone.utc)
+    return datetime.fromtimestamp(int(timestamp), tz=timezone.utc)

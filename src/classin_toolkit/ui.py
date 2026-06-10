@@ -22,7 +22,7 @@ from .config import AppConfig, DEFAULT_CONFIG_PATH, load_config
 from .notify.dispatcher import load_notification_history, notification_history_path
 from .pipelines.core_engine import run_core_engine
 from .pipelines.daily import render_daily
-from .pipelines.exams import import_exam_results
+from .pipelines.exams import create_answer_sheet_activity, import_exam_results
 from .pipelines.missing_homework import (
     missing_homework_selection_key,
     query_missing_homework,
@@ -94,6 +94,7 @@ def create_app(
     ) -> dict:
         cfg = _require_config(state)
         _require_service_config(cfg, "Notion")
+        _validate_window_hours(window_hours)
         try:
             rows = query_missing_homework(
                 cfg,
@@ -108,6 +109,8 @@ def create_app(
     @app.get("/api/notifications")
     async def api_notifications(limit: int = 80) -> dict:
         cfg = _require_config(state)
+        if limit < 1 or limit > 500:
+            raise HTTPException(status_code=400, detail="limit은 1~500 사이여야 합니다.")
         try:
             rows = load_notification_history(cfg, limit=limit)
         except Exception as exc:
@@ -182,7 +185,7 @@ def create_app(
         cfg = _require_config(state)
         _require_service_config(cfg, "Notion")
         payload = await _json_payload(request)
-        window_hours = int(payload.get("window_hours") or 24)
+        window_hours = _parse_window_hours(payload.get("window_hours", 24))
         lesson_id = (payload.get("lesson_id") or "").strip() or None
         selection_keys = _optional_string_list(payload, "selection_keys", "문자 발송 대상")
         try:
@@ -281,6 +284,41 @@ def create_app(
             selected=len(student_classin_ids) if student_classin_ids is not None else None,
             week=raw_week,
             includes=["출결", "숙제", "시험 점수"],
+        )
+
+    @app.post("/api/create-answer-sheet")
+    async def api_create_answer_sheet(request: Request) -> JSONResponse:
+        cfg = _require_config(state)
+        payload = await _json_payload(request)
+        dry_run = bool(payload.get("dry_run", True))
+        if not dry_run:
+            _require_service_config(cfg, "ClassIn")
+
+        course_id = (payload.get("course_id") or "").strip()
+        unit_id = (payload.get("unit_id") or "").strip()
+        name = (payload.get("name") or "").strip()
+        if not course_id or not unit_id or not name:
+            raise HTTPException(status_code=400, detail="course_id, unit_id, name 값이 필요합니다.")
+        try:
+            result = create_answer_sheet_activity(
+                cfg,
+                course_id=course_id,
+                unit_id=unit_id,
+                name=name,
+                teacher_uid=(payload.get("teacher_uid") or "").strip() or None,
+                start_at=_parse_optional_datetime(payload.get("start_at")),
+                end_at=_parse_optional_datetime(payload.get("end_at")),
+                release=bool(payload.get("release", False)),
+                dry_run=dry_run,
+            )
+        except Exception as exc:
+            raise _service_error("OMR 답안지 생성", exc) from exc
+        return _ok(
+            "OMR 답안지 dry-run을 완료했습니다." if result.dry_run else "OMR 답안지를 생성했습니다.",
+            activity_id=result.activity_id,
+            name=result.name,
+            released=result.released,
+            dry_run=result.dry_run,
         )
 
     @app.post("/api/import-exam-results")
@@ -420,6 +458,38 @@ def _optional_string_list(
     if not values:
         raise HTTPException(status_code=400, detail=f"{label}을 선택하세요.")
     return values
+
+
+def _validate_window_hours(window_hours: int) -> None:
+    if window_hours < 1 or window_hours > 720:
+        raise HTTPException(status_code=400, detail="window_hours는 1~720 사이여야 합니다.")
+
+
+def _parse_window_hours(value: Any) -> int:
+    try:
+        window_hours = int(24 if value in (None, "") else value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="window_hours는 숫자여야 합니다.") from exc
+    _validate_window_hours(window_hours)
+    return window_hours
+
+
+def _parse_optional_datetime(value: Any) -> datetime | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    try:
+        if text.isdigit():
+            return datetime.fromtimestamp(int(text), tz=timezone.utc)
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="datetime 값은 ISO 형식 또는 epoch seconds 여야 합니다.",
+        ) from exc
 
 
 def _ok(message: str, **extra: Any) -> JSONResponse:
@@ -705,7 +775,9 @@ def _render_shell(status: dict[str, Any]) -> str:
     academy_name = status.get("academy") or "ClassIn Toolkit"
     title = html.escape(academy_name)
     brand_initial = html.escape((academy_name.strip() or "C")[:1])
-    notify_mode = html.escape((status.get("output") or {}).get("notify_mode") or "dry_run")
+    notify_mode_raw = (status.get("output") or {}).get("notify_mode") or "dry_run"
+    notify_mode = html.escape(notify_mode_raw)
+    notify_mode_class = "sent" if notify_mode_raw == "live" else "dry_run"
     return f"""<!doctype html>
 <html lang="ko" data-theme="light">
 <head>
@@ -740,8 +812,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       --info: #2a6fdb;
       --info-soft: #eaf1fc;
 
-      --radius: 12px;
-      --radius-sm: 9px;
+      --radius: 8px;
+      --radius-sm: 7px;
       --shadow-sm: 0 1px 2px rgba(20,30,50,.05), 0 1px 1px rgba(20,30,50,.04);
       --shadow-md: 0 4px 16px rgba(20,30,50,.08), 0 1px 3px rgba(20,30,50,.05);
       --shadow-lg: 0 20px 50px rgba(15,25,45,.22), 0 6px 16px rgba(15,25,45,.12);
@@ -779,10 +851,10 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-family: var(--font);
       font-size: 14px;
       line-height: 1.5;
-      letter-spacing: -0.01em;
+      letter-spacing: 0;
       -webkit-font-smoothing: antialiased;
     }}
-    h1, h2 {{ letter-spacing: -0.02em; }}
+    h1, h2 {{ letter-spacing: 0; }}
     ::selection {{ background: var(--primary-soft); }}
 
     .app-shell {{
@@ -859,7 +931,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-size: 10.5px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: .06em;
+      letter-spacing: 0;
     }}
     .sidebar .tab-button {{
       display: flex;
@@ -1017,6 +1089,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     .tab-panel.active {{ display: block; }}
 
     .panel {{
+      min-width: 0;
       padding: var(--pad, 20px);
       background: var(--panel);
       border: 1px solid var(--line);
@@ -1038,6 +1111,11 @@ def _render_shell(status: dict[str, Any]) -> str:
       grid-template-columns: 1.2fr .8fr;
       gap: 16px;
       align-items: start;
+    }}
+    .grid > *,
+    .action-layout > *,
+    .action-controls > * {{
+      min-width: 0;
     }}
 
     /* ── Buttons ─────────────────────────── */
@@ -1099,7 +1177,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       grid-row: 1 / span 2;
       width: 44px;
       height: 44px;
-      border-radius: 11px;
+      border-radius: 8px;
       background: var(--primary);
       color: #fff;
       font-size: 17px;
@@ -1185,7 +1263,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       padding: 8px 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #fff;
+      background: var(--panel);
       color: var(--text);
     }}
     input, select, textarea {{
@@ -1303,7 +1381,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-size: 11.5px;
       font-weight: 650;
       text-transform: uppercase;
-      letter-spacing: .03em;
+      letter-spacing: 0;
       white-space: nowrap;
     }}
     tbody tr:hover {{ background: var(--surface-2); }}
@@ -1400,7 +1478,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       gap: 9px;
       max-width: min(560px, 92vw);
       padding: 11px 16px;
-      border-radius: 11px;
+      border-radius: 8px;
       background: var(--text);
       color: var(--panel);
       font-size: 13px;
@@ -1477,6 +1555,32 @@ def _render_shell(status: dict[str, Any]) -> str:
       .status-strip {{ margin: -16px -16px 16px; }}
       dl {{ grid-template-columns: 1fr; gap: 3px; }}
     }}
+    @media (max-width: 1200px) and (min-width: 921px) {{
+      .action-controls {{ grid-template-columns: 1fr; }}
+      .actions.compact {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    }}
+    @media (max-width: 560px) {{
+      .panel-head {{
+        align-items: flex-start;
+        flex-direction: column;
+      }}
+      .inline-actions {{
+        width: 100%;
+      }}
+      .inline-actions button,
+      .inline-actions label {{
+        flex: 1 1 auto;
+      }}
+      .segmented {{
+        display: grid;
+        grid-template-columns: repeat(5, minmax(64px, 1fr));
+        width: 100%;
+        overflow-x: auto;
+      }}
+      .selectable-list {{
+        max-height: 280px;
+      }}
+    }}
   </style>
 </head>
 <body>
@@ -1491,7 +1595,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       </div>
       <nav class="tabs" aria-label="운영 메뉴">
         <div class="nav-sep">운영</div>
-        <button class="tab-button active" data-tab="dashboard"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span class="label">대시보드</span></button>
+        <button class="tab-button active" data-tab="dashboard" aria-current="page"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span class="label">대시보드</span></button>
         <button class="tab-button" data-tab="actions"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg><span class="label">액션</span></button>
         <div class="nav-sep">학생</div>
         <button class="tab-button" data-tab="missing"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.3 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span class="label">미제출</span></button>
@@ -1516,7 +1620,7 @@ def _render_shell(status: dict[str, Any]) -> str:
           <span id="viewMeta">{today}</span>
         </div>
         <div class="inline-actions">
-          <span class="status-pill dry_run" title="현재 notify 출력 모드"><span class="dot" style="background:currentColor"></span>{notify_mode} 모드</span>
+          <span id="notifyModePill" class="status-pill {notify_mode_class}" title="현재 notify 출력 모드"><span class="dot" style="background:currentColor"></span>{notify_mode} 모드</span>
           <button class="icon-btn" title="다크 모드" aria-label="다크 모드 전환" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
           <button data-action="refreshStatus" class="secondary">상태 새로고침</button>
           <div class="topbar-user">
@@ -1728,6 +1832,31 @@ def _render_shell(status: dict[str, Any]) -> str:
 
       <div class="panel">
         <div class="panel-head">
+          <h2>OMR 답안지 생성</h2>
+          <span class="badge">Answer Sheet</span>
+        </div>
+        <div class="stack">
+          <div class="actions compact">
+            <label>Course ID<input id="answerSheetCourseId" type="text"></label>
+            <label>Unit ID<input id="answerSheetUnitId" type="text"></label>
+            <label>활동명<input id="answerSheetName" type="text" value="OMR 답안지"></label>
+            <label>Teacher UID<input id="answerSheetTeacherUid" type="text"></label>
+          </div>
+          <div class="actions compact">
+            <label>시작<input id="answerSheetStart" type="datetime-local"></label>
+            <label>종료<input id="answerSheetEnd" type="datetime-local"></label>
+            <label class="checkbox-field">Dry-run<input id="answerSheetDryRun" type="checkbox" checked></label>
+            <label class="checkbox-field">게시<input id="answerSheetRelease" type="checkbox"></label>
+          </div>
+          <div class="inline-actions">
+            <button data-action="createAnswerSheet">OMR 답안지 생성</button>
+          </div>
+          <div id="answerSheetPreview" class="action-preview">ClassIn Course ID와 Unit ID를 입력하고 dry-run으로 먼저 payload를 확인하세요.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
           <h2>시험 결과 가져오기</h2>
           <span class="badge">CSV</span>
         </div>
@@ -1834,6 +1963,10 @@ def _render_shell(status: dict[str, Any]) -> str:
         `updated ${{new Date().toLocaleTimeString()}}`;
 
       const output = status.output || {{}};
+      const notifyPill = document.querySelector("#notifyModePill");
+      const notify = output.notify_mode || "-";
+      notifyPill.className = `status-pill ${{notify === "live" ? "sent" : notify === "dry_run" ? "dry_run" : "warn"}}`;
+      notifyPill.innerHTML = `<span class="dot" style="background:currentColor"></span>${{escapeHtml(notify)}} 모드`;
       const webhook = status.webhook || {{}};
       const rows = [
         ["config", status.config_path || ""],
@@ -1900,9 +2033,9 @@ def _render_shell(status: dict[str, Any]) -> str:
       renderStatus(await response.json());
     }}
 
-    async function loadSituation() {{
+    async function loadSituation(options) {{
       if (!status.ok) {{
-        renderMissing({{ summary: {{}}, items: [] }});
+        renderMissing({{ summary: {{}}, items: [] }}, options || {{}});
         renderNotifications({{ items: [] }});
         return;
       }}
@@ -1916,7 +2049,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       if (!missingResponse.ok || missingData.ok === false) {{
         throw new Error(missingData.detail || "missing homework load failed");
       }}
-      renderMissing(missingData);
+      renderMissing(missingData, options || {{}});
 
       const notifyResponse = await fetch("/api/notifications?limit=80");
       const notifyData = await notifyResponse.json();
@@ -2129,7 +2262,30 @@ def _render_shell(status: dict[str, Any]) -> str:
         </div>`;
     }}
 
-    function renderMissing(data) {{
+    function isPendingMissing(item) {{
+      return (item.notification_status || "pending") === "pending";
+    }}
+
+    function defaultMissingSelectionKeys(items) {{
+      return new Set(
+        items
+          .filter((item) => item.has_parent_phone && isPendingMissing(item))
+          .map((item) => item.selection_key)
+          .filter(Boolean)
+      );
+    }}
+
+    function preservedMissingSelectionKeys(items, previous) {{
+      const available = new Set(
+        items
+          .filter((item) => item.has_parent_phone)
+          .map((item) => item.selection_key)
+          .filter(Boolean)
+      );
+      return new Set([...previous].filter((key) => available.has(key)));
+    }}
+
+    function renderMissing(data, options) {{
       const summary = data.summary || {{}};
       document.querySelector("#missingCount").textContent = summary.total_missing || 0;
       document.querySelector("#noPhoneCount").textContent = summary.no_parent_phone || 0;
@@ -2138,16 +2294,15 @@ def _render_shell(status: dict[str, Any]) -> str:
       document.querySelector("#failedCount").textContent = summary.failed || 0;
 
       const items = data.items || [];
+      const previousSelection = selectedMissingKeys;
       currentMissing = items;
-      selectedMissingKeys = new Set(
-        items
-          .filter((item) => item.has_parent_phone)
-          .map((item) => item.selection_key)
-          .filter(Boolean)
-      );
+      selectedMissingKeys = options && options.preserveSelection
+        ? preservedMissingSelectionKeys(items, previousSelection)
+        : defaultMissingSelectionKeys(items);
       const withPhone = items.filter((item) => item.has_parent_phone).length;
+      const pendingWithPhone = items.filter((item) => item.has_parent_phone && isPendingMissing(item)).length;
       document.querySelector("#actionPreview").innerHTML =
-        `<strong>숙제 미제출 문자 발송</strong>조회: ${{items.length}}명\\n선택 가능: ${{withPhone}}명\\n현재 발송 모드: ${{escapeHtml(notifyMode())}}`;
+        `<strong>숙제 미제출 문자 발송</strong>조회: ${{items.length}}명\\n대기: ${{pendingWithPhone}}명\\n발송 가능: ${{withPhone}}명\\n현재 발송 모드: ${{escapeHtml(notifyMode())}}`;
       renderMissingSelectionList();
       const target = document.querySelector("#missingTable");
       if (!items.length) {{
@@ -2227,7 +2382,7 @@ def _render_shell(status: dict[str, Any]) -> str:
           <span>
             <strong>${{escapeHtml(item.student_name)}} · ${{escapeHtml(item.class_name || "-")}}</strong>
             <span>${{escapeHtml(formatDate(item.date))}} · 수업 ${{escapeHtml(item.lesson_classin_id || "-")}}</span>
-            <span>${{item.has_parent_phone ? escapeHtml(item.parent_phone) : "연락처 없음"}}</span>
+            <span>${{item.has_parent_phone ? escapeHtml(item.parent_phone) : "연락처 없음"}} · ${{escapeHtml(statusLabel(item.notification_status))}}</span>
           </span>
         </label>
       `).join("");
@@ -2283,6 +2438,12 @@ def _render_shell(status: dict[str, Any]) -> str:
       return new Date(value.getTime() - offset).toISOString().slice(0, 10);
     }}
 
+    function datetimeLocalToIso(value) {{
+      if (!value) return "";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toISOString();
+    }}
+
     function weekStartIso(value) {{
       const date = new Date(value);
       const day = (date.getDay() + 6) % 7;
@@ -2320,6 +2481,11 @@ def _render_shell(status: dict[str, Any]) -> str:
     function activateTab(tab) {{
       document.querySelectorAll(".tab-button").forEach((button) => {{
         button.classList.toggle("active", button.dataset.tab === tab);
+        if (button.dataset.tab === tab) {{
+          button.setAttribute("aria-current", "page");
+        }} else {{
+          button.removeAttribute("aria-current");
+        }}
       }});
       const activeButton = document.querySelector(`.tab-button[data-tab="${{tab}}"]`);
       activeButton?.scrollIntoView({{ block: "nearest", inline: "center" }});
@@ -2772,6 +2938,34 @@ def _render_shell(status: dict[str, Any]) -> str:
           : "");
     }}
 
+    function renderAnswerSheetResult(data) {{
+      document.querySelector("#answerSheetPreview").innerHTML =
+        `<strong>${{escapeHtml(data.dry_run ? "OMR 답안지 dry-run" : "OMR 답안지 생성")}}</strong>` +
+        `활동명: ${{escapeHtml(data.name || "-")}}\\n` +
+        `Activity ID: ${{escapeHtml(data.activity_id || "dry-run")}}\\n` +
+        `게시: ${{data.released ? "예" : "아니오"}}`;
+    }}
+
+    async function createAnswerSheet() {{
+      const dryRun = document.querySelector("#answerSheetDryRun").checked;
+      if (!dryRun) {{
+        const ok = window.confirm("ClassIn에 OMR 답안지 활동을 실제로 생성합니다.");
+        if (!ok) return;
+      }}
+      const data = await callApi("/api/create-answer-sheet", {{
+        course_id: document.querySelector("#answerSheetCourseId").value,
+        unit_id: document.querySelector("#answerSheetUnitId").value,
+        name: document.querySelector("#answerSheetName").value,
+        teacher_uid: document.querySelector("#answerSheetTeacherUid").value,
+        start_at: datetimeLocalToIso(document.querySelector("#answerSheetStart").value),
+        end_at: datetimeLocalToIso(document.querySelector("#answerSheetEnd").value),
+        dry_run: dryRun,
+        release: document.querySelector("#answerSheetRelease").checked,
+      }});
+      renderAnswerSheetResult(data);
+      writeLog(data.message, data);
+    }}
+
     async function importExamResults() {{
       const csvText = document.querySelector("#examCsvText").value.trim();
       if (!csvText) throw new Error("가져올 시험 CSV가 필요합니다.");
@@ -2859,6 +3053,9 @@ def _render_shell(status: dict[str, Any]) -> str:
       }},
       async runScheduleImportDryRun() {{
         await runScheduleImportDryRun();
+      }},
+      async createAnswerSheet() {{
+        await createAnswerSheet();
       }},
       async importExamResults() {{
         await importExamResults();

@@ -239,7 +239,7 @@ class CEDClient:
         start_time: int | None = None,
         end_time: int | None = None,
     ) -> int:
-        """LMS createActivityNoClass — 숙제/퀴즈 등 비课堂 활동 초안 생성."""
+        """LMS createActivityNoClass — 숙제/시험/Answer Sheet 등 비课堂 활동 초안 생성."""
         body: dict[str, Any] = {
             "courseId": int(course_id),
             "unitId": int(unit_id),

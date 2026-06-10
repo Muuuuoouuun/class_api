@@ -37,6 +37,7 @@ classin-toolkit sweep-missing-homework
 classin-toolkit import-exam-results samples/exam_results_sample.csv --exam-name "4월 월말평가" --exam-date 2026-04-24 --dry-run
 classin-toolkit import-exam-results samples/exam_results_sample.csv --exam-name "4월 월말평가" --exam-date 2026-04-24
 classin-toolkit sweep-missing-exam --exam-name "4월 월말평가" --exam-date 2026-04-24
+classin-toolkit create-answer-sheet --course-id 414193 --unit-id 22360790 --name "6월 OMR 답안지" --teacher-uid 1006368 --dry-run
 classin-toolkit weekly-reports
 classin-toolkit check-ready --mode local-demo
 classin-toolkit diagnose-apis --live
@@ -56,6 +57,7 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 | 자동 (MVP1) | `classin-toolkit sweep-missing-homework [--lesson-id X]` | 미제출자 카톡 문구 생성 |
 | 자동 (시험) | `classin-toolkit import-exam-results <csv|json> --exam-name ... --exam-date ... [--dry-run]` | 시험 결과를 학생 Master 와 병합해 Notion 시험 DB 에 적재 |
 | 자동 (시험) | `classin-toolkit sweep-missing-exam --exam-name ... --exam-date ... [--class-name ...]` | 특정 시험 미응시자 카톡 문구 생성 |
+| 자동 (OMR) | `classin-toolkit create-answer-sheet --course-id ... --unit-id ... --name ... [--release] [--live]` | ClassIn LMS Answer Sheet(OMR) activity 초안 생성, 선택 게시 |
 | 자동 (MVP2) | `classin-toolkit weekly-reports` | 학생별 주간 리포트 Notion 페이지 |
 | 자동 (SSO)  | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | ClassIn 앱 호출 링크 |
 | 점검 | `classin-toolkit check-ready --mode local-demo` | 테스트 단계별 API 키·DB ID 누락 확인 |
@@ -69,6 +71,7 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 - [x] MVP1: After-Class Webhook → Notion 적재 → 미제출 sweep → 카톡 dry-run
 - [x] MVP2: 주간 학생별 개인화 리포트 → Notion 페이지 + 학부모 문구
 - [x] 시험 결과 import + 기존 학생 Master 병합 + 미응시 sweep
+- [x] OMR Answer Sheet 생성 + `AnswerSheetScore` Webhook → Notion 시험 DB 적재
 - [x] 에이전트: tool-use 채팅 (수동 오더, 시험 미응시 조회 포함)
 - [x] LMS 스케줄 생성 체인 (Unit/Classroom/Homework Activity/releaseActivity) Layer 1 + core engine mock 검증
 - [ ] 실제 카톡 알림톡 연동 (템플릿 심사 후 Standard 티어)
@@ -94,11 +97,12 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
   - 인증: 헤더 `X-EEO-UID` / `X-EEO-TS` / `X-EEO-SIGN`
   - 성공: 최상위 `code == 1`
 - Webhook: 1 엔드포인트, `Cmd` 디스크리미네이터, `SafeKey` 필드 검증
+- LMS Activity: `createActivityNoClass(activityType=2)` 는 숙제, `activityType=7` 은 Answer Sheet(OMR)
 - 전체 스펙: [`docs/11_api_integration.md`](docs/11_api_integration.md)
 
 ## 다음 할 일
 
-1. 빈 숙제 초안을 게시하려면 필요한 숙제 콘텐츠 입력 API 또는 대시보드 작성 절차 확인
+1. 실계정에서 OMR draft 생성 → 문항/정답 작성 → 게시 → `AnswerSheetScore` 샘플 1건 캡처
 2. `config.yaml` 의 `classin.teacher_uids` 에 실제 교사명→UID 매핑 입력
 3. Notion DB 5종 실제 생성 후 `config.yaml` 의 DB ID 채우기
 4. 5 페르소나 페이크 데이터로 MVP2 리포트 차별화 수동 검증

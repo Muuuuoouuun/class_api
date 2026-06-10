@@ -96,7 +96,7 @@ MD5 → X-EEO-SIGN 헤더
 ### 4.3 LMS (v2)
 - `POST /lms/unit/create` — 단원 생성. `data.unitId`
 - `POST /lms/activity/createClass` — 권장课堂 활동 생성. `data.activityId`, `data.classId`
-- `POST /lms/activity/createActivityNoClass` — 숙제/퀴즈/자료 등 비课堂 활동 초안 생성. `activityType=2` 가 숙제.
+- `POST /lms/activity/createActivityNoClass` — 숙제/시험/자료/Answer Sheet 등 비课堂 활동 초안 생성. `activityType=2` 가 숙제, `3` 이 Test, `7` 이 Answer Sheet(OMR).
 - `POST /lms/activity/release` — 활동 게시. 실 API 확인 결과 단일 `activityId` 필드 필요. 복수 게시도 client에서 단일 호출을 반복한다.
 - `POST /lms/activity/addStudent` / `deleteStudent` — 활동 대상 학생 관리.
 
@@ -125,6 +125,7 @@ classin:
 - `schedule_api: legacy`: `addCourse` → `addCourseClass`; 숙제가 있으면 LMS homework activity 만 별도로 생성한다.
 - LMS `createClass` 와 homework 생성에는 `teacherUid` 가 필요하므로 `teacher_uids` 또는 `default_teacher_uid` 를 채워야 한다.
 - `createActivityNoClass(activityType=2)` 로 빈 숙제 초안은 만들 수 있지만, 실 API에서 내용 없는 숙제를 `releaseActivity` 하면 `errno=29601 内容不能为空` 이 반환된다. ClassIn 대시보드에서 숙제 내용을 채우거나 숙제 콘텐츠 작성 API가 필요하다.
+- OMR 카드는 ClassIn 문서의 `Answer Sheet` 에 해당한다. `classin-toolkit create-answer-sheet` 와 UI의 `OMR 답안지 생성`은 `createActivityNoClass(activityType=7)` 로 draft를 만들고, 옵션으로 `releaseActivity`까지 호출한다.
 
 ## 5. Datasub Webhook
 
@@ -173,7 +174,7 @@ classin:
 | `HomeworkSubmit` | 학생 제출 시마다 (UnitId, ActivityId, StudentInfo, SubmissionTime, IsSubmitLate) | ✅ 필수 |
 | `HomeworkScore`  | 채점 완료 (Score, ReviewDetails) | ✅ |
 | `ExamScore`      | 시험 점수 | ❌ |
-| `AnswerSheetScore` | 답안지 점수 | ❌ |
+| `AnswerSheetScore` | 답안지/OMR 점수 | ✅ 시험 DB 적재 |
 | `DiscussionChangeInfo` | 댓글/답글/좋아요 실시간 | ❌ |
 
 ### 5.4 MVP1 "미제출 알림" 구현 전략
@@ -186,6 +187,20 @@ classin:
 4. 이후 `HomeworkSubmit` 이벤트가 들어올 때마다 해당 row의 `숙제 제출 = True`.
 5. 스케줄러가 `sweep_missing_homework` 실행 — `수업일시 > now - window AND 숙제 제출 != True` 인 row를 학생별 grouping 하여 Claude 문구 생성 → 발송.
 
+### 5.5 OMR/Answer Sheet 구현 전략
+
+**가능한 것**:
+
+1. LMS `createActivityNoClass(activityType=7)` 로 Answer Sheet(OMR) activity 초안 생성.
+2. `releaseActivity` 로 게시.
+3. LMS Datasub `AnswerSheetScore` Webhook 수신.
+4. `StudentUid + ActivityId + TopicDetails/StudentScoringRate` 를 Notion 시험 DB로 upsert.
+
+**아직 확인이 필요한 것**:
+
+- API로 OMR 문항/정답/배점 내용까지 작성하는 별도 엔드포인트는 현재 문서 범위에서 확인되지 않았다. 지금 구현은 ClassIn에 OMR 활동 shell을 만들고, 점수 결과를 자동 수집하는 경로다.
+- 실제 계정에서 draft 생성 후 ClassIn 대시보드에서 문항/정답을 채우고 게시했을 때 `AnswerSheetScore` 샘플 payload를 1건 캡처해 필드 alias를 최종 확정해야 한다.
+
 ## 6. 현재 코드의 확정/추정 매트릭스
 
 | 항목 | 상태 | 근거 |
@@ -195,8 +210,10 @@ classin:
 | `register` 응답 UID 위치 (`data`) | ✅ 확정 | register.html 명시 |
 | `addCourseClass` 필드명 (`beginTime`/`endTime`/`teacherUid`) | ✅ 확정 | addCourseClass.html 명시 |
 | LMS Unit/Classroom/Activity 기본 파라미터 | ✅ 확정 | LMS createUnit/createClassroom/createActivityNoClass/releaseActivity |
+| Answer Sheet 초안 생성 (`activityType=7`) | ✅ 확정 | LMS createActivityNoClass 문서 + pipeline mock 검증 |
 | `Attendance` 필드명 (`Data[].Uid/AttendanceTime/FirstInTime/LastOutTime`) | ✅ 확정 | classrelated.html |
 | `HomeworkSubmit` 필드명 (`Data.ActivityId/StudentInfo.Uid/IsSubmitLate`) | ✅ 확정 | coursedata.html |
+| `AnswerSheetScore` 필드명 (`ActivityId/StudentInfo/TopicDetails/StudentScoringRate`) | ✅ 확정 | coursedata.html + 샘플 schema 테스트 |
 | `End` 내부 `handsupEnd/awardEnd/inoutEnd` 키 구조 | ⚠️ 추정 | 카테고리 존재는 확정, 세부 키는 샘플 페이로드 확인 필요 |
 | `SafeKey` 계산식 | ✅ 확정 | `MD5(SECRET+TimeStamp)` |
 | `releaseActivity` 필드명 | ✅ 확정 | 실 API상 `activityId` 필요. `activityIds` 배열은 `field "activityId" is not set` |
@@ -210,5 +227,6 @@ classin:
 
 - **단위**: `tests/test_signing_v2.py` — v1 SafeKey, v2 서명 정렬·필터링·해시, Webhook SafeKey
 - **HTTP client**: `tests/test_classin_client.py` — v1 form/SafeKey, v2 headers/JSON, 엔벨로프 처리, CED payload 매핑
-- **파싱**: `tests/test_webhook_schema.py` — 3종 샘플 (Attendance/End/HomeworkSubmit) 디스크리미네이트
+- **파싱**: `tests/test_webhook_schema.py` — Attendance/End/HomeworkSubmit/AnswerSheetScore 샘플 디스크리미네이트
+- **시험/OMR**: `tests/test_exams.py` — 시험 CSV 병합, OMR activityType=7 생성 payload, AnswerSheetScore → 시험 DB upsert
 - **Webhook e2e**: `classin-toolkit replay-webhook samples/attendance_sample.json` — 실 Notion 연동으로 적재 확인.

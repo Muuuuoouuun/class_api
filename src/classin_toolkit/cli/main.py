@@ -13,7 +13,7 @@ from ..api_diagnostics import DiagnosticItem, diagnose_apis
 from ..config import load_config
 from ..pipelines.core_engine import run_core_engine
 from ..pipelines.daily import render_daily
-from ..pipelines.exams import import_exam_results, sweep_missing_exam
+from ..pipelines.exams import create_answer_sheet_activity, import_exam_results, sweep_missing_exam
 from ..pipelines.missing_homework import sweep_missing_homework
 from ..pipelines.weekly import approve_all, generate_drafts, run_weekly_reports
 from ..readiness import ReadinessItem, check_readiness
@@ -51,6 +51,7 @@ def replay_webhook(
     import asyncio
 
     from ..classin.webhook_schemas import (
+        AnswerSheetScoreEvent,
         AttendanceEvent,
         EndEvent,
         HomeworkScoreEvent,
@@ -58,6 +59,7 @@ def replay_webhook(
         parse_event,
     )
     from ..pipelines.ingest import (
+        ingest_answer_sheet_score,
         ingest_attendance,
         ingest_end_summary,
         ingest_homework_score,
@@ -73,6 +75,7 @@ def replay_webhook(
         EndEvent: ingest_end_summary,
         HomeworkSubmitEvent: ingest_homework_submit,
         HomeworkScoreEvent: ingest_homework_score,
+        AnswerSheetScoreEvent: ingest_answer_sheet_score,
     }
     for etype, fn in handlers.items():
         if isinstance(event, etype):
@@ -145,6 +148,43 @@ def sweep_missing_exam_cmd(
         class_name=class_name,
     )
     console.print(f"[green]dispatched {n} messages[/green]")
+
+
+@app.command("create-answer-sheet")
+def create_answer_sheet_cmd(
+    course_id: str = typer.Option(..., "--course-id", help="ClassIn Course ID"),
+    unit_id: str = typer.Option(..., "--unit-id", help="ClassIn LMS Unit ID"),
+    name: str = typer.Option(..., "--name", help="답안지/OMR 활동명"),
+    teacher_uid: str | None = typer.Option(None, "--teacher-uid"),
+    start_at: str | None = typer.Option(None, "--start", help="ISO datetime 또는 epoch seconds"),
+    end_at: str | None = typer.Option(None, "--end", help="ISO datetime 또는 epoch seconds"),
+    release: bool = typer.Option(False, "--release", help="생성 후 바로 게시"),
+    dry_run: bool = typer.Option(True, "--dry-run/--live"),
+    config: Path = typer.Option(Path("config.yaml"), "--config"),
+) -> None:
+    """ClassIn LMS Answer Sheet(OMR/답안지) activity 초안을 생성한다."""
+    cfg = load_config(config)
+    result = create_answer_sheet_activity(
+        cfg,
+        course_id=course_id,
+        unit_id=unit_id,
+        name=name,
+        teacher_uid=teacher_uid,
+        start_at=_parse_datetime_option(start_at),
+        end_at=_parse_datetime_option(end_at),
+        release=release,
+        dry_run=dry_run,
+    )
+    if result.dry_run:
+        console.print(
+            "[yellow]dry-run[/yellow] would create Answer Sheet "
+            f"name={result.name!r} course={course_id} unit={unit_id} release={release}"
+        )
+        return
+    console.print(
+        f"[green]created answer sheet[/green] activity_id={result.activity_id} "
+        f"released={result.released}"
+    )
 
 
 @app.command("weekly-reports")
@@ -388,6 +428,20 @@ def _diagnostic_status_label(item: DiagnosticItem) -> str:
         "skipped": "[cyan]SKIP[/cyan]",
     }
     return labels[item.status]
+
+
+def _parse_datetime_option(value: str | None):
+    if not value:
+        return None
+    from datetime import datetime, timezone
+
+    text = value.strip()
+    if text.isdigit():
+        return datetime.fromtimestamp(int(text), tz=timezone.utc)
+    parsed = datetime.fromisoformat(text)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
@@ -67,9 +68,16 @@ def test_ui_home_renders_with_config(tmp_path):
     assert "스케줄 표" in res.text
     assert "CSV 내보내기" in res.text
     assert "전체 주간 드래프트" in res.text
+    assert "OMR 답안지 생성" in res.text
+    assert "answerSheetCourseId" in res.text
+    assert "/api/create-answer-sheet" in res.text
     assert "시험 결과 가져오기" in res.text
     assert "readExamFile" in res.text
     assert "examFile" in res.text
+    assert "notifyModePill" in res.text
+    assert 'aria-current="page"' in res.text
+    assert "defaultMissingSelectionKeys" in res.text
+    assert "item.has_parent_phone && isPendingMissing(item)" in res.text
 
 
 def test_ui_shell_wires_buttons_tabs_and_api_routes(tmp_path):
@@ -154,6 +162,32 @@ def test_ui_missing_homework_requires_notion_config(monkeypatch, tmp_path):
 
     assert res.status_code == 400
     assert res.json()["detail"].startswith("Notion 설정이 필요합니다")
+
+
+def test_ui_missing_homework_rejects_invalid_window(monkeypatch, tmp_path):
+    def query_should_not_run(*_args, **_kwargs):
+        raise AssertionError("invalid window should block before query")
+
+    monkeypatch.setattr("classin_toolkit.ui.query_missing_homework", query_should_not_run)
+    client = TestClient(create_app(config=_cfg(tmp_path)))
+
+    res = client.get("/api/missing-homework?window_hours=0")
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == "window_hours는 1~720 사이여야 합니다."
+
+
+def test_ui_notifications_rejects_excessive_limit(monkeypatch, tmp_path):
+    def history_should_not_run(*_args, **_kwargs):
+        raise AssertionError("invalid limit should block before history load")
+
+    monkeypatch.setattr("classin_toolkit.ui.load_notification_history", history_should_not_run)
+    client = TestClient(create_app(config=_cfg(tmp_path)))
+
+    res = client.get("/api/notifications?limit=999")
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == "limit은 1~500 사이여야 합니다."
 
 
 def test_ui_schedule_groups_lesson_records(monkeypatch, tmp_path):
@@ -336,6 +370,25 @@ def test_ui_sweep_missing_homework_accepts_selection_keys(monkeypatch, tmp_path)
     assert res.json()["count"] == 1
 
 
+def test_ui_sweep_missing_homework_rejects_invalid_window(monkeypatch, tmp_path):
+    def sweep_should_not_run(*_args, **_kwargs):
+        raise AssertionError("invalid window should block before sweep")
+
+    monkeypatch.setattr("classin_toolkit.ui.sweep_missing_homework", sweep_should_not_run)
+    client = TestClient(create_app(config=_cfg(tmp_path)))
+
+    res = client.post(
+        "/api/sweep-missing-homework",
+        json={
+            "window_hours": 0,
+            "selection_keys": ["10001::lesson-1::2026-04-24T10:00:00+00:00"],
+        },
+    )
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == "window_hours는 1~720 사이여야 합니다."
+
+
 def test_ui_generate_class_reports_wraps_weekly_drafts(monkeypatch, tmp_path):
     captured = {}
 
@@ -470,6 +523,76 @@ def test_ui_import_exam_results_accepts_csv_text(monkeypatch, tmp_path):
         "errors": 1,
     }
     assert body["errors"] == ["row 2: student not found or ambiguous: 김영희"]
+
+
+def test_ui_create_answer_sheet_dry_run(monkeypatch, tmp_path):
+    class Result:
+        activity_id = None
+        name = "6월 OMR 답안지"
+        released = False
+        dry_run = True
+
+    captured = {}
+
+    def fake_create_answer_sheet_activity(
+        cfg,
+        *,
+        course_id,
+        unit_id,
+        name,
+        teacher_uid,
+        start_at,
+        end_at,
+        release,
+        dry_run,
+    ):
+        captured["academy"] = cfg.academy.name
+        captured["course_id"] = course_id
+        captured["unit_id"] = unit_id
+        captured["name"] = name
+        captured["teacher_uid"] = teacher_uid
+        captured["start_at"] = start_at
+        captured["end_at"] = end_at
+        captured["release"] = release
+        captured["dry_run"] = dry_run
+        return Result()
+
+    monkeypatch.setattr(
+        "classin_toolkit.ui.create_answer_sheet_activity",
+        fake_create_answer_sheet_activity,
+    )
+    client = TestClient(create_app(config=_cfg(tmp_path)))
+
+    res = client.post(
+        "/api/create-answer-sheet",
+        json={
+            "course_id": "414193",
+            "unit_id": "22360790",
+            "name": "6월 OMR 답안지",
+            "teacher_uid": "1006368",
+            "start_at": "2026-06-11T09:00:00+00:00",
+            "end_at": "2026-06-12T09:00:00+00:00",
+            "release": False,
+            "dry_run": True,
+        },
+    )
+
+    assert res.status_code == 200
+    assert captured == {
+        "academy": "테스트학원",
+        "course_id": "414193",
+        "unit_id": "22360790",
+        "name": "6월 OMR 답안지",
+        "teacher_uid": "1006368",
+        "start_at": datetime(2026, 6, 11, 9, 0, tzinfo=timezone.utc),
+        "end_at": datetime(2026, 6, 12, 9, 0, tzinfo=timezone.utc),
+        "release": False,
+        "dry_run": True,
+    }
+    body = res.json()
+    assert body["message"] == "OMR 답안지 dry-run을 완료했습니다."
+    assert body["activity_id"] is None
+    assert body["name"] == "6월 OMR 답안지"
 
 
 def test_ui_status_reports_local_counts(tmp_path):
