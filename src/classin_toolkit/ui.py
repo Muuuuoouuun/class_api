@@ -1752,12 +1752,40 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
     .quick-input-actions {{
       display: grid;
-      grid-template-columns: 1fr;
+      grid-column: 1 / -1;
+      grid-template-columns: minmax(260px, 1.45fr) minmax(160px, .55fr);
       gap: 8px;
+      align-items: stretch;
     }}
     .quick-input-actions button {{
       justify-content: center;
-      min-height: 40px;
+      min-height: 44px;
+      width: 100%;
+      white-space: normal;
+      text-align: center;
+    }}
+    .quick-primary-send {{
+      min-height: 68px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 850;
+      flex-direction: column;
+      gap: 3px;
+      box-shadow: 0 14px 28px -20px rgba(34, 197, 94, .85);
+    }}
+    .quick-primary-send .quick-send-main {{
+      display: block;
+      line-height: 1.2;
+    }}
+    .quick-primary-send .quick-send-sub {{
+      display: block;
+      font-size: 11.5px;
+      font-weight: 700;
+      line-height: 1.25;
+      opacity: .84;
+    }}
+    .quick-secondary-action {{
+      align-self: stretch;
     }}
       border-radius: 10px;
       background: #fff;
@@ -1771,13 +1799,14 @@ def _render_shell(status: dict[str, Any]) -> str:
     .topbar-bell:hover {{ background: var(--panel-soft); border-color: var(--line-strong); color: var(--text); }}
     .topbar-bell .dot {{
       .quick-input-grid {{ grid-template-columns: 1fr 1fr; }}
-      .quick-input-actions {{ grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }}
+      .quick-input-actions {{ grid-template-columns: minmax(0, 1.35fr) minmax(150px, .65fr); }}
       position: absolute;
       top: 6px;
       right: 7px;
       .quick-input-head {{ flex-direction: column; }}
       .quick-input-grid {{ grid-template-columns: 1fr; }}
       .quick-input-actions {{ grid-template-columns: 1fr; }}
+      .quick-primary-send {{ min-height: 62px; }}
       width: 7px;
       height: 7px;
       background: var(--accent);
@@ -5058,8 +5087,11 @@ def _render_shell(status: dict[str, Any]) -> str:
             <input id="quickHomeworkActivityId" type="text" placeholder="?? ?? activityId">
           </label>
           <div class="quick-input-actions">
-            <button type="button" data-action="quickSendMissingAlert">?? ??? ?? ???</button>
-            <button type="button" class="secondary" data-action="quickCreateClasses">?? ?? ??</button>
+            <button type="button" class="quick-primary-send" data-action="quickSendMissingAlert">
+              <span class="quick-send-main">단체 숙제 독촉 문자 보내기</span>
+              <span class="quick-send-sub">입력한 미제출 대상 전체</span>
+            </button>
+            <button type="button" class="secondary quick-secondary-action" data-action="quickCreateClasses">수업 일괄 생성</button>
           </div>
         </div>
       </section>
