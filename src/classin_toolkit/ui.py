@@ -9,9 +9,10 @@ import html
 import json
 import re
 from datetime import date as date_cls
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -19,7 +20,15 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 import yaml
 
 from .config import AppConfig, DEFAULT_CONFIG_PATH, load_config
-from .notify.dispatcher import load_notification_history, notification_history_path
+from .classin.ced import CEDClient
+from .classin.client import ClassInClient
+from .classin.schemas import Homework, Lesson
+from .notify.dispatcher import (
+    dispatch_notifications,
+    load_notification_history,
+    notification_history_path,
+)
+from .notify.message import OutgoingMessage
 from .pipelines.daily import render_daily
 from .pipelines.data_merge import build_report_contexts
 from .pipelines.demo_seed import (
@@ -216,6 +225,143 @@ def create_app(
         lesson_id = (payload.get("lesson_id") or "").strip() or None
         count = sweep_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id)
         return _ok(f"미제출 알림 {count}건을 처리했습니다.", count=count)
+
+    @app.post("/api/quick/missing-homework-alert")
+    async def api_quick_missing_homework_alert(request: Request) -> JSONResponse:
+        payload = await _json_payload(request)
+        course_id = _required_text(payload, "course_id")
+        recipients = _quick_recipients(payload)
+        if not recipients:
+            raise HTTPException(status_code=400, detail="recipients or raw_recipients is required")
+        template = (
+            (payload.get("message") or payload.get("template") or "").strip()
+            or "[{student_name}] student has missing homework. - {academy_name}"
+        )
+        if state.demo:
+            messages = [
+                _quick_outgoing_message(
+                    row,
+                    template=template,
+                    course_id=course_id,
+                    academy_name=_DEMO_ACADEMY,
+                )
+                for row in recipients
+            ]
+            return _demo_ok(
+                "Quick input missing-homework alert accepted in demo mode.",
+                count=len(messages),
+                course_id=course_id,
+                channel=payload.get("channel") or "classin",
+            )
+
+        cfg = _require_config(state)
+        messages = [
+            _quick_outgoing_message(
+                row,
+                template=template,
+                course_id=course_id,
+                academy_name=cfg.academy.name,
+            )
+            for row in recipients
+        ]
+        await dispatch_notifications(cfg, messages, event_type="manual_missing_homework")
+        return _ok(
+            f"Quick missing-homework alert queued for {len(messages)} students.",
+            count=len(messages),
+            course_id=course_id,
+            channel=payload.get("channel") or "classin",
+        )
+
+    @app.post("/api/quick/class-bulk-create")
+    async def api_quick_class_bulk_create(request: Request) -> JSONResponse:
+        payload = await _json_payload(request)
+        course_id = _required_text(payload, "course_id")
+        if state.demo:
+            rows = _quick_class_rows(
+                payload,
+                timezone_name="Asia/Seoul",
+                default_teacher_id=(payload.get("teacher_id") or "").strip() or None,
+            )
+            return _demo_ok(
+                "Quick class bulk create accepted in demo mode.",
+                course_id=course_id,
+                created=len(rows),
+                homework_released=len(rows) if (payload.get("homework_activity_id") or "").strip() else 0,
+                items=[
+                    {
+                        "title": row["title"],
+                        "class_id": f"demo-class-{idx + 1}",
+                        "start_at": row["start_at"].isoformat(),
+                    }
+                    for idx, row in enumerate(rows)
+                ],
+                errors=[],
+            )
+
+        cfg = _require_config(state)
+        rows = _quick_class_rows(
+            payload,
+            timezone_name=cfg.academy.timezone,
+            default_teacher_id=(payload.get("teacher_id") or "").strip() or None,
+        )
+        if not rows:
+            raise HTTPException(status_code=400, detail="classes or raw_classes is required")
+
+        homework_activity_id = (payload.get("homework_activity_id") or "").strip()
+        homework_title = (payload.get("homework_title") or "").strip() or "Homework"
+        homework_due_at = _parse_quick_datetime(
+            (payload.get("homework_due_at") or "").strip(),
+            timezone_name=cfg.academy.timezone,
+        )
+        created: list[dict[str, Any]] = []
+        errors: list[str] = []
+        with ClassInClient(
+            base_url=cfg.classin.base_url,
+            school_id=cfg.classin.school_id,
+            secret_key=cfg.classin.secret_key,
+        ) as client:
+            ced = CEDClient(client)
+            for row in rows:
+                try:
+                    lesson = ced.add_course_class(
+                        Lesson(
+                            course_id=course_id,
+                            title=row["title"],
+                            start_at=row["start_at"],
+                            end_at=row["end_at"],
+                            teacher_id=row.get("teacher_id"),
+                        )
+                    )
+                    item = {
+                        "title": row["title"],
+                        "class_id": lesson.classin_id,
+                        "start_at": row["start_at"].isoformat(),
+                        "end_at": row["end_at"].isoformat(),
+                        "homework_released": False,
+                    }
+                    if homework_activity_id and lesson.classin_id:
+                        ced.release_homework(
+                            Homework(
+                                classin_id=homework_activity_id,
+                                lesson_id=lesson.classin_id,
+                                title=homework_title,
+                                due_at=homework_due_at,
+                            )
+                        )
+                        item["homework_released"] = True
+                    created.append(item)
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"{row['title']}: {exc}")
+
+        return _ok(
+            f"Quick class bulk create completed: {len(created)} created.",
+            course_id=course_id,
+            created=len(created),
+            homework_released=sum(1 for item in created if item.get("homework_released")),
+            items=created,
+            errors=errors,
+        )
+
 
     @app.post("/api/import-exam-results")
     async def api_import_exam_results(request: Request) -> JSONResponse:
@@ -431,6 +577,215 @@ def _ok(message: str, **extra: Any) -> JSONResponse:
 
 def _demo_ok(message: str, **extra: Any) -> JSONResponse:
     return JSONResponse({"ok": True, "demo": True, "message": message, **extra})
+
+
+def _required_text(payload: dict[str, Any], key: str) -> str:
+    value = str(payload.get(key) or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail=f"{key} is required")
+    return value
+
+
+def _quick_recipients(payload: dict[str, Any]) -> list[dict[str, str]]:
+    raw = payload.get("recipients")
+    if isinstance(raw, list):
+        return [_quick_recipient_from_value(item) for item in raw if item]
+    text = str(payload.get("raw_recipients") or payload.get("recipients_text") or "").strip()
+    if not text:
+        return []
+    recipients: list[dict[str, str]] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        recipients.append(_quick_recipient_from_value(line))
+    return recipients
+
+
+def _quick_recipient_from_value(value: Any) -> dict[str, str]:
+    if isinstance(value, dict):
+        student_id = str(
+            value.get("student_classin_id")
+            or value.get("uid")
+            or value.get("student_id")
+            or ""
+        ).strip()
+        student_name = str(value.get("student_name") or value.get("name") or student_id).strip()
+        parent_phone = str(value.get("parent_phone") or value.get("phone") or "").strip()
+    else:
+        parts = [part.strip() for part in re.split(r"[\t|,]", str(value)) if part.strip()]
+        student_id = parts[0] if parts else ""
+        student_name = parts[1] if len(parts) > 1 else student_id
+        parent_phone = parts[2] if len(parts) > 2 else ""
+    if not student_id:
+        raise HTTPException(status_code=400, detail="recipient uid is required")
+    return {
+        "student_classin_id": student_id,
+        "student_name": student_name or student_id,
+        "parent_phone": parent_phone,
+    }
+
+
+def _quick_outgoing_message(
+    row: dict[str, str],
+    *,
+    template: str,
+    course_id: str,
+    academy_name: str,
+) -> OutgoingMessage:
+    values = {
+        "student_classin_id": row["student_classin_id"],
+        "student_name": row["student_name"],
+        "parent_phone": row.get("parent_phone") or "",
+        "course_id": course_id,
+        "academy_name": academy_name,
+    }
+    return OutgoingMessage(
+        student_classin_id=row["student_classin_id"],
+        student_name=row["student_name"],
+        parent_phone=row.get("parent_phone") or None,
+        message=_quick_template(template, values),
+    )
+
+
+def _quick_template(template: str, values: dict[str, str]) -> str:
+    rendered = template
+    for key, value in values.items():
+        rendered = rendered.replace("{{" + key + "}}", value)
+        rendered = rendered.replace("{" + key + "}", value)
+    return rendered
+
+
+def _quick_class_rows(
+    payload: dict[str, Any],
+    *,
+    timezone_name: str,
+    default_teacher_id: str | None,
+) -> list[dict[str, Any]]:
+    default_duration = _quick_int(payload.get("duration_minutes"), default=60)
+    raw_rows = payload.get("classes")
+    if isinstance(raw_rows, list):
+        return [
+            _quick_class_row_from_dict(
+                item,
+                timezone_name=timezone_name,
+                default_duration=default_duration,
+                default_teacher_id=default_teacher_id,
+            )
+            for item in raw_rows
+            if isinstance(item, dict)
+        ]
+
+    text = str(payload.get("raw_classes") or payload.get("classes_text") or "").strip()
+    if not text:
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        rows.append(
+            _quick_class_row_from_line(
+                line,
+                timezone_name=timezone_name,
+                default_duration=default_duration,
+                default_teacher_id=default_teacher_id,
+            )
+        )
+    return rows
+
+
+def _quick_class_row_from_dict(
+    item: dict[str, Any],
+    *,
+    timezone_name: str,
+    default_duration: int,
+    default_teacher_id: str | None,
+) -> dict[str, Any]:
+    title = str(item.get("title") or item.get("class_name") or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="class title is required")
+    start_at = _parse_quick_datetime(str(item.get("start_at") or "").strip(), timezone_name=timezone_name)
+    if start_at is None:
+        raise HTTPException(status_code=400, detail=f"start_at is required for {title}")
+    end_at = _parse_quick_datetime(str(item.get("end_at") or "").strip(), timezone_name=timezone_name)
+    if end_at is None:
+        end_at = start_at + timedelta(minutes=_quick_int(item.get("duration_minutes"), default_duration))
+    return {
+        "title": title,
+        "start_at": start_at,
+        "end_at": end_at,
+        "teacher_id": str(item.get("teacher_id") or default_teacher_id or "").strip() or None,
+    }
+
+
+def _quick_class_row_from_line(
+    line: str,
+    *,
+    timezone_name: str,
+    default_duration: int,
+    default_teacher_id: str | None,
+) -> dict[str, Any]:
+    parts = [part.strip() for part in re.split(r"[\t|,]", line) if part.strip()]
+    if len(parts) < 2:
+        raise HTTPException(status_code=400, detail=f"invalid class row: {line}")
+    if (
+        len(parts) >= 3
+        and re.fullmatch(r"\d{4}-\d{1,2}-\d{1,2}", parts[0])
+        and re.fullmatch(r"\d{1,2}:\d{2}", parts[1])
+    ):
+        start_text = f"{parts[0]} {parts[1]}"
+        title = parts[2]
+        duration = _quick_int(parts[3] if len(parts) > 3 else None, default_duration)
+        teacher_id = parts[4] if len(parts) > 4 else default_teacher_id
+    else:
+        start_text = parts[0]
+        title = parts[1]
+        duration = _quick_int(parts[2] if len(parts) > 2 else None, default_duration)
+        teacher_id = parts[3] if len(parts) > 3 else default_teacher_id
+    start_at = _parse_quick_datetime(start_text, timezone_name=timezone_name)
+    if start_at is None:
+        raise HTTPException(status_code=400, detail=f"invalid start time: {line}")
+    return {
+        "title": title,
+        "start_at": start_at,
+        "end_at": start_at + timedelta(minutes=duration),
+        "teacher_id": str(teacher_id or "").strip() or None,
+    }
+
+
+def _parse_quick_datetime(value: str, *, timezone_name: str) -> datetime | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    normalized = text.replace("/", "-").replace("T", " ")
+    parsed: datetime | None = None
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+            try:
+                parsed = datetime.strptime(normalized, fmt)
+                break
+            except ValueError:
+                continue
+    if parsed is None:
+        raise HTTPException(status_code=400, detail=f"invalid datetime: {value}")
+    if parsed.tzinfo is None:
+        try:
+            parsed = parsed.replace(tzinfo=ZoneInfo(timezone_name or "Asia/Seoul"))
+        except Exception:
+            parsed = parsed.replace(tzinfo=ZoneInfo("Asia/Seoul"))
+    return parsed
+
+
+def _quick_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(1, parsed)
+
 
 
 def _status_payload(
@@ -1338,6 +1693,72 @@ def _render_shell(status: dict[str, Any]) -> str:
       width: 36px;
       height: 36px;
       min-height: 36px;
+    .quick-input-panel {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-bottom: 20px;
+    }}
+    .quick-input-head {{
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }}
+    .quick-input-title {{
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.3;
+    }}
+    .quick-input-sub {{
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 3px;
+      line-height: 1.5;
+    }}
+    .quick-input-grid {{
+      display: grid;
+      grid-template-columns: minmax(160px, .7fr) minmax(240px, 1fr) minmax(240px, 1fr);
+      gap: 10px;
+      align-items: end;
+    }}
+    .quick-input-grid label {{
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 700;
+    }}
+    .quick-input-grid input,
+    .quick-input-grid textarea {{
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 11px;
+      font: inherit;
+      color: var(--text);
+      background: #fff;
+      min-width: 0;
+    }}
+    .quick-input-grid textarea {{
+      min-height: 82px;
+      resize: vertical;
+      line-height: 1.45;
+    }}
+    .quick-input-actions {{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }}
+    .quick-input-actions button {{
+      justify-content: center;
+      min-height: 40px;
+    }}
       border-radius: 10px;
       background: #fff;
       border: 1px solid var(--line);
@@ -1349,9 +1770,14 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
     .topbar-bell:hover {{ background: var(--panel-soft); border-color: var(--line-strong); color: var(--text); }}
     .topbar-bell .dot {{
+      .quick-input-grid {{ grid-template-columns: 1fr 1fr; }}
+      .quick-input-actions {{ grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }}
       position: absolute;
       top: 6px;
       right: 7px;
+      .quick-input-head {{ flex-direction: column; }}
+      .quick-input-grid {{ grid-template-columns: 1fr; }}
+      .quick-input-actions {{ grid-template-columns: 1fr; }}
       width: 7px;
       height: 7px;
       background: var(--accent);
@@ -4607,6 +5033,37 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
     }}
     @media (prefers-reduced-motion: reduce) {{
+      <section class="quick-input-panel" aria-label="Quick input send panel">
+        <div class="quick-input-head">
+          <div>
+            <div class="quick-input-title">??? ?? quick input</div>
+            <div class="quick-input-sub">?? ?? ??? ?? ClassIn/API ??? ????. ?? ID? ??? ??? ??? ?? ???.</div>
+          </div>
+          <span class="badge">input only</span>
+        </div>
+        <div class="quick-input-grid">
+          <label>?? ID
+            <input id="quickCourseId" type="text" placeholder="captured courseId">
+          </label>
+          <label>??? ?? ??
+            <textarea id="quickRecipients" placeholder="10001,???,01012345678&#10;10002,???,01099998888"></textarea>
+          </label>
+          <label>?? ?? ??
+            <textarea id="quickClasses" placeholder="2026-06-11 19:00,?2 ?? ???,90,teacherUid&#10;2026-06-13 15:00,?2 ?? ??,60,teacherUid"></textarea>
+          </label>
+          <label>?? ??
+            <input id="quickMessage" type="text" value="[{{{{student_name}}}}] ?? ?? ??? ?? ??????.">
+          </label>
+          <label>?? activityId
+            <input id="quickHomeworkActivityId" type="text" placeholder="?? ?? activityId">
+          </label>
+          <div class="quick-input-actions">
+            <button type="button" data-action="quickSendMissingAlert">?? ??? ?? ???</button>
+            <button type="button" class="secondary" data-action="quickCreateClasses">?? ?? ??</button>
+          </div>
+        </div>
+      </section>
+
       *, *::before, *::after {{
         animation-duration: 0.01ms !important;
         transition-duration: 0.01ms !important;
@@ -6978,6 +7435,37 @@ def _render_shell(status: dict[str, Any]) -> str:
       const pending = items.filter((item) => item.action_required !== "done").length;
       if (meta) meta.textContent = pending ? `처리 대기 ${{pending}}건` : "처리 완료";
       if (!queue.length) {{
+      async quickSendMissingAlert() {{
+        const courseId = (document.querySelector("#quickCourseId")?.value || "").trim();
+        const rawRecipients = (document.querySelector("#quickRecipients")?.value || "").trim();
+        if (!courseId || !rawRecipients) {{
+          writeLog("Quick input: ?? ID? ??? ?? ??? ?? ??? ???.");
+          return;
+        }}
+        const data = await callApi("/api/quick/missing-homework-alert", {{
+          course_id: courseId,
+          raw_recipients: rawRecipients,
+          message: document.querySelector("#quickMessage")?.value || "",
+          channel: "classin",
+        }});
+        writeLog(data.message, data);
+        await refreshStatus();
+      }},
+      async quickCreateClasses() {{
+        const courseId = (document.querySelector("#quickCourseId")?.value || "").trim();
+        const rawClasses = (document.querySelector("#quickClasses")?.value || "").trim();
+        if (!courseId || !rawClasses) {{
+          writeLog("Quick input: ?? ID? ?? ?? ?? ??? ?? ??? ???.");
+          return;
+        }}
+        const data = await callApi("/api/quick/class-bulk-create", {{
+          course_id: courseId,
+          raw_classes: rawClasses,
+          homework_activity_id: document.querySelector("#quickHomeworkActivityId")?.value || "",
+        }});
+        writeLog(data.message, data);
+        await refreshStatus();
+      }},
         target.innerHTML = `<div class="empty">지금 바로 처리할 학생이 없습니다.</div>`;
         return;
       }}

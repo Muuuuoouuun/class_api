@@ -293,3 +293,87 @@ def test_ui_missing_homework_includes_notification_status(monkeypatch, tmp_path)
     assert body["items"][0]["report_context"]["has_context"] is False
     assert body["items"][1]["notification_status"] == "pending"
     assert body["items"][1]["action_required"] == "needs_phone"
+
+
+def test_ui_quick_missing_homework_alert_uses_input_only(monkeypatch, tmp_path):
+    cfg = _cfg(tmp_path)
+    captured = {}
+
+    async def fake_dispatch(cfg, messages, *, event_type):
+        captured["event_type"] = event_type
+        captured["messages"] = messages
+
+    monkeypatch.setattr("classin_toolkit.ui.dispatch_notifications", fake_dispatch)
+    client = TestClient(create_app(config=cfg))
+
+    res = client.post(
+        "/api/quick/missing-homework-alert",
+        json={
+            "course_id": "C-CAPTURED",
+            "raw_recipients": "10001,Alice,01012345678",
+            "message": "{{student_name}} / {{course_id}}",
+        },
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert body["count"] == 1
+    assert body["course_id"] == "C-CAPTURED"
+    assert captured["event_type"] == "manual_missing_homework"
+    assert captured["messages"][0].student_classin_id == "10001"
+    assert captured["messages"][0].student_name == "Alice"
+    assert captured["messages"][0].message == "Alice / C-CAPTURED"
+
+
+def test_ui_quick_class_bulk_create_posts_to_classin(monkeypatch, tmp_path):
+    cfg = _cfg(tmp_path)
+    captured = {"lessons": [], "homework": []}
+
+    class FakeClassInClient:
+        def __init__(self, **kwargs):
+            captured["client_kwargs"] = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+    class FakeCEDClient:
+        def __init__(self, client):
+            self.client = client
+
+        def add_course_class(self, lesson):
+            lesson.classin_id = f"class-{len(captured['lessons']) + 1}"
+            captured["lessons"].append(lesson)
+            return lesson
+
+        def release_homework(self, homework):
+            captured["homework"].append(homework)
+            return homework
+
+    monkeypatch.setattr("classin_toolkit.ui.ClassInClient", FakeClassInClient)
+    monkeypatch.setattr("classin_toolkit.ui.CEDClient", FakeCEDClient)
+    client = TestClient(create_app(config=cfg))
+
+    res = client.post(
+        "/api/quick/class-bulk-create",
+        json={
+            "course_id": "C-CAPTURED",
+            "raw_classes": "2026-06-11 19:00,Algebra test,90,20001",
+            "homework_activity_id": "HW-1",
+        },
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert body["created"] == 1
+    assert body["homework_released"] == 1
+    assert captured["client_kwargs"]["school_id"] == "sid"
+    assert captured["lessons"][0].course_id == "C-CAPTURED"
+    assert captured["lessons"][0].title == "Algebra test"
+    assert captured["lessons"][0].teacher_id == "20001"
+    assert captured["homework"][0].classin_id == "HW-1"
+    assert captured["homework"][0].lesson_id == "class-1"
