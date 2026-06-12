@@ -1,39 +1,47 @@
 academy:
-  name: "○○수학학원"
+  name: "Demo Academy"
   timezone: "Asia/Seoul"
 
 classin:
   base_url: "https://api.eeo.cn"
-  school_id: "REPLACE_ME"        # SID — eeo.cn 대시보드에서 확보
-  secret_key: "REPLACE_ME"       # v2 서명 시크릿 (signing key)
-  webhook_secret: "REPLACE_ME"   # Datasub SafeKey 검증용 공유비밀
+  school_id: "REPLACE_ME"
+  secret_key: "REPLACE_ME"
+  webhook_secret: "REPLACE_ME"
   default_password: "Classin!2026"
 
-notion:
-  token: "secret_REPLACE_ME"
-  databases:
-    students: "REPLACE_ME_STUDENTS_DB_ID"
-    lessons: "REPLACE_ME_LESSONS_DB_ID"
-    reports: "REPLACE_ME_REPORTS_DB_ID"
-    exams: "REPLACE_ME_EXAMS_DB_ID"        # exam results and missing-exam tracking
-    memos: "REPLACE_ME_MEMOS_DB_ID"        # 원장 메모·대응기록 전용
+storage:
+  backend: "local"
+  path: "./local_data/store.json"
 
 output:
   daily:
-    mode: "html"             # html | notion | both
+    mode: "html"
     path: "./reports_out/daily"
-    public_url_base: ""      # Cloudflare Tunnel 공개 URL (예: https://webhook.demo.com/reports)
+    public_url_base: ""
   weekly:
-    mode: "html+notion"      # html | notion | html+notion
-    require_approval: true   # Notion 아카이브 전 승인 필수
+    mode: "html"
+    require_approval: true
     path: "./reports_out/weekly"
   memo:
-    mode: "notion"           # notion | off
+    mode: "local"
 
 anthropic:
-  api_key: "sk-ant-REPLACE_ME"
-  model: "claude-sonnet-4-6"
-  report_model: "claude-opus-4-7"
+  api_key: "REPLACE_ME"
+  provider: "auto"
+  model: "gemini-3.5-flash"
+  report_model: "gemini-3.5-flash"
+
+neis:
+  api_key: "REPLACE_ME"
+  base_url: "https://open.neis.go.kr/hub"
+  schools: []
+  event_keywords:
+    - "시험"
+    - "고사"
+    - "학력평가"
+    - "모의평가"
+    - "모의고사"
+    - "방학식"
 
 notify:
   mode: "dry_run"
@@ -50,3 +58,8 @@ webhook:
 
 reports:
   output_dir: "./reports_out"
+
+course_links:
+  aliases:
+    "중2 수학 겨울방학 대비반":
+      - "26 리얼 테스트"

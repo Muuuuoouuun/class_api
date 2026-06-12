@@ -9,7 +9,7 @@ from rich.markdown import Markdown
 
 from ..config import AppConfig
 from ..storage.notion_repo import NotionRepo
-from .claude_client import get_claude
+from .claude_client import get_claude, get_gemini_openai, resolve_model, resolve_provider
 from .skills import TOOLS, execute_tool
 
 log = logging.getLogger(__name__)
@@ -30,12 +30,15 @@ def run_agent_turn(
     messages: list[dict],
 ) -> tuple[str, list[dict]]:
     """Run one agent turn and return the final text plus updated messages."""
+    if resolve_provider(cfg) == "gemini":
+        return _run_gemini_agent_turn(cfg, messages)
+
     client = get_claude(cfg.anthropic.api_key)
     repo = NotionRepo.from_config(cfg)
 
     while True:
         response = client.messages.create(
-            model=cfg.anthropic.model,
+            model=resolve_model(cfg),
             max_tokens=4096,
             system=[{"type": "text", "text": _SYSTEM, "cache_control": {"type": "ephemeral"}}],
             tools=TOOLS,
@@ -71,6 +74,82 @@ def run_agent_turn(
             return text.strip(), messages
 
         messages = messages + [{"role": "user", "content": tool_results}]
+
+
+def _run_gemini_agent_turn(
+    cfg: AppConfig,
+    messages: list[dict],
+) -> tuple[str, list[dict]]:
+    client = get_gemini_openai(cfg.anthropic.api_key)
+    repo = NotionRepo.from_config(cfg)
+    openai_tools = [_to_openai_tool(tool) for tool in TOOLS]
+    messages = [{"role": "system", "content": _SYSTEM}, *messages]
+
+    while True:
+        response = client.chat.completions.create(
+            model=resolve_model(cfg),
+            max_tokens=4096,
+            messages=messages,
+            tools=openai_tools,
+            tool_choice="auto",
+        )
+        message = response.choices[0].message
+        assistant_message = _openai_assistant_message(message)
+        messages.append(assistant_message)
+
+        tool_calls = getattr(message, "tool_calls", None) or []
+        if not tool_calls:
+            return (message.content or "").strip(), _without_system(messages)
+
+        for tool_call in tool_calls:
+            try:
+                tool_input = json.loads(tool_call.function.arguments or "{}")
+            except json.JSONDecodeError:
+                tool_input = {"_raw_arguments": tool_call.function.arguments or ""}
+            result = execute_tool(tool_call.function.name, tool_input, repo, cfg)
+            log.debug("tool=%s result=%s", tool_call.function.name, str(result)[:200])
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result, ensure_ascii=False, default=str),
+                }
+            )
+
+
+def _to_openai_tool(tool: dict) -> dict:
+    return {
+        "type": "function",
+        "function": {
+            "name": tool["name"],
+            "description": tool.get("description", ""),
+            "parameters": tool.get("input_schema", {"type": "object", "properties": {}}),
+        },
+    }
+
+
+def _openai_assistant_message(message) -> dict:
+    payload = {"role": "assistant", "content": message.content or ""}
+    tool_calls = getattr(message, "tool_calls", None) or []
+    if tool_calls:
+        payload["tool_calls"] = [
+            {
+                "id": tool_call.id,
+                "type": "function",
+                "function": {
+                    "name": tool_call.function.name,
+                    "arguments": tool_call.function.arguments or "{}",
+                },
+            }
+            for tool_call in tool_calls
+        ]
+    return payload
+
+
+def _without_system(messages: list[dict]) -> list[dict]:
+    if messages and messages[0].get("role") == "system":
+        return messages[1:]
+    return messages
 
 
 def chat_loop(cfg: AppConfig) -> None:

@@ -14,6 +14,7 @@ from ..config import AppConfig
 from ..intelligence.missing_exam import compose_messages_from_rows
 from ..notify.dispatcher import dispatch_notifications
 from ..storage.notion_repo import NotionRepo, StudentRecord
+from .demo_filter import without_seed_demo_rows, without_seed_demo_students
 
 log = logging.getLogger(__name__)
 
@@ -106,7 +107,7 @@ def merge_exam_results(
     dry_run: bool = False,
 ) -> ExamImportResult:
     repo = repo or NotionRepo.from_config(cfg)
-    active_students = repo.list_active_students()
+    active_students = without_seed_demo_students(repo.list_active_students())
     students_by_id = {student.classin_id: student for student in active_students}
     students_by_name: dict[str, list[StudentRecord]] = defaultdict(list)
     for student in active_students:
@@ -170,10 +171,12 @@ def query_missing_exam(
     repo: NotionRepo | None = None,
 ) -> list[dict]:
     repo = repo or NotionRepo.from_config(cfg)
-    return repo.find_missing_exam(
-        exam_name=exam_name,
-        exam_date=_parse_exam_date(exam_date),
-        class_name=class_name,
+    return without_seed_demo_rows(
+        repo.find_missing_exam(
+            exam_name=exam_name,
+            exam_date=_parse_exam_date(exam_date),
+            class_name=class_name,
+        )
     )
 
 

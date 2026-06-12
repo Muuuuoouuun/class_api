@@ -19,16 +19,18 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 import yaml
 
-from .config import AppConfig, DEFAULT_CONFIG_PATH, load_config
 from .classin.ced import CEDClient
 from .classin.client import ClassInClient
 from .classin.schemas import Homework, Lesson
+from .config import AppConfig, DEFAULT_CONFIG_PATH, load_config
+from .intelligence.claude_client import has_configured_ai_key, resolve_model, resolve_provider
 from .notify.dispatcher import (
     dispatch_notifications,
     load_notification_history,
     notification_history_path,
 )
 from .notify.message import OutgoingMessage
+from .neis import NeisApiError
 from .pipelines.daily import render_daily
 from .pipelines.data_merge import build_report_contexts
 from .pipelines.demo_seed import (
@@ -45,8 +47,10 @@ from .pipelines.course_dashboard import (
 )
 from .pipelines.exams import import_exam_results, query_missing_exam, sweep_missing_exam
 from .pipelines.missing_homework import query_missing_homework, sweep_missing_homework
+from .pipelines.neis_schedule import fetch_relevant_school_schedules
 from .pipelines.weekly import approve_all, generate_drafts
-from .storage.notion_repo import NotionRepo
+from .storage.local_repo import LocalRepo
+from .storage.pdf_renderer import render_learning_report_pdf
 
 _DEMO_ACADEMY = "ClassIn Demo Academy"
 
@@ -103,7 +107,7 @@ def create_app(
     async def api_profile_post(request: Request) -> JSONResponse:
         payload = await _json_payload(request)
         saved = _save_profile(state, payload)
-        return _ok("프로필이 저장되었습니다. 변경된 자격증명은 다음 실행부터 반영됩니다.", profile=saved)
+        return _ok("프로필이 저장되었습니다. 홈과 미제출 상황판에 바로 반영됩니다.", profile=saved)
 
     @app.get("/api/missing-homework")
     async def api_missing_homework(
@@ -187,11 +191,32 @@ def create_app(
         target = date_cls.fromisoformat(raw_date) if raw_date else None
         result = render_daily(cfg, target=target)
         if not result:
-            return _ok("daily mode가 notion이라 HTML 생성을 건너뛰었습니다.")
+            return _ok("daily mode가 레거시 모드라 HTML 생성을 건너뛰었습니다.")
         return _ok(
             "일일 현황 HTML을 생성했습니다.",
             path=str(result.path) if result.path else None,
             public_url=result.public_url,
+        )
+
+    @app.post("/api/report-pdf")
+    async def api_report_pdf(request: Request) -> FileResponse:
+        payload = await _json_payload(request)
+        if state.demo:
+            academy_name = _DEMO_ACADEMY
+            output_dir = Path("./reports_out/pdf")
+        else:
+            cfg = _require_config(state)
+            academy_name = cfg.academy.name
+            output_dir = _config_relative_path(state, cfg.reports.output_dir) / "pdf"
+        result = render_learning_report_pdf(
+            output_dir=output_dir,
+            academy_name=academy_name,
+            payload=payload,
+        )
+        return FileResponse(
+            result.path,
+            media_type="application/pdf",
+            filename=result.filename,
         )
 
     @app.post("/api/generate-weekly-drafts")
@@ -223,7 +248,37 @@ def create_app(
         payload = await _json_payload(request)
         window_hours = int(payload.get("window_hours") or 24)
         lesson_id = (payload.get("lesson_id") or "").strip() or None
-        count = sweep_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id)
+        course_id = (payload.get("course_id") or "").strip() or None
+        recipients = payload.get("recipients")
+        template = (payload.get("template") or "").strip()
+        if recipients or template or course_id:
+            rows = query_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id)
+            if course_id:
+                rows = [
+                    row for row in rows
+                    if str(row.get("course_classin_id") or "") == course_id
+                ]
+            rows = _filter_missing_rows_for_recipients(rows, recipients)
+            messages = _missing_rows_to_messages(
+                rows,
+                template=template,
+                academy_name=cfg.academy.name,
+            )
+            if not messages:
+                raise HTTPException(status_code=400, detail="발송 가능한 미제출 대상이 없습니다.")
+            dispatch_cfg = cfg
+            if payload.get("dry_run") is True and cfg.notify.mode != "dry_run":
+                dispatch_cfg = cfg.model_copy(
+                    update={"notify": cfg.notify.model_copy(update={"mode": "dry_run"})}
+                )
+            await dispatch_notifications(
+                dispatch_cfg,
+                messages,
+                event_type="missing_homework",
+            )
+            count = len(messages)
+        else:
+            count = sweep_missing_homework(cfg, window_hours=window_hours, lesson_id=lesson_id)
         return _ok(f"미제출 알림 {count}건을 처리했습니다.", count=count)
 
     @app.post("/api/quick/missing-homework-alert")
@@ -362,7 +417,6 @@ def create_app(
             errors=errors,
         )
 
-
     @app.post("/api/import-exam-results")
     async def api_import_exam_results(request: Request) -> JSONResponse:
         if state.demo:
@@ -458,7 +512,7 @@ def create_app(
             raise HTTPException(status_code=400, detail="classin_id와 text가 필요합니다.")
         if cfg.output.memo.mode == "off":
             return _ok("memo mode가 off라 기록을 건너뛰었습니다.")
-        page_id = NotionRepo.from_config(cfg).write_memo(
+        page_id = LocalRepo.from_config(cfg).write_memo(
             student_classin_id=classin_id,
             text=text,
             tag=tag,
@@ -479,13 +533,12 @@ def create_app(
                 source="heuristic",
             )
         cfg = _require_config(state)
-        ak = (cfg.anthropic.api_key or "").strip()
-        if ak and not ak.lower().startswith(("test", "dummy", "your-")):
+        if has_configured_ai_key(cfg):
             try:
                 from .intelligence.schedule_parser import parse_schedule_text
 
                 rows = parse_schedule_text(cfg, text)
-                return _ok("AI가 스케줄을 인식했습니다.", items=rows, source="claude")
+                return _ok("AI가 스케줄을 인식했습니다.", items=rows, source=resolve_provider(cfg))
             except Exception as exc:  # noqa: BLE001
                 rows = _parse_schedule_heuristic(text)
                 return _ok(
@@ -494,7 +547,41 @@ def create_app(
                     source="heuristic",
                 )
         rows = _parse_schedule_heuristic(text)
-        return _ok("Claude API 키가 없어 휴리스틱 파서로 인식했습니다.", items=rows, source="heuristic")
+        return _ok("AI API 키가 없어 휴리스틱 파서로 인식했습니다.", items=rows, source="heuristic")
+
+    @app.post("/api/neis/schedules")
+    async def api_neis_schedules(request: Request) -> JSONResponse:
+        payload = await _json_payload(request)
+        if state.demo:
+            return _demo_ok(
+                "Demo mode: NEIS 학사일정 샘플을 불러왔습니다.",
+                source="neis",
+                items=_demo_neis_schedule_items(),
+                schools=[
+                    {
+                        "name": "샘플고등학교",
+                        "office_code": "B10",
+                        "school_code": "7010000",
+                        "office_name": "서울특별시교육청",
+                    }
+                ],
+                unmatched=[],
+                summary={"event_count": 3, "school_count": 1, "unmatched_count": 0},
+            )
+        cfg = _require_config(state)
+        try:
+            result = fetch_relevant_school_schedules(
+                cfg,
+                schools=payload.get("schools"),
+                start_date=payload.get("start_date"),
+                end_date=payload.get("end_date"),
+                keywords=payload.get("keywords"),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except NeisApiError as exc:
+            raise HTTPException(status_code=502, detail=f"NEIS API error: {exc}") from exc
+        return _ok("NEIS 학사일정을 불러왔습니다.", **result)
 
     @app.post("/api/agent")
     async def api_agent(request: Request) -> JSONResponse:
@@ -559,6 +646,13 @@ def _require_config(state: _ConfigState) -> AppConfig:
     if cfg:
         return cfg
     raise HTTPException(status_code=400, detail=error or "config.yaml을 읽을 수 없습니다.")
+
+
+def _config_relative_path(state: _ConfigState, value: str | Path) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return state.config_path.resolve().parent / path
 
 
 async def _json_payload(request: Request) -> dict[str, Any]:
@@ -654,6 +748,106 @@ def _quick_template(template: str, values: dict[str, str]) -> str:
         rendered = rendered.replace("{{" + key + "}}", value)
         rendered = rendered.replace("{" + key + "}", value)
     return rendered
+
+
+def _filter_missing_rows_for_recipients(
+    rows: list[dict],
+    recipients: Any,
+) -> list[dict]:
+    if not isinstance(recipients, list) or not recipients:
+        return rows
+
+    selected: list[tuple[str, str, str]] = []
+    for item in recipients:
+        if not isinstance(item, dict):
+            continue
+        student_id = str(
+            item.get("student_classin_id")
+            or item.get("uid")
+            or item.get("student_id")
+            or ""
+        ).strip()
+        if not student_id:
+            continue
+        selected.append(
+            (
+                student_id,
+                str(item.get("lesson_classin_id") or item.get("lesson_id") or "").strip(),
+                str(item.get("date") or "").strip(),
+            )
+        )
+    if not selected:
+        return []
+
+    filtered: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for row in rows:
+        row_student = str(row.get("student_classin_id") or "").strip()
+        row_lesson = str(row.get("lesson_classin_id") or "").strip()
+        row_date = str(row.get("date") or "").strip()
+        for student_id, lesson_id, date_value in selected:
+            if row_student != student_id:
+                continue
+            if lesson_id and row_lesson != lesson_id:
+                continue
+            if date_value and row_date != date_value:
+                continue
+            key = (row_student, row_lesson, row_date)
+            if key not in seen:
+                filtered.append(row)
+                seen.add(key)
+            break
+    return filtered
+
+
+def _missing_rows_to_messages(
+    rows: list[dict],
+    *,
+    template: str,
+    academy_name: str,
+) -> list[OutgoingMessage]:
+    fallback_template = (
+        "안녕하세요 학부모님, {{student_name}} 학생이 {{class_name}} "
+        "{{date}} 숙제를 아직 제출하지 않았습니다. 오늘 중 확인 부탁드립니다. "
+        "- {{academy_name}}"
+    )
+    counts = _missing_count_by_student(rows)
+    messages: list[OutgoingMessage] = []
+    for row in rows:
+        parent_phone = str(row.get("parent_phone") or "").strip()
+        if not parent_phone:
+            continue
+        student_id = str(row.get("student_classin_id") or "").strip()
+        student_name = str(row.get("student_name") or student_id or "미등록").strip()
+        values = {
+            "student_classin_id": student_id,
+            "student_name": student_name,
+            "parent_phone": parent_phone,
+            "class_name": str(row.get("student_class_name") or row.get("class_name") or "").strip(),
+            "lesson_id": str(row.get("lesson_classin_id") or "").strip(),
+            "course_id": str(row.get("course_classin_id") or "").strip(),
+            "date": _short_date(row.get("date")),
+            "missing_count": str(counts.get(student_id, 1)),
+            "academy_name": academy_name,
+        }
+        messages.append(
+            OutgoingMessage(
+                student_classin_id=student_id,
+                student_name=student_name,
+                parent_phone=parent_phone,
+                message=_quick_template(template or fallback_template, values),
+            )
+        )
+    return messages
+
+
+def _short_date(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "오늘"
+    if "T" in text:
+        return text.split("T", 1)[0]
+    return text[:10] if len(text) >= 10 else text
 
 
 def _quick_class_rows(
@@ -787,7 +981,6 @@ def _quick_int(value: Any, default: int) -> int:
     return max(1, parsed)
 
 
-
 def _status_payload(
     cfg: AppConfig | None,
     error: str | None,
@@ -825,6 +1018,20 @@ def _status_payload(
             "memo_mode": cfg.output.memo.mode,
             "notify_mode": cfg.notify.mode,
         },
+        "storage": {
+            "backend": cfg.storage.backend,
+            "path": cfg.storage.path,
+        },
+        "neis": {
+            "schools": [
+                {
+                    "name": school.name,
+                    "office_code": school.office_code,
+                    "school_code": school.school_code,
+                }
+                for school in cfg.neis.schools
+            ],
+        },
         "counts": {
             "incoming_json": _count_files(incoming_dir, "*.json"),
             "daily_html": _count_files(daily_dir, "*.html"),
@@ -841,8 +1048,11 @@ PROFILE_FIELDS = (
     "classin_school_id",
     "classin_secret_key",
     "classin_webhook_secret",
-    "notion_token",
     "anthropic_api_key",
+    "ai_provider",
+    "ai_model",
+    "ai_report_model",
+    "neis_api_key",
     "aligo_api_key",
     "aligo_user_id",
     "aligo_sender",
@@ -851,8 +1061,8 @@ PROFILE_FIELDS = (
 SECRET_FIELDS = {
     "classin_secret_key",
     "classin_webhook_secret",
-    "notion_token",
     "anthropic_api_key",
+    "neis_api_key",
     "aligo_api_key",
 }
 
@@ -892,8 +1102,11 @@ def _profile_defaults_from_config(cfg: AppConfig | None) -> dict[str, str]:
         "classin_school_id": cfg.classin.school_id,
         "classin_secret_key": cfg.classin.secret_key,
         "classin_webhook_secret": cfg.classin.webhook_secret,
-        "notion_token": cfg.notion.token,
         "anthropic_api_key": cfg.anthropic.api_key,
+        "ai_provider": cfg.anthropic.provider,
+        "ai_model": cfg.anthropic.model,
+        "ai_report_model": cfg.anthropic.report_model,
+        "neis_api_key": cfg.neis.api_key,
         "aligo_api_key": cfg.notify.aligo.api_key,
         "aligo_user_id": cfg.notify.aligo.user_id,
         "aligo_sender": cfg.notify.aligo.sender,
@@ -941,26 +1154,29 @@ def _save_profile(state: "_ConfigState", payload: dict[str, Any]) -> dict[str, A
         next_values[key] = text
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(next_values, allow_unicode=True, sort_keys=True), encoding="utf-8")
+    load_config.cache_clear()
     return _profile_payload(state)
 
 
 def _connection_payload(cfg: AppConfig | None) -> list[dict[str, Any]]:
     if not cfg:
         return []
-    ak = (cfg.anthropic.api_key or "").strip()
-    anthropic_ok = bool(ak) and not ak.lower().startswith(("test", "dummy", "your-"))
+    ai_provider = resolve_provider(cfg)
+    ai_ok = has_configured_ai_key(cfg)
     aligo = cfg.notify.aligo
     aligo_ok = bool((aligo.api_key or "").strip() and (aligo.user_id or "").strip() and (aligo.sender or "").strip())
     notify_live = cfg.notify.mode == "live"
     classin_ok = bool((cfg.classin.school_id or "").strip() and (cfg.classin.secret_key or "").strip())
-    notion_ok = bool((cfg.notion.token or "").strip() and (cfg.notion.databases.students or "").strip())
+    neis_ok = bool((cfg.neis.api_key or "").strip())
+    storage_path = Path(cfg.storage.path)
+    storage_ok = cfg.storage.backend == "local"
     return [
         {
-            "key": "claude",
-            "label": "Claude AI",
+            "key": "ai",
+            "label": "Gemini AI" if ai_provider == "gemini" else "Claude AI",
             "kind": "API",
-            "connected": anthropic_ok,
-            "detail": f"model · {cfg.anthropic.model}" if anthropic_ok else "ANTHROPIC_API_KEY 미설정",
+            "connected": ai_ok,
+            "detail": f"{ai_provider} · {resolve_model(cfg)}" if ai_ok else "AI API Key 미설정",
         },
         {
             "key": "classin",
@@ -968,6 +1184,16 @@ def _connection_payload(cfg: AppConfig | None) -> list[dict[str, Any]]:
             "kind": "API",
             "connected": classin_ok,
             "detail": "appid + secret 확인" if classin_ok else "appid/secret 미설정",
+        },
+        {
+            "key": "neis",
+            "label": "NEIS Open API",
+            "kind": "API",
+            "connected": neis_ok,
+            "detail": (
+                f"키 설정됨 · 기본 학교 {len(cfg.neis.schools)}개"
+                if neis_ok else "neis_api_key 미설정"
+            ),
         },
         {
             "key": "notify",
@@ -980,11 +1206,11 @@ def _connection_payload(cfg: AppConfig | None) -> list[dict[str, Any]]:
             ),
         },
         {
-            "key": "notion",
-            "label": "Notion 저장소",
-            "kind": "출력",
-            "connected": notion_ok,
-            "detail": "주간 리포트/메모 동기화" if notion_ok else "Notion api_key 미설정",
+            "key": "storage",
+            "label": "로컬 저장소",
+            "kind": "DATA",
+            "connected": storage_ok,
+            "detail": str(storage_path) if storage_ok else "local storage disabled",
         },
     ]
 
@@ -1028,10 +1254,12 @@ def _demo_status_payload(config_path: Path) -> dict[str, Any]:
              "detail": "demo · claude-sonnet-4-6"},
             {"key": "classin", "label": "ClassIn API", "kind": "API", "connected": True,
              "detail": "demo school_id"},
+            {"key": "neis", "label": "NEIS Open API", "kind": "API", "connected": True,
+             "detail": "demo schedule data"},
             {"key": "notify", "label": "알림톡 / SMS (Aligo)", "kind": "발송", "connected": False,
              "detail": "DRY_RUN · 연결 안됨"},
-            {"key": "notion", "label": "Notion 저장소", "kind": "출력", "connected": False,
-             "detail": "demo 모드 — 외부 쓰기 비활성"},
+            {"key": "storage", "label": "로컬 저장소", "kind": "DATA", "connected": True,
+             "detail": "demo 모드"},
         ],
     }
 
@@ -1087,6 +1315,56 @@ def _parse_schedule_heuristic(text: str) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def _demo_neis_schedule_items() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "demo-neis-1",
+            "source": "neis",
+            "day": "월",
+            "date": "2026-07-06",
+            "time": "2026-07-06",
+            "class_name": "1학기 기말고사",
+            "teacher": "샘플고등학교",
+            "room": "시험",
+            "school_name": "샘플고등학교",
+            "event_name": "1학기 기말고사",
+            "category": "exam",
+            "category_label": "시험",
+            "confidence": 1.0,
+        },
+        {
+            "id": "demo-neis-2",
+            "source": "neis",
+            "day": "화",
+            "date": "2026-07-07",
+            "time": "2026-07-07",
+            "class_name": "1학기 기말고사",
+            "teacher": "샘플고등학교",
+            "room": "시험",
+            "school_name": "샘플고등학교",
+            "event_name": "1학기 기말고사",
+            "category": "exam",
+            "category_label": "시험",
+            "confidence": 1.0,
+        },
+        {
+            "id": "demo-neis-3",
+            "source": "neis",
+            "day": "금",
+            "date": "2026-07-24",
+            "time": "2026-07-24",
+            "class_name": "여름방학식",
+            "teacher": "샘플고등학교",
+            "room": "방학식",
+            "school_name": "샘플고등학교",
+            "event_name": "여름방학식",
+            "category": "break_ceremony",
+            "category_label": "방학식",
+            "confidence": 1.0,
+        },
+    ]
 
 
 def _count_history_rows(path: Path) -> int:
@@ -1418,9 +1696,25 @@ def _demo_report_contexts() -> dict[str, dict[str, Any]]:
     return contexts
 
 
+def _neis_school_input_lines(status: dict[str, Any]) -> list[str]:
+    schools = ((status.get("neis") or {}).get("schools") or [])
+    lines: list[str] = []
+    for school in schools:
+        name = str(school.get("name") or "").strip()
+        office_code = str(school.get("office_code") or "").strip()
+        school_code = str(school.get("school_code") or "").strip()
+        if name and office_code and school_code:
+            lines.append(f"{name}|{office_code}|{school_code}")
+        elif name:
+            lines.append(name)
+    return lines
+
+
 def _render_shell(status: dict[str, Any]) -> str:
     status_json = _json_for_script(status)
     today = date_cls.today().isoformat()
+    neis_end = (date_cls.today() + timedelta(days=180)).isoformat()
+    neis_schools_value = html.escape("\n".join(_neis_school_input_lines(status)))
     week_start = _week_start(date_cls.today()).isoformat()
     title = html.escape(status.get("academy") or "Classin++")
     initial_source = (status.get("academy") or "Classin++").strip()
@@ -1457,9 +1751,19 @@ def _render_shell(status: dict[str, Any]) -> str:
       --primary-softer: #f0faf2;
       --primary-ink: #0b3d20;
       --primary-ring: rgba(22, 163, 74, .18);
+      --green: var(--primary);
+      --green-2: var(--primary-strong);
+      --green-3: var(--primary-soft);
+      --green-4: var(--primary-softer);
+      --green-ink: var(--primary-ink);
+      --ink: var(--text);
+      --ink-2: var(--text-2);
+      --surface: var(--panel);
       --accent: #d97706;
       --accent-soft: #fef6e7;
       --accent-ink: #92520a;
+      --warn: var(--accent);
+      --warn-bg: var(--accent-soft);
       --danger: #dc2626;
       --danger-soft: #fdecec;
       --danger-ink: #991b1b;
@@ -1693,100 +1997,6 @@ def _render_shell(status: dict[str, Any]) -> str:
       width: 36px;
       height: 36px;
       min-height: 36px;
-    .quick-input-panel {{
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow);
-      padding: 16px;
-      margin-bottom: 20px;
-    }}
-    .quick-input-head {{
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-      margin-bottom: 12px;
-    }}
-    .quick-input-title {{
-      font-size: 15px;
-      font-weight: 800;
-      color: var(--text);
-      line-height: 1.3;
-    }}
-    .quick-input-sub {{
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 3px;
-      line-height: 1.5;
-    }}
-    .quick-input-grid {{
-      display: grid;
-      grid-template-columns: minmax(160px, .7fr) minmax(240px, 1fr) minmax(240px, 1fr);
-      gap: 10px;
-      align-items: end;
-    }}
-    .quick-input-grid label {{
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      font-size: 11.5px;
-      color: var(--muted);
-      font-weight: 700;
-    }}
-    .quick-input-grid input,
-    .quick-input-grid textarea {{
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px 11px;
-      font: inherit;
-      color: var(--text);
-      background: #fff;
-      min-width: 0;
-    }}
-    .quick-input-grid textarea {{
-      min-height: 82px;
-      resize: vertical;
-      line-height: 1.45;
-    }}
-    .quick-input-actions {{
-      display: grid;
-      grid-column: 1 / -1;
-      grid-template-columns: minmax(260px, 1.45fr) minmax(160px, .55fr);
-      gap: 8px;
-      align-items: stretch;
-    }}
-    .quick-input-actions button {{
-      justify-content: center;
-      min-height: 44px;
-      width: 100%;
-      white-space: normal;
-      text-align: center;
-    }}
-    .quick-primary-send {{
-      min-height: 68px;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 850;
-      flex-direction: column;
-      gap: 3px;
-      box-shadow: 0 14px 28px -20px rgba(34, 197, 94, .85);
-    }}
-    .quick-primary-send .quick-send-main {{
-      display: block;
-      line-height: 1.2;
-    }}
-    .quick-primary-send .quick-send-sub {{
-      display: block;
-      font-size: 11.5px;
-      font-weight: 700;
-      line-height: 1.25;
-      opacity: .84;
-    }}
-    .quick-secondary-action {{
-      align-self: stretch;
-    }}
       border-radius: 10px;
       background: #fff;
       border: 1px solid var(--line);
@@ -1798,15 +2008,9 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
     .topbar-bell:hover {{ background: var(--panel-soft); border-color: var(--line-strong); color: var(--text); }}
     .topbar-bell .dot {{
-      .quick-input-grid {{ grid-template-columns: 1fr 1fr; }}
-      .quick-input-actions {{ grid-template-columns: minmax(0, 1.35fr) minmax(150px, .65fr); }}
       position: absolute;
       top: 6px;
       right: 7px;
-      .quick-input-head {{ flex-direction: column; }}
-      .quick-input-grid {{ grid-template-columns: 1fr; }}
-      .quick-input-actions {{ grid-template-columns: 1fr; }}
-      .quick-primary-send {{ min-height: 62px; }}
       width: 7px;
       height: 7px;
       background: var(--accent);
@@ -1825,6 +2029,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
     main.app-body {{
       padding: 28px 32px 80px;
+      width: 100%;
       max-width: 1400px;
       margin: 0 auto;
     }}
@@ -1911,11 +2116,158 @@ def _render_shell(status: dict[str, Any]) -> str:
       margin-top: 2px;
     }}
     .quick-card .chev {{ color: var(--muted-2); flex: 0 0 auto; }}
+    .quick-input-panel {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-bottom: 20px;
+    }}
+    .quick-input-panel.ops-panel {{
+      padding: 18px;
+      border-color: rgba(22, 163, 74, .24);
+      background: linear-gradient(180deg, #fff, #fbfefb);
+    }}
+    .quick-input-head {{
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }}
+    .ops-badges {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+      max-width: 420px;
+    }}
+    .ops-chip {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text-2);
+      font-size: 11.5px;
+      font-weight: 750;
+      white-space: nowrap;
+    }}
+    .ops-chip.ok {{
+      border-color: rgba(22, 163, 74, .26);
+      background: var(--primary-softer);
+      color: var(--primary-strong);
+    }}
+    .quick-input-title {{
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.3;
+    }}
+    .quick-input-sub {{
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 3px;
+      line-height: 1.5;
+    }}
+    .quick-input-grid {{
+      display: grid;
+      grid-template-columns: minmax(160px, .7fr) minmax(240px, 1fr) minmax(240px, 1fr);
+      gap: 10px;
+      align-items: end;
+    }}
+    .quick-input-grid .span-2 {{ grid-column: span 2; }}
+    .quick-input-grid label {{
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 700;
+    }}
+    .quick-input-grid input,
+    .quick-input-grid textarea {{
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 11px;
+      font: inherit;
+      color: var(--text);
+      background: #fff;
+      min-width: 0;
+    }}
+    .quick-input-grid textarea {{
+      min-height: 82px;
+      resize: vertical;
+      line-height: 1.45;
+    }}
+    .quick-input-actions {{
+      display: grid;
+      grid-column: 1 / -1;
+      grid-template-columns: minmax(260px, 1.45fr) minmax(160px, .55fr);
+      gap: 8px;
+      align-items: stretch;
+    }}
+    .quick-input-actions button {{
+      justify-content: center;
+      min-height: 44px;
+      width: 100%;
+      white-space: normal;
+      text-align: center;
+    }}
+    .quick-primary-send {{
+      min-height: 68px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 850;
+      flex-direction: column;
+      gap: 3px;
+      box-shadow: 0 14px 28px -20px rgba(34, 197, 94, .85);
+    }}
+    .quick-primary-send .quick-send-main {{
+      display: block;
+      line-height: 1.2;
+    }}
+    .quick-primary-send .quick-send-sub {{
+      display: block;
+      font-size: 11.5px;
+      font-weight: 700;
+      line-height: 1.25;
+      opacity: .84;
+    }}
+    .quick-secondary-action {{
+      align-self: stretch;
+    }}
+    .ops-note {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--primary-softer);
+      color: var(--primary-ink);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }}
+    .ops-note svg {{ flex: 0 0 auto; color: var(--primary); }}
     @media (max-width: 1100px) {{
       .quick-actions {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .quick-input-grid {{ grid-template-columns: 1fr 1fr; }}
+      .quick-input-actions {{ grid-template-columns: minmax(0, 1.35fr) minmax(150px, .65fr); }}
+      .quick-input-grid .span-2 {{ grid-column: span 2; }}
     }}
     @media (max-width: 600px) {{
       .quick-actions {{ grid-template-columns: 1fr; }}
+      .quick-input-head {{ flex-direction: column; }}
+      .ops-badges {{ justify-content: flex-start; }}
+      .quick-input-grid {{ grid-template-columns: 1fr; }}
+      .quick-input-grid .span-2 {{ grid-column: auto; }}
+      .quick-input-actions {{ grid-template-columns: 1fr; }}
+      .quick-primary-send {{ min-height: 62px; }}
       .page-head {{ flex-direction: column; align-items: flex-start; }}
     }}
     /* ============ Home dashboard (Classin++ design) ============ */
@@ -1941,7 +2293,7 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     .kpi-hero {{
       display: grid;
-      grid-template-columns: 1.4fr 1fr 1fr 1fr;
+      grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
       gap: 16px;
       margin-bottom: 28px;
     }}
@@ -1954,6 +2306,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       display: flex;
       flex-direction: column;
       gap: 0;
+      min-width: 0;
       transition: transform .15s ease, box-shadow .15s ease;
     }}
     .kpi-card--main {{
@@ -1961,12 +2314,13 @@ def _render_shell(status: dict[str, Any]) -> str:
       flex-direction: row;
       overflow: hidden;
     }}
-    .kpi-card--main .kpi-body {{ padding: 20px 22px; flex: 1; }}
+    .kpi-card--main .kpi-body {{ padding: 20px 22px; flex: 1; min-width: 0; }}
     .kpi-card--main .kpi-side {{
       padding: 20px 22px;
       display: flex;
       align-items: center;
       justify-content: center;
+      flex: 0 0 142px;
       border-left: 1px solid var(--line-2);
       background: var(--green-4);
     }}
@@ -2037,6 +2391,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-weight: 600;
       display: inline-flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 4px;
       background: transparent;
       border: none;
@@ -2044,6 +2399,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       box-shadow: none;
       cursor: pointer;
       min-height: auto;
+      text-align: left;
     }}
     .kpi-cta:hover {{ color: var(--ink); background: transparent; box-shadow: none; }}
     .kpi-foot {{ font-size: 12px; color: var(--muted); margin-top: 4px; }}
@@ -3132,9 +3488,87 @@ def _render_shell(status: dict[str, Any]) -> str:
       background: var(--green-4);
     }}
     .modal-foot:empty {{ display: none; }}
+    .toast-stack {{
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 140;
+      display: grid;
+      gap: 10px;
+      width: min(360px, calc(100vw - 32px));
+      pointer-events: none;
+    }}
+    .toast {{
+      display: grid;
+      grid-template-columns: 30px 1fr auto;
+      align-items: start;
+      gap: 10px;
+      padding: 12px 13px;
+      border: 1px solid rgba(22, 163, 74, .24);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      box-shadow: var(--shadow-pop);
+      pointer-events: auto;
+      animation: toastIn .18s ease;
+    }}
+    .toast.error {{ border-color: rgba(220, 38, 38, .26); }}
+    .toast-icon {{
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: var(--primary-soft);
+      color: var(--primary-strong);
+    }}
+    .toast.error .toast-icon {{
+      background: var(--danger-soft);
+      color: var(--danger);
+    }}
+    .toast-title {{
+      font-size: 13.5px;
+      font-weight: 800;
+      line-height: 1.35;
+    }}
+    .toast-body {{
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }}
+    .toast-close {{
+      width: 24px;
+      height: 24px;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      box-shadow: none;
+      font-size: 18px;
+      line-height: 1;
+    }}
+    .toast-close:hover {{
+      background: var(--panel-soft);
+      color: var(--text);
+      transform: none;
+      box-shadow: none;
+    }}
+    @keyframes toastIn {{
+      from {{ opacity: 0; transform: translateY(8px); }}
+      to {{ opacity: 1; transform: none; }}
+    }}
     @media (max-width: 600px) {{
       .modal-shell {{ max-width: 100%; max-height: calc(100vh - 24px); }}
       .modal-head, .modal-body, .modal-foot {{ padding-left: 18px; padding-right: 18px; }}
+      .toast-stack {{
+        right: 16px;
+        bottom: 16px;
+      }}
     }}
     /* Template picker cards inside template modal */
     .report-tpl-card {{
@@ -3284,6 +3718,85 @@ def _render_shell(status: dict[str, Any]) -> str:
     .schedule-review td .low {{
       color: var(--accent-ink);
       font-weight: 700;
+    }}
+    .exam-period-example {{
+      margin-top: 22px;
+    }}
+    .exam-period-example-head {{
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }}
+    .exam-period-example-title {{
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.25;
+      color: var(--text);
+    }}
+    .exam-period-example-sub {{
+      margin-top: 5px;
+      font-size: 13px;
+      color: var(--muted);
+    }}
+    .exam-period-badge {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(180, 92, 25, .25);
+      background: var(--accent-soft);
+      color: var(--accent-ink);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }}
+    .exam-period-table table {{
+      min-width: 1040px;
+    }}
+    .exam-period-table .school-cell strong {{
+      display: block;
+      color: var(--text);
+      font-size: 13.5px;
+      margin-bottom: 4px;
+    }}
+    .exam-period-table .school-cell span {{
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }}
+    .exam-period-focus {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }}
+    .exam-period-focus div {{
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--panel-soft);
+      padding: 10px 12px;
+      font-size: 12.5px;
+      color: var(--text-2);
+    }}
+    .exam-period-focus b {{
+      display: block;
+      margin-bottom: 3px;
+      color: var(--text);
+      font-size: 13px;
+    }}
+    @media (max-width: 760px) {{
+      .exam-period-example-head {{
+        align-items: flex-start;
+        flex-direction: column;
+      }}
+      .exam-period-focus {{
+        grid-template-columns: 1fr;
+      }}
     }}
     .conn-list {{
       display: grid;
@@ -5062,40 +5575,6 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
     }}
     @media (prefers-reduced-motion: reduce) {{
-      <section class="quick-input-panel" aria-label="Quick input send panel">
-        <div class="quick-input-head">
-          <div>
-            <div class="quick-input-title">??? ?? quick input</div>
-            <div class="quick-input-sub">?? ?? ??? ?? ClassIn/API ??? ????. ?? ID? ??? ??? ??? ?? ???.</div>
-          </div>
-          <span class="badge">input only</span>
-        </div>
-        <div class="quick-input-grid">
-          <label>?? ID
-            <input id="quickCourseId" type="text" placeholder="captured courseId">
-          </label>
-          <label>??? ?? ??
-            <textarea id="quickRecipients" placeholder="10001,???,01012345678&#10;10002,???,01099998888"></textarea>
-          </label>
-          <label>?? ?? ??
-            <textarea id="quickClasses" placeholder="2026-06-11 19:00,?2 ?? ???,90,teacherUid&#10;2026-06-13 15:00,?2 ?? ??,60,teacherUid"></textarea>
-          </label>
-          <label>?? ??
-            <input id="quickMessage" type="text" value="[{{{{student_name}}}}] ?? ?? ??? ?? ??????.">
-          </label>
-          <label>?? activityId
-            <input id="quickHomeworkActivityId" type="text" placeholder="?? ?? activityId">
-          </label>
-          <div class="quick-input-actions">
-            <button type="button" class="quick-primary-send" data-action="quickSendMissingAlert">
-              <span class="quick-send-main">단체 숙제 독촉 문자 보내기</span>
-              <span class="quick-send-sub">입력한 미제출 대상 전체</span>
-            </button>
-            <button type="button" class="secondary quick-secondary-action" data-action="quickCreateClasses">수업 일괄 생성</button>
-          </div>
-        </div>
-      </section>
-
       *, *::before, *::after {{
         animation-duration: 0.01ms !important;
         transition-duration: 0.01ms !important;
@@ -5190,20 +5669,63 @@ def _render_shell(status: dict[str, Any]) -> str:
       <header class="dash-greeting">
         <div>
           <div class="dash-eyebrow" id="todayLabel">{today_korean} · {title}</div>
-          <h1 class="dash-title">안녕하세요, 원장님 <span class="wave" aria-hidden="true">👋</span></h1>
-          <div class="dash-sub" id="dashSub">오늘 운영 중인 클래스 현황을 한눈에 확인하세요.</div>
+          <h1 class="dash-title">오늘 처리할 학생과 수업을 한 화면에서</h1>
+          <div class="dash-sub" id="dashSub">ClassIn API로 수업 생성, 숙제 배포, 미제출 독촉까지 바로 처리하세요.</div>
         </div>
         <div class="dash-actions">
           <button class="secondary" data-tab="schedule">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
             스케줄 업로드
           </button>
-          <button data-tab="homework">
+          <button data-action="focusQuickClasses">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-            활동 만들기
+            수업·숙제 만들기
           </button>
         </div>
       </header>
+
+      <section class="quick-input-panel ops-panel" id="quickOpsPanel" aria-label="ClassIn quick operations">
+        <div class="quick-input-head">
+          <div>
+            <div class="quick-input-title">ClassIn 즉시 처리 콘솔</div>
+            <div class="quick-input-sub">코스 ID와 대상만 있으면 수업 생성, 숙제 activity 배포, 미제출 독촉 발송까지 이어집니다.</div>
+          </div>
+          <div class="ops-badges" aria-label="가능한 자동화">
+            <span class="ops-chip ok">CED 수업 생성</span>
+            <span class="ops-chip ok">숙제 배포</span>
+            <span class="ops-chip ok">독촉 문자</span>
+            <span class="ops-chip">발송 이력 기록</span>
+          </div>
+        </div>
+        <div class="quick-input-grid">
+          <label>코스 ID
+            <input id="quickCourseId" type="text" placeholder="예: 26901289">
+          </label>
+          <label>숙제 독촉 대상
+            <textarea id="quickRecipients" placeholder="10001,홍길동,01012345678&#10;10002,김학생,01099998888"></textarea>
+          </label>
+          <label>생성할 수업
+            <textarea id="quickClasses" placeholder="2026-06-11 19:00,중2 수학 심화,90,teacherUid&#10;2026-06-13 15:00,중2 수학 보강,60,teacherUid"></textarea>
+          </label>
+          <label class="span-2">독촉 문구
+            <input id="quickMessage" type="text" value="안녕하세요 학부모님, [{{{{student_name}}}}] 학생 숙제 미제출 확인 부탁드립니다. - {{{{academy_name}}}}">
+          </label>
+          <label>숙제 activityId
+            <input id="quickHomeworkActivityId" type="text" placeholder="예: 54911996">
+          </label>
+          <div class="quick-input-actions">
+            <button type="button" class="quick-primary-send" data-action="quickSendMissingAlert">
+              <span class="quick-send-main">숙제 독촉 문자 보내기</span>
+              <span class="quick-send-sub">입력한 학부모 연락처 전체</span>
+            </button>
+            <button type="button" class="secondary quick-secondary-action" data-action="quickCreateClasses">수업 만들고 숙제 배포</button>
+          </div>
+        </div>
+        <div class="ops-note">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          <span>실발송 여부는 내 설정의 알림 모드와 Aligo 연결 상태를 따릅니다. dry-run이면 같은 흐름으로 발송 이력과 미리보기 파일만 생성됩니다.</span>
+        </div>
+      </section>
 
       <section class="kpi-hero">
         <article class="kpi-card kpi-card--main">
@@ -5250,7 +5772,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       </section>
 
       <div class="section-title">
-        <h3>빠른 작업</h3>
+        <h3>다음 액션</h3>
       </div>
       <div class="quick-actions" role="list">
         <button class="quick-card" data-tab="homework" role="listitem">
@@ -5258,18 +5780,18 @@ def _render_shell(status: dict[str, Any]) -> str:
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
           </span>
           <span class="quick-meta">
-            <span class="quick-title">미제출 일괄 알림</span>
+            <span class="quick-title">숙제 독촉 발송</span>
             <span class="quick-desc" id="qaMissingDesc">전체 클래스 미제출자에게</span>
           </span>
           <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </button>
-        <button class="quick-card" data-tab="schedule" role="listitem">
+        <button class="quick-card" data-action="focusQuickClasses" role="listitem">
           <span class="quick-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
           </span>
           <span class="quick-meta">
-            <span class="quick-title">스케줄 사진 등록</span>
-            <span class="quick-desc">AI가 자동 인식</span>
+            <span class="quick-title">수업·숙제 생성</span>
+            <span class="quick-desc">코스에 수업을 만들고 activity 배포</span>
           </span>
           <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </button>
@@ -5545,6 +6067,25 @@ def _render_shell(status: dict[str, Any]) -> str:
             </div>
           </details>
 
+          <details class="schedule-paste neis-lookup" id="neisScheduleDetails" open>
+            <summary>NEIS 학교 학사일정 불러오기</summary>
+            <div class="profile-grid" style="margin-top:10px">
+              <label>학교명 목록<textarea id="neisSchools" rows="4" placeholder="예: 서울고등학교&#10;예: 경기고등학교">{neis_schools_value}</textarea></label>
+              <label>검색 키워드<textarea id="neisKeywords" rows="4" placeholder="시험&#10;고사&#10;학력평가&#10;모의평가&#10;모의고사&#10;방학식">시험
+고사
+학력평가
+모의평가
+모의고사
+방학식</textarea></label>
+              <label>시작일<input id="neisStartDate" type="date" value="{today}"></label>
+              <label>종료일<input id="neisEndDate" type="date" value="{neis_end}"></label>
+            </div>
+            <div class="actions" style="margin-top:10px">
+              <button data-action="fetchNeisSchedules">NEIS 일정 조회</button>
+              <button data-action="parseScheduleReset" class="secondary">지우기</button>
+            </div>
+          </details>
+
           <div class="schedule-hint">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg>
             <div>인식 후 <b>요일·시간·강사·교실</b>이 자동 분류되며, 기존 클래스에 매칭됩니다. 확인 단계에서 한 번에 수정할 수 있어요.</div>
@@ -5615,6 +6156,148 @@ def _render_shell(status: dict[str, Any]) -> str:
           </div>
         </div>
       </div>
+
+      <section class="exam-period-example" aria-labelledby="examPeriodExampleTitle">
+        <div class="exam-period-example-head">
+          <div>
+            <h2 class="exam-period-example-title" id="examPeriodExampleTitle">수성구 주요 고교 시험 기간 종합 예시</h2>
+            <div class="exam-period-example-sub">하단 표는 운영 테스트용 예시 데이터입니다. 실제 확정 일정은 NEIS 조회 결과로 교체해 주세요.</div>
+          </div>
+          <span class="exam-period-badge">예시 스케줄표</span>
+        </div>
+        <div class="table-wrap exam-period-table">
+          <table>
+            <thead>
+              <tr>
+                <th>학교</th>
+                <th>주소</th>
+                <th>1학기 기말</th>
+                <th>2학기 중간</th>
+                <th>2학기 기말</th>
+                <th>대비 메모</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="school-cell"><strong>경북고등학교</strong></td>
+                <td>수성구 청호로 300</td>
+                <td>2026-06-24 ~ 06-30</td>
+                <td>2026-10-05 ~ 10-08</td>
+                <td>2026-12-08 ~ 12-11</td>
+                <td>기말 대비 2주 전부터 고난도 문항 집중</td>
+              </tr>
+              <tr>
+                <td class="school-cell"><strong>경신고등학교</strong></td>
+                <td>수성구 달구벌대로504길 34 (범어동)</td>
+                <td>2026-06-25 ~ 07-01</td>
+                <td>2026-10-06 ~ 10-09</td>
+                <td>2026-12-09 ~ 12-14</td>
+                <td>국영수 주요 과목 기간이 길어 보강 분산</td>
+              </tr>
+              <tr>
+                <td class="school-cell"><strong>대구과학고등학교</strong></td>
+                <td>수성구 동대구로 154 (황금동)</td>
+                <td>2026-06-18 ~ 06-23</td>
+                <td>2026-09-29 ~ 10-02</td>
+                <td>2026-11-30 ~ 12-04</td>
+                <td>일반고보다 한 주 빠른 흐름으로 선행 대비</td>
+              </tr>
+              <tr>
+                <td class="school-cell"><strong>대구여자고등학교</strong></td>
+                <td>수성구 달구벌대로488길 17</td>
+                <td>2026-06-26 ~ 07-02</td>
+                <td>2026-10-07 ~ 10-13</td>
+                <td>2026-12-10 ~ 12-15</td>
+                <td>시험 직전 주말 클리닉 우선 배정</td>
+              </tr>
+              <tr>
+                <td class="school-cell"><strong>대구수성고등학교</strong></td>
+                <td>수성구 용학로28길 36 (지산동)</td>
+                <td>2026-06-23 ~ 06-27</td>
+                <td>2026-10-01 ~ 10-06</td>
+                <td>2026-12-07 ~ 12-11</td>
+                <td>경북고와 일정이 겹쳐 합반 보강 가능</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="exam-period-focus">
+          <div><b>기말 집중 주간</b>2026-06-24 ~ 2026-07-02</div>
+          <div><b>중간 집중 주간</b>2026-10-01 ~ 2026-10-13</div>
+          <div><b>겨울 기말 집중</b>2026-12-07 ~ 2026-12-15</div>
+        </div>
+      </section>
+
+      <section class="exam-period-example" aria-labelledby="ulsanExamPeriodExampleTitle">
+        <div class="exam-period-example-head">
+          <div>
+            <h2 class="exam-period-example-title" id="ulsanExamPeriodExampleTitle">울산 남구 주요 고교 시험 기간 종합 예시</h2>
+            <div class="exam-period-example-sub">NEIS 학교정보 기준 주소를 사용한 별도 샘플입니다. 시험 기간은 운영 테스트용 예시값입니다.</div>
+          </div>
+          <span class="exam-period-badge">울산 남구 예시</span>
+        </div>
+        <div class="table-wrap exam-period-table">
+          <table>
+            <thead>
+              <tr>
+                <th>학교</th>
+                <th>주소</th>
+                <th>1학기 기말</th>
+                <th>2학기 중간</th>
+                <th>2학기 기말</th>
+                <th>대비 메모</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="school-cell"><strong>학성고등학교</strong></td>
+                <td>울산광역시 남구 문수로 436</td>
+                <td>2026-06-24 ~ 06-30</td>
+                <td>2026-10-05 ~ 10-08</td>
+                <td>2026-12-08 ~ 12-11</td>
+                <td>문수로 권역 보강 수요를 먼저 확보</td>
+              </tr>
+              <tr>
+                <td class="school-cell"><strong>신정고등학교</strong></td>
+                <td>울산광역시 남구 문수로 458</td>
+                <td>2026-06-25 ~ 07-01</td>
+                <td>2026-10-06 ~ 10-10</td>
+                <td>2026-12-09 ~ 12-14</td>
+                <td>학성고와 인접해 합동 대비반 편성 가능</td>
+              </tr>
+              <tr>
+                <td class="school-cell"><strong>울산여자고등학교</strong></td>
+                <td>울산광역시 남구 삼산로9번길 16</td>
+                <td>2026-06-26 ~ 07-02</td>
+                <td>2026-10-07 ~ 10-13</td>
+                <td>2026-12-10 ~ 12-15</td>
+                <td>기말 직전 주말 클리닉 우선 배정</td>
+              </tr>
+              <tr>
+                <td class="school-cell"><strong>우신고등학교</strong></td>
+                <td>울산광역시 남구 대학로1번길 29</td>
+                <td>2026-06-23 ~ 06-27</td>
+                <td>2026-10-01 ~ 10-06</td>
+                <td>2026-12-07 ~ 12-11</td>
+                <td>무거동 권역은 한 주 빠른 대비 시작</td>
+              </tr>
+              <tr>
+                <td class="school-cell"><strong>울산제일고등학교</strong></td>
+                <td>울산광역시 남구 남부순환도로 107</td>
+                <td>2026-06-24 ~ 06-29</td>
+                <td>2026-10-02 ~ 10-07</td>
+                <td>2026-12-08 ~ 12-12</td>
+                <td>옥동 권역 성광여고 일정과 함께 모니터링</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="exam-period-focus">
+          <div><b>울산 기말 집중</b>2026-06-23 ~ 2026-07-02</div>
+          <div><b>울산 중간 집중</b>2026-10-01 ~ 2026-10-13</div>
+          <div><b>울산 겨울 기말</b>2026-12-07 ~ 2026-12-15</div>
+        </div>
+      </section>
     </section>
 
     <section id="tab-report" class="tab-view">
@@ -5629,7 +6312,7 @@ def _render_shell(status: dict[str, Any]) -> str:
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
             템플릿 설정
           </button>
-          <button class="secondary" data-action="renderDaily" id="reportDownloadBtn">
+          <button class="secondary" data-action="downloadReport" id="reportDownloadBtn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
             <span id="reportDownloadLabel">PDF 다운로드</span>
           </button>
@@ -5961,16 +6644,23 @@ def _render_shell(status: dict[str, Any]) -> str:
             <p>비워두면 기존 config.yaml 값이 그대로 사용됩니다.</p>
           </div>
           <div class="profile-grid">
-            <label>Notion 토큰
+            <label>AI Provider<select id="pf_ai_provider">
+              <option value="auto">auto</option>
+              <option value="gemini">gemini</option>
+              <option value="anthropic">anthropic</option>
+            </select></label>
+            <label>AI API Key
               <span class="input-with-toggle">
-                <input id="pf_notion_token" type="password" placeholder="secret_..." autocomplete="off">
-                <button type="button" class="input-toggle" data-toggle-target="pf_notion_token">👁</button>
+                <input id="pf_anthropic_api_key" type="password" placeholder="AIza... 또는 sk-ant-..." autocomplete="off">
+                <button type="button" class="input-toggle" data-toggle-target="pf_anthropic_api_key">👁</button>
               </span>
             </label>
-            <label>Anthropic API Key
+            <label>AI Model<input id="pf_ai_model" type="text" placeholder="gemini-3.5-flash" autocomplete="off"></label>
+            <label>Report Model<input id="pf_ai_report_model" type="text" placeholder="gemini-3.5-flash" autocomplete="off"></label>
+            <label>NEIS API Key
               <span class="input-with-toggle">
-                <input id="pf_anthropic_api_key" type="password" placeholder="sk-ant-..." autocomplete="off">
-                <button type="button" class="input-toggle" data-toggle-target="pf_anthropic_api_key">👁</button>
+                <input id="pf_neis_api_key" type="password" placeholder="open.neis.go.kr 인증키" autocomplete="off">
+                <button type="button" class="input-toggle" data-toggle-target="pf_neis_api_key">👁</button>
               </span>
             </label>
             <label>알림 모드<select id="pf_notify_mode">
@@ -6011,6 +6701,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       <footer class="modal-foot" id="modalFoot"></footer>
     </div>
   </div>
+  <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
 
   <script id="initial-status" type="application/json">{status_json}</script>
   <script>
@@ -6031,8 +6722,11 @@ def _render_shell(status: dict[str, Any]) -> str:
       "classin_school_id",
       "classin_secret_key",
       "classin_webhook_secret",
-      "notion_token",
       "anthropic_api_key",
+      "ai_provider",
+      "ai_model",
+      "ai_report_model",
+      "neis_api_key",
       "aligo_api_key",
       "aligo_user_id",
       "aligo_sender",
@@ -6041,13 +6735,13 @@ def _render_shell(status: dict[str, Any]) -> str:
     const PROFILE_SECRET_FIELDS = new Set([
       "classin_secret_key",
       "classin_webhook_secret",
-      "notion_token",
       "anthropic_api_key",
+      "neis_api_key",
       "aligo_api_key",
     ]);
     let profileFilled = {{}};
 
-    const ACADEMY_NAME = (status && status.academy) ? status.academy : "Classin++ 학원";
+    let academyName = (status && status.academy) ? status.academy : "Classin++ 학원";
     const BULK_TEMPLATES = {{
       soft: "안녕하세요 학부모님 😊\\n[{{student_name}}] 학생이 오늘 마감 숙제를 아직 제출하지 않았어요.\\n마감 전 한 번만 확인 부탁드려요.\\n\\n- {{academy_name}}",
       firm: "[{{student_name}}] 학생 학부모님께 안내드립니다.\\n{{class_name}} ({{date}}) 숙제 미제출이 확인되었습니다. 최근 {{missing_count}}회 누적되었으니 오늘 안에 제출 확인 부탁드립니다.\\n\\n- {{academy_name}}",
@@ -6059,6 +6753,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     let bulkTemplate = BULK_TEMPLATES.soft;
     let bulkChannel = "classin";
     const bulkSelection = new Map();
+    let reportFormat = "pdf";
 
     function writeLog(message, data) {{
       const now = new Date().toLocaleTimeString();
@@ -6066,8 +6761,44 @@ def _render_shell(status: dict[str, Any]) -> str:
       log.textContent = `[${{now}}] ${{message}}${{detail}}\\n\\n` + log.textContent;
     }}
 
+    function notifyMode() {{
+      return (status && status.output && status.output.notify_mode) || "dry_run";
+    }}
+
+    function sentCopy(noun, count) {{
+      const n = Number(count || 0);
+      return notifyMode() === "dry_run"
+        ? `${{noun}} ${{n}}건을 미리보기로 생성했습니다.`
+        : `${{noun}} ${{n}}건을 보냈습니다.`;
+    }}
+
+    function showToast(title, body="", type="ok") {{
+      const stack = document.querySelector("#toastStack");
+      if (!stack) return;
+      const node = document.createElement("div");
+      node.className = `toast ${{type === "error" ? "error" : ""}}`;
+      const icon = type === "error"
+        ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`
+        : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
+      node.innerHTML = `
+        <span class="toast-icon" aria-hidden="true">${{icon}}</span>
+        <span>
+          <span class="toast-title">${{escapeHtml(title)}}</span>
+          ${{body ? `<span class="toast-body">${{escapeHtml(body)}}</span>` : ""}}
+        </span>
+        <button class="toast-close" type="button" aria-label="토스트 닫기">×</button>
+      `;
+      stack.prepend(node);
+      const timer = window.setTimeout(() => node.remove(), type === "error" ? 5200 : 3600);
+      node.querySelector(".toast-close")?.addEventListener("click", () => {{
+        window.clearTimeout(timer);
+        node.remove();
+      }});
+    }}
+
     function renderStatus(next) {{
       status = next;
+      academyName = (status && status.academy) ? status.academy : academyName;
       const counts = status.counts || {{}};
       document.querySelector("#incomingCount").textContent = counts.incoming_json || 0;
 
@@ -6109,7 +6840,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         return;
       }}
       const low = items.filter((i) => (i.confidence || 0) < 0.85).length;
-      const sourceLabel = data.source === "claude" ? "Claude AI" : "휴리스틱 파서";
+      const sourceLabel = data.source === "gemini" ? "Gemini AI" : data.source === "claude" ? "Claude AI" : "휴리스틱 파서";
       target.hidden = false;
       target.innerHTML = `
         <div class="schedule-review-head">
@@ -6511,19 +7242,23 @@ def _render_shell(status: dict[str, Any]) -> str:
       const grid = document.querySelector("#schedDayGrid");
       if (!grid) return;
       const conf = (it) => (it.confidence == null ? 0.95 : Number(it.confidence));
+      const isNeis = scheduleItems.some((it) => it.source === "neis");
+      const itemNoun = isNeis ? "일정" : "수업";
       const avgConf = scheduleItems.length
         ? scheduleItems.reduce((s, it) => s + conf(it), 0) / scheduleItems.length
         : 0;
       const lowCount = scheduleItems.filter((it) => conf(it) < 0.9).length;
       const countEl = document.querySelector("#schedReviewCount");
       const metaEl = document.querySelector("#schedReviewMeta");
-      if (countEl) countEl.textContent = `${{scheduleItems.length}}개 수업`;
+      if (countEl) countEl.textContent = `${{scheduleItems.length}}개 ${{itemNoun}}`;
       if (metaEl) {{
         const avg = `평균 신뢰도 ${{Math.round(avgConf * 100)}}%`;
         metaEl.textContent = lowCount > 0 ? `${{avg}} · 노란색 표시된 ${{lowCount}}건은 확인이 필요해요.` : avg;
       }}
       grid.innerHTML = days.map((d) => {{
-        const dayItems = scheduleItems.filter((it) => (it.day || "") === d);
+        const dayItems = scheduleItems
+          .filter((it) => (it.day || "") === d)
+          .sort((a, b) => String(a.date || a.time || "").localeCompare(String(b.date || b.time || "")));
         return `
           <div class="sched-day-col">
             <div class="sched-day-col-head">${{d}}요일 <span class="count">· ${{dayItems.length}}</span></div>
@@ -6534,11 +7269,19 @@ def _render_shell(status: dict[str, Any]) -> str:
                   const cf = conf(it);
                   const low = cf < 0.9;
                   const excluded = it.included === false;
+                  const itemId = escapeHtml(it.id == null ? "" : String(it.id));
+                  const timeLabel = it.date || it.time || "-";
+                  const title = it.event_name || it.class_name || "(미지정)";
+                  const meta = [
+                    it.school_name || it.teacher || "",
+                    it.grade_label || "",
+                    it.category_label || it.room || "",
+                  ].filter(Boolean).join(" · ") || "-";
                   return `
-                    <button class="sched-day-item ${{low ? "low" : ""}} ${{excluded ? "excluded" : ""}}" type="button">
-                      <div class="sched-day-item-time">${{escapeHtml(it.time || "-")}}</div>
-                      <div class="sched-day-item-class">${{escapeHtml(it.class_name || "(미지정)")}}</div>
-                      <div class="sched-day-item-meta">${{escapeHtml(it.teacher || "-")}} · ${{escapeHtml(it.room || "-")}}</div>
+                    <button class="sched-day-item ${{low ? "low" : ""}} ${{excluded ? "excluded" : ""}}" type="button" data-schedule-id="${{itemId}}">
+                      <div class="sched-day-item-time">${{escapeHtml(timeLabel)}}</div>
+                      <div class="sched-day-item-class">${{escapeHtml(title)}}</div>
+                      <div class="sched-day-item-meta">${{escapeHtml(meta)}}</div>
                       ${{low ? `<span class="sched-day-item-flag" aria-label="확인 필요"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.86l-8.4 14.6A1.5 1.5 0 003.2 21h17.6a1.5 1.5 0 001.3-2.54l-8.4-14.6a1.5 1.5 0 00-2.6 0z"/></svg></span>` : ""}}
                     </button>`;
                 }}).join("")}}
@@ -6547,7 +7290,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}).join("");
       const summary = document.querySelector("#schedReviewSummary");
       const included = scheduleItems.filter((it) => it.included !== false).length;
-      if (summary) summary.innerHTML = `포함 <b>${{included}}개</b> / 총 ${{scheduleItems.length}}개 수업`;
+      if (summary) summary.innerHTML = `포함 <b>${{included}}개</b> / 총 ${{scheduleItems.length}}개 ${{itemNoun}}`;
       const doneCount = document.querySelector("#schedDoneCount");
       if (doneCount) doneCount.textContent = included;
     }}
@@ -6559,6 +7302,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
 
     function syncReportFormat(value) {{
+      reportFormat = value || "pdf";
       document.querySelectorAll("#reportFormatSeg button").forEach((btn) => {{
         btn.classList.toggle("active", btn.dataset.reportFormat === value);
       }});
@@ -6584,7 +7328,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       }});
       if (!items.length) {{
         items.push(
-          {{ kind: "ai", text: "Claude AI가 오늘 미제출자 안내 문구를 준비했어요.", t: "방금" }},
+          {{ kind: "ai", text: "AI가 오늘 미제출자 안내 문구를 준비했어요.", t: "방금" }},
           {{ kind: "ok", text: "demo 모드로 운영 중입니다. 실제 발송은 설정에서 LIVE로 전환하세요.", t: "오늘" }},
         );
       }}
@@ -7285,7 +8029,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         lesson_id: (item && item.lesson_classin_id) || "(수업)",
         date: item ? formatDate(item.date) : "(날짜)",
         missing_count: (item && item.missing_count) || 1,
-        academy_name: ACADEMY_NAME,
+        academy_name: academyName,
       }};
       return String(tpl || "").replace(/\\u007b(\\w+)\\u007d/g, (m, key) => (
         vars[key] !== undefined ? vars[key] : m
@@ -7467,37 +8211,6 @@ def _render_shell(status: dict[str, Any]) -> str:
       const pending = items.filter((item) => item.action_required !== "done").length;
       if (meta) meta.textContent = pending ? `처리 대기 ${{pending}}건` : "처리 완료";
       if (!queue.length) {{
-      async quickSendMissingAlert() {{
-        const courseId = (document.querySelector("#quickCourseId")?.value || "").trim();
-        const rawRecipients = (document.querySelector("#quickRecipients")?.value || "").trim();
-        if (!courseId || !rawRecipients) {{
-          writeLog("Quick input: ?? ID? ??? ?? ??? ?? ??? ???.");
-          return;
-        }}
-        const data = await callApi("/api/quick/missing-homework-alert", {{
-          course_id: courseId,
-          raw_recipients: rawRecipients,
-          message: document.querySelector("#quickMessage")?.value || "",
-          channel: "classin",
-        }});
-        writeLog(data.message, data);
-        await refreshStatus();
-      }},
-      async quickCreateClasses() {{
-        const courseId = (document.querySelector("#quickCourseId")?.value || "").trim();
-        const rawClasses = (document.querySelector("#quickClasses")?.value || "").trim();
-        if (!courseId || !rawClasses) {{
-          writeLog("Quick input: ?? ID? ?? ?? ?? ??? ?? ??? ???.");
-          return;
-        }}
-        const data = await callApi("/api/quick/class-bulk-create", {{
-          course_id: courseId,
-          raw_classes: rawClasses,
-          homework_activity_id: document.querySelector("#quickHomeworkActivityId")?.value || "",
-        }});
-        writeLog(data.message, data);
-        await refreshStatus();
-      }},
         target.innerHTML = `<div class="empty">지금 바로 처리할 학생이 없습니다.</div>`;
         return;
       }}
@@ -7592,9 +8305,60 @@ def _render_shell(status: dict[str, Any]) -> str:
         writeLog(data.message, data);
         await refreshStatus();
       }},
+      async downloadReport() {{
+        if (reportFormat === "csv") {{
+          writeLog("CSV 다운로드는 아직 준비 중입니다. PDF 리포트를 선택해 주세요.");
+          return;
+        }}
+        const btn = document.querySelector("#reportDownloadBtn");
+        const label = document.querySelector("#reportDownloadLabel");
+        const previousLabel = label ? label.textContent : "";
+        if (btn) btn.disabled = true;
+        if (label) label.textContent = "PDF 생성 중...";
+        try {{
+          const response = await fetch("/api/report-pdf", {{
+            method: "POST",
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{
+              student_name: "김도윤",
+              class_name: "중2 수학 심화 A",
+              comment: document.querySelector("#reportComment")?.value || "",
+            }}),
+          }});
+          if (!response.ok) {{
+            let message = "PDF 생성에 실패했습니다.";
+            try {{
+              const data = await response.json();
+              message = data.detail || data.message || message;
+            }} catch (_) {{}}
+            throw new Error(message);
+          }}
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const disposition = response.headers.get("content-disposition") || "";
+          const match = disposition.match(/filename\\*?=(?:UTF-8''|")?([^";]+)/i);
+          const filename = match
+            ? decodeURIComponent(match[1].replaceAll('"', ""))
+            : "learning_report.pdf";
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = filename;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(url);
+          writeLog("PDF 리포트를 생성했습니다.", {{ filename }});
+          showToast("PDF 리포트를 생성했습니다.", filename);
+          await refreshStatus();
+        }} finally {{
+          if (btn) btn.disabled = false;
+          if (label) label.textContent = previousLabel || "PDF 다운로드";
+        }}
+      }},
       async generateWeekly() {{
         const data = await callApi("/api/generate-weekly-drafts");
         writeLog(data.message, data);
+        showToast("주간 드래프트 생성 완료", `${{data.count || 0}}건이 준비되었습니다.`);
         await refreshStatus();
       }},
       async approveWeekly() {{
@@ -7602,7 +8366,57 @@ def _render_shell(status: dict[str, Any]) -> str:
           week: document.querySelector("#weekDate").value,
         }});
         writeLog(data.message, data);
+        showToast("주간 리포트 승인 완료", `${{data.count || 0}}건을 승인 처리했습니다.`);
         await refreshStatus();
+      }},
+      async quickSendMissingAlert() {{
+        const courseId = (document.querySelector("#quickCourseId")?.value || "").trim();
+        const rawRecipients = (document.querySelector("#quickRecipients")?.value || "").trim();
+        if (!courseId || !rawRecipients) {{
+          writeLog("Quick input: 코스 ID와 미제출 알림 대상을 먼저 입력해 주세요.");
+          return;
+        }}
+        const data = await callApi("/api/quick/missing-homework-alert", {{
+          course_id: courseId,
+          raw_recipients: rawRecipients,
+          message: document.querySelector("#quickMessage")?.value || "",
+          channel: "classin",
+        }});
+        writeLog(data.message, data);
+        showToast(sentCopy("숙제 독촉 문자", data.count), "발송 이력에 기록했습니다.");
+        await refreshStatus();
+        await loadSituation();
+      }},
+      async quickCreateClasses() {{
+        const courseId = (document.querySelector("#quickCourseId")?.value || "").trim();
+        const rawClasses = (document.querySelector("#quickClasses")?.value || "").trim();
+        if (!courseId || !rawClasses) {{
+          writeLog("Quick input: 코스 ID와 수업 일괄 생성 목록을 먼저 입력해 주세요.");
+          return;
+        }}
+        const data = await callApi("/api/quick/class-bulk-create", {{
+          course_id: courseId,
+          raw_classes: rawClasses,
+          homework_activity_id: document.querySelector("#quickHomeworkActivityId")?.value || "",
+        }});
+        writeLog(data.message, data);
+        const created = data.created || 0;
+        const released = data.homework_released || 0;
+        showToast(
+          "ClassIn 수업 생성 완료",
+          released ? `${{created}}개 수업 생성, 숙제 ${{released}}건 배포` : `${{created}}개 수업을 생성했습니다.`
+        );
+        await refreshStatus();
+      }},
+      async focusQuickClasses() {{
+        const homeView = document.querySelector("#tab-home");
+        if (!homeView?.classList.contains("active")) {{
+          document.querySelector('.sidenav button[data-tab="home"]')?.click();
+        }}
+        window.setTimeout(() => {{
+          document.querySelector("#quickOpsPanel")?.scrollIntoView({{ behavior: "smooth", block: "start" }});
+          document.querySelector("#quickClasses")?.focus();
+        }}, 80);
       }},
       async sweepMissing() {{
         const dryRunEl = document.querySelector("#bulkDryRun");
@@ -7633,6 +8447,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         }};
         const data = await callApi("/api/sweep-missing-homework", payload);
         writeLog(data.message, data);
+        showToast(sentCopy("미제출 알림", data.count), "선택한 학생 기준으로 처리했습니다.");
         await loadSituation();
       }},
       async resetBulkFilters() {{
@@ -7657,7 +8472,17 @@ def _render_shell(status: dict[str, Any]) -> str:
         }});
         const data = await callApi("/api/profile", payload);
         writeLog(data.message, data);
+        showToast("설정을 저장했습니다.", "홈과 미제출 상황판을 다시 동기화합니다.");
         if (data.profile) applyProfileToForm(data.profile);
+        await refreshStatus();
+        await Promise.all([
+          loadDashboardOptions("course", ""),
+          loadDashboardOptions("student", ""),
+        ]);
+        syncLessonComboboxFromState();
+        await loadSituation();
+        await loadDashboard();
+        writeLog("홈과 숙제 미제출 상황을 최신 설정으로 동기화했습니다.");
       }},
       async aiSuggestTemplate() {{
         const items = (missingState.items || []).filter(itemMatchesFilter);
@@ -7685,6 +8510,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       async importExam() {{
         const data = await callApi("/api/import-exam-results", examFormPayload());
         writeLog(data.message, data);
+        showToast("시험 결과 import 완료", `병합 ${{data.merged || 0}}건 · 미해결 ${{data.unresolved || 0}}건`);
       }},
       async previewMissingExam() {{
         const data = await loadMissingExamPreview();
@@ -7698,6 +8524,7 @@ def _render_shell(status: dict[str, Any]) -> str:
           class_name: payload.class_name,
         }});
         writeLog(data.message, data);
+        showToast(sentCopy("미응시 알림", data.count), "시험 미응시 대상에게 처리했습니다.");
         await loadMissingExamPreview();
         await loadSituation();
       }},
@@ -7723,8 +8550,39 @@ def _render_shell(status: dict[str, Any]) -> str:
           }}
         }});
       }},
+      async fetchNeisSchedules() {{
+        const schools = (document.querySelector("#neisSchools")?.value || "").trim();
+        if (!schools) {{
+          writeLog("NEIS 조회할 학교명을 먼저 입력해 주세요.");
+          return;
+        }}
+        const payload = {{
+          schools,
+          start_date: document.querySelector("#neisStartDate")?.value || "",
+          end_date: document.querySelector("#neisEndDate")?.value || "",
+          keywords: document.querySelector("#neisKeywords")?.value || "",
+        }};
+        const apiPromise = callApi("/api/neis/schedules", payload);
+        startScheduleAnalyzing(async () => {{
+          try {{
+            const data = await apiPromise;
+            scheduleItems = (data.items || []).map((it, idx) => ({{ ...it, id: it.id || `neis-${{idx}}`, included: true }}));
+            const summary = data.summary || {{}};
+            writeLog(data.message, {{
+              source: data.source,
+              schools: summary.school_count || 0,
+              events: scheduleItems.length,
+              unmatched: data.unmatched || [],
+            }});
+          }} catch (err) {{
+            writeLog(`NEIS 일정 조회 실패: ${{err.message}}`);
+          }}
+        }});
+      }},
       async parseScheduleReset() {{
         document.querySelector("#schedulePaste").value = "";
+        const schools = document.querySelector("#neisSchools");
+        if (schools) schools.value = "";
         scheduleItems = [];
         if (scheduleProgressTimer) {{ clearInterval(scheduleProgressTimer); scheduleProgressTimer = null; }}
         setScheduleStage("upload");
@@ -7827,7 +8685,7 @@ def _render_shell(status: dict[str, Any]) -> str:
                 .join("")}}
             </div>
             <div style="padding:12px 14px; border:1px solid var(--line); border-radius:8px; font-size:13px; color:var(--ink-2); line-height:1.6;">
-              안녕하세요 학부모님, ${{escapeHtml(ACADEMY_NAME || "학원")}}입니다.<br>
+              안녕하세요 학부모님, ${{escapeHtml(academyName || "학원")}}입니다.<br>
               이번달 학습 리포트를 첨부드립니다. 자세한 내용은 첨부 PDF를 확인해주세요.
             </div>
           `,
@@ -7851,7 +8709,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         }}
         // demo polish (real impl would call /api/agent)
         const polished = original
-          .replace(/권장\.?$/, "지도해 주시면 더 좋아질 것 같습니다.")
+          .replace(/권장\\.?$/, "지도해 주시면 더 좋아질 것 같습니다.")
           .replace(/실수가/, "사소한 실수가")
           .replace(/안정적입니다/, "튼튼하게 잡혀 있습니다");
         ta.value = polished;
@@ -7865,6 +8723,7 @@ def _render_shell(status: dict[str, Any]) -> str:
           text: document.querySelector("#memoText").value,
         }});
         writeLog(data.message, data);
+        showToast("메모를 저장했습니다.", "학생 기록에 반영했습니다.");
       }},
       async askAgent() {{
         const data = await callApi("/api/agent", {{
@@ -7946,10 +8805,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
       const schedDayItem = event.target.closest(".sched-day-item");
       if (schedDayItem) {{
-        const colHead = schedDayItem.closest(".sched-day-col")?.querySelector(".sched-day-col-head")?.textContent || "";
-        const day = (colHead.match(/^([월화수목금토])/) || [])[1] || "";
-        const timeText = schedDayItem.querySelector(".sched-day-item-time")?.textContent || "";
-        const idx = scheduleItems.findIndex((it) => (it.day || "") === day && (it.time || "") === timeText);
+        const itemId = schedDayItem.dataset.scheduleId || "";
+        const idx = scheduleItems.findIndex((it) => String(it.id || "") === itemId);
         if (idx >= 0) {{
           scheduleItems[idx].included = !(scheduleItems[idx].included !== false);
           renderScheduleReview();
@@ -8047,6 +8904,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         await action();
       }} catch (error) {{
         writeLog(error.message);
+        showToast("처리하지 못했습니다.", error.message, "error");
       }} finally {{
         button.disabled = false;
       }}

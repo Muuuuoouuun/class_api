@@ -7,6 +7,7 @@ captured by webhooks and imports.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from statistics import mean
@@ -14,6 +15,9 @@ from typing import Any, Protocol
 
 from ..config import AppConfig
 from ..storage.notion_repo import NotionRepo, StudentRecord
+from .demo_filter import without_seed_demo_rows, without_seed_demo_students
+
+log = logging.getLogger(__name__)
 
 
 class DashboardRepo(Protocol):
@@ -43,6 +47,7 @@ class GradePoint:
 _PRESENT = {"출석", "present", "attended"}
 _LATE = {"지각", "late", "tardy"}
 _ABSENT = {"결석", "absent", "missing"}
+_CLASS_COURSE_PREFIX = "class:"
 
 
 def build_course_options(
@@ -57,9 +62,26 @@ def build_course_options(
 
     repo = repo or NotionRepo.from_config(cfg)
     now = _as_utc(now or datetime.now(timezone.utc))
-    rows = repo.lesson_records(since=now - timedelta(days=365), until=now + timedelta(days=1))
-    options = _course_options(rows, query=query, limit=limit)
-    return {"ok": True, "items": options, "query": query}
+    rows: list[dict] = []
+    active_students: list[StudentRecord] = []
+    warning: str | None = None
+    try:
+        rows = without_seed_demo_rows(
+            repo.lesson_records(since=now - timedelta(days=365), until=now + timedelta(days=1))
+        )
+        active_students = without_seed_demo_students(repo.list_active_students())
+    except Exception as exc:
+        warning = str(exc)
+        log.warning(
+            "course option storage lookup failed; using configured course links only",
+            exc_info=True,
+        )
+    options = _course_options(rows, students=active_students, query=query, limit=limit, cfg=cfg)
+    payload: dict[str, Any] = {"ok": True, "items": options, "query": query}
+    if warning:
+        payload["warning"] = "storage_unavailable"
+        payload["detail"] = warning[:300]
+    return payload
 
 
 def build_student_options(
@@ -72,7 +94,18 @@ def build_student_options(
     repo = repo or NotionRepo.from_config(cfg)
     needle = _norm(query)
     items = []
-    for student in repo.list_active_students():
+    try:
+        students = without_seed_demo_students(repo.list_active_students())
+    except Exception as exc:
+        log.warning("student option storage lookup failed", exc_info=True)
+        return {
+            "ok": True,
+            "items": [],
+            "query": query,
+            "warning": "storage_unavailable",
+            "detail": str(exc)[:300],
+        }
+    for student in students:
         haystack = _norm(f"{student.name} {student.classin_id} {student.class_name or ''}")
         if needle and needle not in haystack:
             continue
@@ -112,18 +145,60 @@ def build_course_dashboard(
     since = now - timedelta(days=days)
     until = now + timedelta(days=1)
 
-    all_rows = repo.lesson_records(since=since, until=until)
-    active_students = repo.list_active_students()
+    warnings: list[str] = []
+    try:
+        all_rows = without_seed_demo_rows(repo.lesson_records(since=since, until=until))
+        active_students = without_seed_demo_students(repo.list_active_students())
+    except Exception as exc:
+        all_rows = []
+        active_students = []
+        warnings.append(str(exc)[:300])
+        log.warning("dashboard storage lookup failed; using configured course links only", exc_info=True)
     students_by_id = {student.classin_id: student for student in active_students}
 
     course_id = (course_id or "").strip()
     student_id = (student_id or "").strip()
+    selected_class_name = _class_name_from_course_id(course_id)
+    selected_class_names = (
+        _class_alias_names(cfg, selected_class_name) if selected_class_name else set()
+    )
+    selected_course_rows = [
+        row
+        for row in all_rows
+        if course_id
+        and not selected_class_name
+        and _row_course_id(cfg, row) == course_id
+    ]
+    selected_course_classes = selected_class_names or {
+        str(row.get("student_class_name") or "").strip()
+        for row in selected_course_rows
+        if row.get("student_class_name")
+    }
+    selected_student_ids = _selected_student_ids(
+        active_students,
+        course_id=course_id,
+        selected_course_rows=selected_course_rows,
+        selected_course_classes=selected_course_classes,
+        student_id=student_id,
+    )
+
     rows = [
         row
         for row in all_rows
-        if (not course_id or str(row.get("course_classin_id") or "") == course_id)
-        and (not student_id or str(row.get("student_classin_id") or "") == student_id)
+        if _row_in_scope(
+            row,
+            cfg=cfg,
+            course_id=course_id,
+            selected_course_classes=selected_course_classes,
+            student_id=student_id,
+        )
     ]
+    if course_id and not student_id:
+        selected_student_ids.update(
+            str(row.get("student_classin_id") or "")
+            for row in rows
+            if row.get("student_classin_id")
+        )
 
     for row in rows:
         sid = str(row.get("student_classin_id") or "")
@@ -136,23 +211,17 @@ def build_course_dashboard(
                 class_name=row.get("student_class_name") or None,
             )
 
-    selected_student_ids = {str(row.get("student_classin_id") or "") for row in rows}
-    selected_student_ids.discard("")
-    if student_id:
-        selected_student_ids.add(student_id)
-
-    exams = repo.exam_records(since=since, until=until)
-    if course_id and selected_student_ids:
+    try:
+        exams = without_seed_demo_rows(repo.exam_records(since=since, until=until))
+    except Exception as exc:
+        exams = []
+        warnings.append(str(exc)[:300])
+        log.warning("dashboard exam lookup failed", exc_info=True)
+    if selected_student_ids or course_id or student_id:
         exams = [
             exam
             for exam in exams
             if str(exam.get("student_classin_id") or "") in selected_student_ids
-        ]
-    if student_id:
-        exams = [
-            exam
-            for exam in exams
-            if str(exam.get("student_classin_id") or "") == student_id
         ]
 
     for exam in exams:
@@ -166,17 +235,22 @@ def build_course_dashboard(
                 class_name=exam.get("student_class_name") or None,
             )
 
-    metrics = _student_metrics(rows, exams, students_by_id)
+    metrics = _student_metrics(
+        rows,
+        exams,
+        students_by_id,
+        include_student_ids=selected_student_ids,
+    )
     score_points = _grade_points(rows, exams)
     attendance_trend = _attendance_trend(rows)
     score_trend = _score_trend(score_points)
     summary = _summary(rows, score_points, metrics, course_id=course_id, student_id=student_id)
 
-    options = _course_options(all_rows, query="", limit=50)
+    options = _course_options(all_rows, students=active_students, query="", limit=50, cfg=cfg)
     student_options = _student_option_items(active_students, limit=80)
     scope_label = _scope_label(summary, options, student_options)
 
-    return {
+    payload = {
         "ok": True,
         "filters": {
             "course_id": course_id,
@@ -194,11 +268,19 @@ def build_course_dashboard(
         "needs_attention": _needs_attention(metrics),
         "top_movers": _top_movers(metrics),
     }
+    if warnings:
+        payload["warning"] = "storage_unavailable"
+        payload["details"] = warnings
+    return payload
 
 
 def demo_course_options(query: str = "", limit: int = 30) -> dict[str, Any]:
     rows, _students, _exams = _demo_rows()
-    return {"ok": True, "demo": True, "items": _course_options(rows, query=query, limit=limit)}
+    return {
+        "ok": True,
+        "demo": True,
+        "items": _course_options(rows, students=_students, query=query, limit=limit),
+    }
 
 
 def demo_student_options(query: str = "", limit: int = 30) -> dict[str, Any]:
@@ -263,7 +345,7 @@ def demo_course_dashboard(
     students_by_id = {student.classin_id: student for student in students}
     metrics = _student_metrics(rows, exams, students_by_id)
     score_points = _grade_points(rows, exams)
-    options = _course_options(all_rows, query="", limit=50)
+    options = _course_options(all_rows, students=students, query="", limit=50)
     student_options = _student_option_items(students, limit=80)
     summary = _summary(rows, score_points, metrics, course_id=course_id, student_id=student_id)
     payload = {
@@ -288,31 +370,94 @@ def demo_course_dashboard(
     return payload
 
 
-def _course_options(rows: list[dict], *, query: str, limit: int) -> list[dict[str, Any]]:
+def _course_options(
+    rows: list[dict],
+    *,
+    students: list[StudentRecord] | None = None,
+    query: str,
+    limit: int,
+    cfg: AppConfig | None = None,
+) -> list[dict[str, Any]]:
     needle = _norm(query)
     grouped: dict[str, dict[str, Any]] = {}
     for row in rows:
-        course_id = str(row.get("course_classin_id") or "").strip()
+        raw_course_id = str(row.get("course_classin_id") or "").strip()
+        class_name = str(row.get("student_class_name") or "").strip()
+        course_id = _canonical_course_id(
+            cfg,
+            raw_course_id=raw_course_id,
+            class_name=class_name,
+        )
         if not course_id:
             continue
         group = grouped.setdefault(
             course_id,
             {
                 "course_id": course_id,
-                "course_name": f"Course {course_id}",
+                "course_name": _course_display_name(cfg, course_id, f"Course {raw_course_id}"),
                 "class_names": set(),
                 "student_ids": set(),
                 "lesson_count": 0,
                 "latest_date": "",
             },
         )
-        if row.get("student_class_name"):
-            group["class_names"].add(str(row["student_class_name"]))
+        if class_name:
+            group["class_names"].add(class_name)
         if row.get("student_classin_id"):
             group["student_ids"].add(str(row["student_classin_id"]))
         group["lesson_count"] += 1
         if row.get("date"):
             group["latest_date"] = max(group["latest_date"], str(row["date"]))
+
+    covered_classes = {
+        class_name
+        for group in grouped.values()
+        for class_name in group["class_names"]
+    }
+    for student in students or []:
+        class_name = (student.class_name or "").strip()
+        if not class_name:
+            continue
+        student_course_id = _canonical_class_course_id(cfg, class_name)
+        if student_course_id in grouped:
+            grouped[student_course_id]["student_ids"].add(student.classin_id)
+            grouped[student_course_id]["class_names"].add(class_name)
+            continue
+        if class_name in covered_classes:
+            for group in grouped.values():
+                if class_name in group["class_names"]:
+                    group["student_ids"].add(student.classin_id)
+            continue
+        course_id = student_course_id
+        group = grouped.setdefault(
+            course_id,
+            {
+                "course_id": course_id,
+                "course_name": _course_display_name(cfg, course_id, class_name),
+                "class_names": {class_name},
+                "student_ids": set(),
+                "lesson_count": 0,
+                "latest_date": "",
+                "source": "student_master",
+            },
+        )
+        group["student_ids"].add(student.classin_id)
+
+    for canonical, aliases in _course_alias_groups(cfg):
+        course_id = _class_course_id(canonical)
+        group = grouped.setdefault(
+            course_id,
+            {
+                "course_id": course_id,
+                "course_name": canonical,
+                "class_names": set(),
+                "student_ids": set(),
+                "lesson_count": 0,
+                "latest_date": "",
+                "source": "course_links",
+            },
+        )
+        group["class_names"].update([canonical, *aliases])
 
     items = []
     for group in grouped.values():
@@ -338,12 +483,170 @@ def _course_options(rows: list[dict], *, query: str, limit: int) -> list[dict[st
                 "student_count": len(group["student_ids"]),
                 "lesson_count": group["lesson_count"],
                 "latest_date": group["latest_date"],
+                "source": group.get("source", "lesson_records"),
                 "label": label,
             }
         )
 
     items.sort(key=lambda item: (item["course_name"], item["course_id"]))
     return items[: max(0, limit)]
+
+
+def _class_course_id(class_name: str) -> str:
+    return f"{_CLASS_COURSE_PREFIX}{class_name}"
+
+
+def _class_name_from_course_id(course_id: str) -> str | None:
+    if not course_id.startswith(_CLASS_COURSE_PREFIX):
+        return None
+    class_name = course_id[len(_CLASS_COURSE_PREFIX):].strip()
+    return class_name or None
+
+
+def _row_course_id(cfg: AppConfig | None, row: dict[str, Any]) -> str:
+    return _canonical_course_id(
+        cfg,
+        raw_course_id=str(row.get("course_classin_id") or "").strip(),
+        class_name=str(row.get("student_class_name") or "").strip(),
+    )
+
+
+def _canonical_course_id(
+    cfg: AppConfig | None,
+    *,
+    raw_course_id: str,
+    class_name: str,
+) -> str:
+    lookup = _course_alias_lookup(cfg)
+    for value in (class_name, raw_course_id):
+        text = str(value or "").strip()
+        if not text:
+            continue
+        if _norm(text) in lookup:
+            return lookup[_norm(text)]
+        class_id = _class_course_id(text)
+        if _norm(class_id) in lookup:
+            return lookup[_norm(class_id)]
+    if raw_course_id:
+        return raw_course_id
+    return _canonical_class_course_id(cfg, class_name) if class_name else ""
+
+
+def _canonical_class_course_id(cfg: AppConfig | None, class_name: str) -> str:
+    class_name = str(class_name or "").strip()
+    if not class_name:
+        return ""
+    lookup = _course_alias_lookup(cfg)
+    for value in (class_name, _class_course_id(class_name)):
+        key = _norm(value)
+        if key in lookup:
+            return lookup[key]
+    return _class_course_id(class_name)
+
+
+def _course_display_name(cfg: AppConfig | None, course_id: str, fallback: str) -> str:
+    class_name = _class_name_from_course_id(course_id)
+    if class_name:
+        return class_name
+    aliases = getattr(getattr(cfg, "course_links", None), "aliases", {}) if cfg else {}
+    for canonical in aliases:
+        if _norm(str(canonical)) == _norm(course_id):
+            return str(canonical)
+    return fallback
+
+
+def _class_alias_names(cfg: AppConfig | None, class_name: str | None) -> set[str]:
+    class_name = str(class_name or "").strip()
+    if not class_name:
+        return set()
+    aliases = getattr(getattr(cfg, "course_links", None), "aliases", {}) if cfg else {}
+    needle = _norm(class_name)
+    for canonical, names in aliases.items():
+        group = [str(canonical).strip()]
+        group.extend(str(name).strip() for name in names or [])
+        group = [name for name in group if name]
+        if needle in {_norm(name) for name in group}:
+            return set(group)
+    return {class_name}
+
+
+def _course_alias_lookup(cfg: AppConfig | None) -> dict[str, str]:
+    aliases = getattr(getattr(cfg, "course_links", None), "aliases", {}) if cfg else {}
+    lookup: dict[str, str] = {}
+    for canonical_name, names in _course_alias_groups(cfg):
+        canonical_id = _class_course_id(canonical_name)
+        for name in [canonical_name, *(names or [])]:
+            text = str(name or "").strip()
+            if not text:
+                continue
+            lookup[_norm(text)] = canonical_id
+            lookup[_norm(_class_course_id(text))] = canonical_id
+    return lookup
+
+
+def _course_alias_groups(cfg: AppConfig | None) -> list[tuple[str, list[str]]]:
+    aliases = getattr(getattr(cfg, "course_links", None), "aliases", {}) if cfg else {}
+    groups: list[tuple[str, list[str]]] = []
+    for canonical, names in aliases.items():
+        canonical_name = str(canonical or "").strip()
+        if not canonical_name:
+            continue
+        alias_names = [str(name or "").strip() for name in names or []]
+        groups.append((canonical_name, [name for name in alias_names if name]))
+    return groups
+
+
+def _selected_student_ids(
+    active_students: list[StudentRecord],
+    *,
+    course_id: str,
+    selected_course_rows: list[dict],
+    selected_course_classes: set[str],
+    student_id: str,
+) -> set[str]:
+    if student_id:
+        return {student_id}
+
+    if selected_course_classes and not selected_course_rows:
+        return {
+            student.classin_id
+            for student in active_students
+            if (student.class_name or "").strip() in selected_course_classes
+        }
+
+    selected = {
+        str(row.get("student_classin_id") or "")
+        for row in selected_course_rows
+        if row.get("student_classin_id")
+    }
+    if selected_course_classes:
+        selected.update(
+            student.classin_id
+            for student in active_students
+            if (student.class_name or "").strip() in selected_course_classes
+        )
+    if selected_course_rows or selected_course_classes or course_id:
+        return selected
+
+    return {student.classin_id for student in active_students if student.classin_id}
+
+
+def _row_in_scope(
+    row: dict,
+    *,
+    cfg: AppConfig | None,
+    course_id: str,
+    selected_course_classes: set[str],
+    student_id: str,
+) -> bool:
+    if student_id and str(row.get("student_classin_id") or "") != student_id:
+        return False
+    if not course_id:
+        return True
+    class_name = str(row.get("student_class_name") or "").strip()
+    if selected_course_classes:
+        return class_name in selected_course_classes
+    return _row_course_id(cfg, row) == course_id
 
 
 def _student_option_items(students: list[StudentRecord], *, limit: int) -> list[dict[str, str]]:
@@ -374,6 +677,8 @@ def _student_metrics(
     rows: list[dict],
     exams: list[dict],
     students_by_id: dict[str, StudentRecord],
+    *,
+    include_student_ids: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     grouped_rows: dict[str, list[dict]] = {}
     grouped_exams: dict[str, list[dict]] = {}
@@ -387,7 +692,9 @@ def _student_metrics(
             grouped_exams.setdefault(sid, []).append(exam)
 
     metrics = []
-    for sid in sorted(set(grouped_rows) | set(grouped_exams)):
+    all_student_ids = (set(grouped_rows) | set(grouped_exams) | set(include_student_ids or set()))
+    all_student_ids.discard("")
+    for sid in sorted(all_student_ids):
         lesson_rows = grouped_rows.get(sid, [])
         exam_rows = grouped_exams.get(sid, [])
         student = students_by_id.get(sid)

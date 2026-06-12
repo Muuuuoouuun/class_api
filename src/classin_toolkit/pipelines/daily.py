@@ -16,6 +16,7 @@ from ..config import AppConfig
 from ..storage.html_renderer import HtmlDailyRenderer
 from ..storage.notion_repo import NotionRepo
 from ..storage.output_port import DailySnapshot, RenderResult
+from .demo_filter import without_seed_demo_rows
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def _build_snapshot(cfg: AppConfig, target: date) -> DailySnapshot:
     start = datetime.combine(target, datetime.min.time(), tzinfo=timezone.utc)
     end = start + timedelta(days=1)
 
-    rows = repo.lesson_records(since=start, until=end)
+    rows = without_seed_demo_rows(repo.lesson_records(since=start, until=end))
 
     lessons_by_id: dict[str, dict] = {}
     missing_homework = []

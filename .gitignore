@@ -15,6 +15,7 @@ local_data/
 .tmp_pytest/
 tmp_pytest/
 tmp_pytest2/
+.tmp_*.log
 .ruff_cache/
 .mypy_cache/
 dist/

@@ -4,7 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from notion_client import Client
+try:
+    from notion_client import Client
+except ImportError:  # pragma: no cover - legacy Notion support is optional
+    Client = None
 
 
 @dataclass(frozen=True)
@@ -35,6 +38,8 @@ def create_notion_schema(
     prefix: str = "ClassIn Toolkit",
     client: Any | None = None,
 ) -> CreatedNotionSchema:
+    if client is None and Client is None:
+        raise RuntimeError("notion-client is not installed")
     nc = client or Client(auth=token)
     students = _create_database(
         nc,

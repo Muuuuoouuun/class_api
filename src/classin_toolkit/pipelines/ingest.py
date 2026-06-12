@@ -38,6 +38,8 @@ async def ingest_attendance(event: AttendanceEvent, cfg: AppConfig) -> None:
             attendance_seconds=m.AttendanceTime,
             first_in_time=m.FirstInTime,
             last_out_time=m.LastOutTime,
+            student_name=m.Name,
+            class_name=event.CourseName or event.ClassName,
         )
     log.info("attendance ingested lesson=%s n=%d", event.class_id, len(event.Data))
 
@@ -56,6 +58,7 @@ async def ingest_end_summary(event: EndEvent, cfg: AppConfig) -> None:
             hand_raise=hand_raise.get(uid),
             trophy=trophies.get(uid),
             poll=polls.get(uid),
+            course_id=event.course_id,
         )
     log.info(
         "end summary ingested lesson=%s hand_total=%d trophy_total=%d",
@@ -67,26 +70,62 @@ async def ingest_end_summary(event: EndEvent, cfg: AppConfig) -> None:
 
 async def ingest_homework_submit(event: HomeworkSubmitEvent, cfg: AppConfig) -> None:
     repo = NotionRepo.from_config(cfg)
-    sid = event.Data.StudentInfo.Uid if event.Data.StudentInfo else None
+    student = event.Data.StudentInfo
+    sid = student.Uid if student else None
     if not sid:
         log.warning("homework submit without StudentInfo.Uid event=%s", event.Cmd)
         return
     repo.patch_lesson_record(
-        lesson_id=event.class_id or "",
+        lesson_id=_homework_lesson_id(event),
         student_classin_id=str(sid),
         homework_submitted=True,
         homework_submitted_late=bool(event.Data.IsSubmitLate),
         homework_activity_id=str(event.Data.ActivityId),
+        student_name=student.Name if student else None,
+        class_name=event.CourseName,
+        course_id=event.course_id,
+        event_time=event.ActionTime or event.Data.SubmissionTime,
     )
 
 
 async def ingest_homework_score(event: HomeworkScoreEvent, cfg: AppConfig) -> None:
     repo = NotionRepo.from_config(cfg)
-    sid = event.Data.StudentInfo.Uid if event.Data.StudentInfo else None
+    student = event.Data.StudentInfo
+    sid = student.Uid if student else None
     if not sid:
         return
     repo.patch_lesson_record(
-        lesson_id=event.class_id or "",
+        lesson_id=_homework_lesson_id(event),
         student_classin_id=str(sid),
-        homework_score=event.Data.Score,
+        homework_score=_homework_score_percent(event),
+        homework_activity_id=str(event.Data.ActivityId),
+        student_name=student.Name if student else None,
+        class_name=event.CourseName,
+        course_id=event.course_id,
+        event_time=event.ActionTime or event.Data.CorrectionTime,
     )
+
+
+def _homework_lesson_id(event: HomeworkSubmitEvent | HomeworkScoreEvent) -> str:
+    if event.class_id:
+        return event.class_id
+    return f"homework:{event.Data.ActivityId}"
+
+
+def _homework_score_percent(event: HomeworkScoreEvent) -> float | None:
+    if event.Data.StudentScoringRate is not None:
+        return round(float(event.Data.StudentScoringRate) * 100, 1)
+    raw_score = _number(event.Data.StudentScore)
+    max_score = _number(event.Data.Score)
+    if raw_score is not None and max_score not in (None, 0):
+        return round(raw_score / max_score * 100, 1)
+    return max_score
+
+
+def _number(value: object) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

@@ -17,6 +17,7 @@ from ..config import AppConfig
 from ..intelligence.missing_homework import OutgoingMessage, compose_messages_from_rows
 from ..notify.dispatcher import dispatch_kakao
 from ..storage.notion_repo import NotionRepo
+from .demo_filter import without_seed_demo_rows
 
 log = logging.getLogger(__name__)
 
@@ -53,4 +54,4 @@ def query_missing_homework(
 ) -> list[dict]:
     repo = repo or NotionRepo.from_config(cfg)
     since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
-    return repo.find_missing_homework(since=since, lesson_id=lesson_id)
+    return without_seed_demo_rows(repo.find_missing_homework(since=since, lesson_id=lesson_id))

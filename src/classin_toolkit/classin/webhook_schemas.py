@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 # -------------- common base --------------
 
@@ -165,9 +165,18 @@ class EndEvent(_BaseEvent):
 class HomeworkParty(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    Uid: int | None = None
-    Name: str | None = None
-    Account: str | None = None
+    Uid: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("Uid", "uid", "StudentUid", "TeacherUid"),
+    )
+    Name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("Name", "name", "StudentName", "TeacherName"),
+    )
+    Account: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("Account", "account", "StudentAccount", "TeacherAccount"),
+    )
 
 
 class HomeworkSubmitData(BaseModel):
@@ -189,6 +198,7 @@ class HomeworkSubmitData(BaseModel):
 
 class HomeworkSubmitEvent(_BaseEvent):
     Cmd: Literal["HomeworkSubmit"]
+    CourseName: str | None = None
     Data: HomeworkSubmitData
 
 
@@ -212,6 +222,7 @@ class HomeworkScoreData(BaseModel):
     ActivityId: int
     ActivityName: str | None = None
     Score: float | None = None
+    StudentScore: str | float | None = None
     StudentInfo: HomeworkParty | None = None
     TeacherInfo: HomeworkParty | None = None
     CorrectionTime: int | None = None
@@ -221,6 +232,7 @@ class HomeworkScoreData(BaseModel):
 
 class HomeworkScoreEvent(_BaseEvent):
     Cmd: Literal["HomeworkScore"]
+    CourseName: str | None = None
     Data: HomeworkScoreData
 
 

@@ -1,7 +1,7 @@
 """Test-version readiness checks.
 
 This module is intentionally offline-only: it checks whether config values look
-usable before the operator spends time on Notion/ClassIn/Claude calls.
+usable before the operator spends time on ClassIn/Claude calls.
 """
 from __future__ import annotations
 
@@ -80,67 +80,15 @@ def _local_demo_items(cfg: AppConfig, project_root: Path) -> list[ReadinessItem]
         _required("local-demo", "학원 이름", cfg.academy.name, "academy.name 을 입력하세요."),
         _required(
             "local-demo",
-            "Notion 토큰",
-            cfg.notion.token,
-            "notion.token 에 학원 Notion Integration 토큰을 넣으세요.",
-        ),
-        _required(
-            "local-demo",
-            "학생 Master DB ID",
-            cfg.notion.databases.students,
-            "notion.databases.students 를 채우세요.",
-        ),
-        _required(
-            "local-demo",
-            "수업 기록 DB ID",
-            cfg.notion.databases.lessons,
-            "notion.databases.lessons 를 채우세요.",
-        ),
-        _required(
-            "local-demo",
-            "리포트 DB ID",
-            cfg.notion.databases.reports,
-            "notion.databases.reports 를 채우세요.",
-        ),
-        _required(
-            "local-demo",
-            "Claude API 키",
+            "AI API 키",
             cfg.anthropic.api_key,
             "anthropic.api_key 를 채우세요.",
         ),
+        _path_value("local-demo", "로컬 저장소 경로", cfg.storage.path),
         _path_value("local-demo", "일일 HTML 출력 경로", cfg.output.daily.path),
         _path_value("local-demo", "주간 HTML 출력 경로", cfg.output.weekly.path),
         _path_value("local-demo", "Webhook 원본 덤프 경로", cfg.webhook.dump_dir),
     ]
-
-    if _is_missing(cfg.notion.databases.exams):
-        items.append(
-            ReadinessItem(
-                "local-demo",
-                "시험 DB ID",
-                "warn",
-                "exam import/sweep 기능은 notion.databases.exams 설정 후 사용할 수 있습니다.",
-                "시험 기능을 쓸 계획이면 setup-notion 결과의 exams DB ID를 채우세요.",
-            )
-        )
-    else:
-        items.append(
-            ReadinessItem("local-demo", "시험 DB ID", "ok", _mask(cfg.notion.databases.exams))
-        )
-
-    if cfg.output.memo.mode == "notion":
-        items.append(
-            _required(
-                "local-demo",
-                "메모 DB ID",
-                cfg.notion.databases.memos,
-                "메모 기능을 쓸 거면 notion.databases.memos 를 채우세요.",
-            )
-        )
-    else:
-        items.append(
-            ReadinessItem("local-demo", "메모 DB ID", "warn", "memo.mode=off 라서 생략됨")
-        )
 
     if cfg.notify.mode == "dry_run":
         items.append(ReadinessItem("local-demo", "카톡 발송 모드", "ok", "dry_run"))

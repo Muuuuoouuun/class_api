@@ -10,7 +10,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
-from notion_client import Client
+try:
+    from notion_client import Client
+except ImportError:  # pragma: no cover - legacy Notion support is optional
+    Client = None
 
 from ..config import AppConfig
 
@@ -84,6 +87,11 @@ class NotionRepo:
         memos_db: str | None = None,
         exams_db: str | None = None,
     ):
+        if Client is None:
+            raise RuntimeError(
+                "notion-client is not installed. Use storage.backend=local "
+                "or install notion-client for legacy Notion support."
+            )
         self._nc = Client(auth=token)
         self.students_db = students_db
         self.lessons_db = lessons_db
@@ -94,7 +102,11 @@ class NotionRepo:
         self._student_cache: dict[str, StudentRecord | None] = {}
 
     @classmethod
-    def from_config(cls, cfg: AppConfig) -> "NotionRepo":
+    def from_config(cls, cfg: AppConfig):
+        if cfg.storage.backend != "notion":
+            from .local_repo import LocalRepo
+
+            return LocalRepo.from_config(cfg)
         return cls(
             token=cfg.notion.token,
             students_db=cfg.notion.databases.students,
@@ -202,6 +214,9 @@ class NotionRepo:
         attendance_seconds: int | None = None,
         first_in_time: int | None = None,
         last_out_time: int | None = None,
+        student_name: str | None = None,
+        class_name: str | None = None,
+        parent_phone: str | None = None,
     ) -> str | None:
         student = self.find_student_by_classin_id(student_classin_id)
         if not student:
@@ -251,6 +266,11 @@ class NotionRepo:
         homework_score: float | None = None,
         homework_activity_id: str | None = None,
         page_id: str | None = None,
+        student_name: str | None = None,
+        class_name: str | None = None,
+        parent_phone: str | None = None,
+        course_id: str | None = None,
+        event_time: int | None = None,
     ) -> str | None:
         student = None
         if not page_id:

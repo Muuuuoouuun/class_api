@@ -20,6 +20,7 @@ from ..intelligence.weekly_report import build_weekly_report
 from ..storage.html_renderer import HtmlWeeklyRenderer
 from ..storage.notion_repo import NotionRepo, StudentRecord
 from ..storage.output_port import WeeklyRenderInput
+from .demo_filter import without_seed_demo_students
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def generate_drafts(cfg: AppConfig, *, reference: datetime | None = None) -> int
 
     repo = NotionRepo.from_config(cfg)
     renderer = HtmlWeeklyRenderer()
-    students = repo.list_active_students()
+    students = without_seed_demo_students(repo.list_active_students())
     log.info("weekly drafts for %d students (%s ~ %s)", len(students), this_start, this_end)
 
     drafts: list[DraftRecord] = []

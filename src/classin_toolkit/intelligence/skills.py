@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from ..config import AppConfig
+from ..pipelines.demo_filter import without_seed_demo_rows, without_seed_demo_students
 from ..pipelines.exams import query_missing_exam
 from ..pipelines.weekly import run_weekly_reports
 from ..storage.notion_repo import NotionRepo
@@ -38,8 +39,11 @@ def _query_missing_homework(
     now = datetime.now(tz=timezone.utc)
     window_hours = int(tool_input.get("window_hours") or 24)
     since = now - timedelta(hours=window_hours)
-    rows = repo.find_missing_homework(since=since)
-    students = {student.page_id: student for student in repo.list_active_students()}
+    rows = without_seed_demo_rows(repo.find_missing_homework(since=since))
+    students = {
+        student.page_id: student
+        for student in without_seed_demo_students(repo.list_active_students())
+    }
     return [
         {
             "student_name": students[row["student_page_id"]].name
@@ -61,7 +65,11 @@ def _query_student_stats(
     now = datetime.now(tz=timezone.utc)
     student_name: str = tool_input["student_name"]
     days = int(tool_input.get("days") or 7)
-    matched = [student for student in repo.list_active_students() if student_name in student.name]
+    matched = [
+        student
+        for student in without_seed_demo_students(repo.list_active_students())
+        if student_name in student.name
+    ]
     if not matched:
         return {"error": f"Student not found: {student_name}"}
     student = matched[0]
@@ -86,7 +94,7 @@ def _list_students(
 ) -> ToolResult:
     return [
         {"name": student.name, "class": student.class_name, "classin_id": student.classin_id}
-        for student in repo.list_active_students()
+        for student in without_seed_demo_students(repo.list_active_students())
     ]
 
 

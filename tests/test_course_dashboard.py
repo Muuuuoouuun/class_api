@@ -240,6 +240,213 @@ def test_attendance_unknown_excluded_from_rate(tmp_path: Path) -> None:
     assert dashboard["summary"]["attendance_rate"] == 1.0
 
 
+def test_student_master_builds_course_options_without_lesson_rows(tmp_path: Path) -> None:
+    class Repo(FakeRepo):
+        students = [
+            StudentRecord("p1", "10001", "박서연", "01011112222", "고2-A"),
+            StudentRecord("p2", "10002", "김지각", "01055556666", "고2-A"),
+            StudentRecord("p3", "10003", "이민수", "01033334444", "고1-B"),
+        ]
+        rows = []
+        exams = []
+
+    cfg = _cfg(tmp_path)
+    repo = Repo()
+    now = datetime(2026, 5, 12, tzinfo=timezone.utc)
+
+    courses = build_course_options(cfg, repo=repo, now=now)
+    dashboard = build_course_dashboard(cfg, course_id="class:고2-A", repo=repo, now=now)
+
+    assert [item["course_id"] for item in courses["items"]] == ["class:고1-B", "class:고2-A"]
+    assert courses["items"][1]["student_count"] == 2
+    assert courses["items"][1]["source"] == "student_master"
+    assert dashboard["summary"]["student_count"] == 2
+    assert dashboard["summary"]["lesson_count"] == 0
+    assert [item["student_name"] for item in dashboard["students"]] == ["김지각", "박서연"]
+
+
+def test_course_aliases_merge_classin_courses(tmp_path: Path) -> None:
+    class Repo(FakeRepo):
+        students = [
+            StudentRecord("p1", "10001", "박서연", "01011112222", "중2 수학 겨울방학 대비반"),
+            StudentRecord("p2", "10002", "김지각", "01055556666", "26 리얼 테스트"),
+        ]
+        rows = [
+            {
+                "student_page_id": "p2",
+                "student_classin_id": "10002",
+                "student_name": "김지각",
+                "student_class_name": "26 리얼 테스트",
+                "lesson_classin_id": "L-real",
+                "course_classin_id": "C-real",
+                "date": "2026-05-01T09:00:00+00:00",
+                "attendance": "출석",
+                "homework_submitted": True,
+                "homework_score": 88,
+            },
+        ]
+        exams = []
+
+    base = _cfg(tmp_path).model_dump()
+    base["course_links"] = {
+        "aliases": {
+            "중2 수학 겨울방학 대비반": ["26 리얼 테스트"],
+        },
+    }
+    cfg = AppConfig.model_validate(base)
+    repo = Repo()
+    now = datetime(2026, 5, 12, tzinfo=timezone.utc)
+
+    courses = build_course_options(cfg, query="26 리얼", repo=repo, now=now)
+    course = courses["items"][0]
+    dashboard = build_course_dashboard(cfg, course_id=course["course_id"], repo=repo, now=now)
+
+    assert course["course_id"] == "class:중2 수학 겨울방학 대비반"
+    assert course["course_name"] == "중2 수학 겨울방학 대비반"
+    assert course["class_names"] == ["26 리얼 테스트", "중2 수학 겨울방학 대비반"]
+    assert course["student_count"] == 2
+    assert dashboard["summary"]["student_count"] == 2
+    assert dashboard["summary"]["lesson_count"] == 1
+
+
+def test_course_alias_option_exists_without_records(tmp_path: Path) -> None:
+    class Repo(FakeRepo):
+        students = []
+        rows = []
+        exams = []
+
+    base = _cfg(tmp_path).model_dump()
+    base["course_links"] = {
+        "aliases": {
+            "중2 수학 겨울방학 대비반": ["26 리얼 테스트"],
+        },
+    }
+    cfg = AppConfig.model_validate(base)
+
+    courses = build_course_options(
+        cfg,
+        query="26 리얼",
+        repo=Repo(),
+        now=datetime(2026, 5, 12, tzinfo=timezone.utc),
+    )
+
+    assert courses["items"] == [
+        {
+            "course_id": "class:중2 수학 겨울방학 대비반",
+            "course_name": "중2 수학 겨울방학 대비반",
+            "class_names": ["26 리얼 테스트", "중2 수학 겨울방학 대비반"],
+            "student_count": 0,
+            "lesson_count": 0,
+            "latest_date": "",
+            "source": "course_links",
+            "label": "중2 수학 겨울방학 대비반 · 26 리얼 테스트, 중2 수학 겨울방학 대비반 · 0명",
+        }
+    ]
+
+
+def test_dashboard_defaults_to_active_students_when_records_are_empty(tmp_path: Path) -> None:
+    class Repo(FakeRepo):
+        students = [
+            StudentRecord("p1", "10001", "박서연", "01011112222", "고2-A"),
+            StudentRecord("p2", "10002", "김지각", "01055556666", "고2-A"),
+        ]
+        rows = []
+        exams = []
+
+    cfg = _cfg(tmp_path)
+    dashboard = build_course_dashboard(
+        cfg,
+        repo=Repo(),
+        now=datetime(2026, 5, 12, tzinfo=timezone.utc),
+    )
+
+    assert dashboard["summary"]["scope_label"] == "전체 코스"
+    assert dashboard["summary"]["student_count"] == 2
+    assert dashboard["students"][0]["lesson_count"] == 0
+
+
+def test_live_dashboard_excludes_seed_demo_data(tmp_path: Path) -> None:
+    class Repo(FakeRepo):
+        students = [
+            StudentRecord("p-demo", "10001", "박성실", "010-0000-0001", "고2-A"),
+            StudentRecord("p-real", "90001", "실제학생", "01099990000", "중3-A"),
+        ]
+        rows = [
+            {
+                "student_page_id": "p-demo",
+                "student_classin_id": "10001",
+                "student_name": "박성실",
+                "student_class_name": "고2-A",
+                "lesson_classin_id": "DEMO-2026-05-01-1",
+                "course_classin_id": "DEMO-COURSE-G2A",
+                "date": "2026-05-01T09:00:00+00:00",
+                "attendance": "출석",
+                "homework_submitted": True,
+                "homework_score": 100,
+            },
+            {
+                "student_page_id": "p-real",
+                "student_classin_id": "90001",
+                "student_name": "실제학생",
+                "student_class_name": "중3-A",
+                "lesson_classin_id": "L-real",
+                "course_classin_id": "C-real",
+                "date": "2026-05-01T09:00:00+00:00",
+                "attendance": "출석",
+                "homework_submitted": True,
+                "homework_score": 88,
+            },
+        ]
+        exams = []
+
+    cfg = _cfg(tmp_path)
+    repo = Repo()
+    now = datetime(2026, 5, 12, tzinfo=timezone.utc)
+
+    courses = build_course_options(cfg, repo=repo, now=now)
+    students = build_student_options(cfg, repo=repo)
+    dashboard = build_course_dashboard(cfg, repo=repo, now=now)
+
+    assert [item["course_id"] for item in courses["items"]] == ["C-real"]
+    assert [item["student_classin_id"] for item in students["items"]] == ["90001"]
+    assert dashboard["summary"]["student_count"] == 1
+    assert dashboard["students"][0]["student_name"] == "실제학생"
+
+
+def test_configured_courses_survive_storage_lookup_failure(tmp_path: Path) -> None:
+    class BrokenRepo:
+        def list_active_students(self):
+            raise RuntimeError("storage down")
+
+        def lesson_records(self, *, since, until):
+            raise RuntimeError("storage down")
+
+        def exam_records(self, *, since, until, class_name=None):
+            raise RuntimeError("storage down")
+
+    base = _cfg(tmp_path).model_dump()
+    base["course_links"] = {
+        "aliases": {
+            "Live Course": ["Current Class"],
+        },
+    }
+    cfg = AppConfig.model_validate(base)
+    repo = BrokenRepo()
+    now = datetime(2026, 5, 12, tzinfo=timezone.utc)
+
+    courses = build_course_options(cfg, repo=repo, now=now)
+    students = build_student_options(cfg, repo=repo)
+    dashboard = build_course_dashboard(cfg, repo=repo, now=now)
+
+    assert courses["warning"] == "storage_unavailable"
+    assert courses["items"][0]["course_id"] == "class:Live Course"
+    assert courses["items"][0]["source"] == "course_links"
+    assert students["items"] == []
+    assert students["warning"] == "storage_unavailable"
+    assert dashboard["warning"] == "storage_unavailable"
+    assert dashboard["course_options"][0]["course_id"] == "class:Live Course"
+
+
 def test_zero_limit_returns_empty(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
     repo = FakeRepo()

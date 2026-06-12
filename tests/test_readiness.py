@@ -6,22 +6,13 @@ from classin_toolkit.readiness import check_readiness
 
 def _cfg(**overrides) -> AppConfig:
     data = {
-        "academy": {"name": "테스트학원", "timezone": "Asia/Seoul"},
+        "academy": {"name": "Test Academy", "timezone": "Asia/Seoul"},
         "classin": {
             "school_id": "sid_123",
             "secret_key": "secret_123",
             "webhook_secret": "webhook_123",
         },
-        "notion": {
-            "token": "secret_test",
-            "databases": {
-                "students": "students_db",
-                    "lessons": "lessons_db",
-                    "reports": "reports_db",
-                    "memos": "memos_db",
-                    "exams": "exams_db",
-                },
-            },
+        "storage": {"backend": "local", "path": "./local_data/store.json"},
         "anthropic": {"api_key": "sk-ant-test"},
         "notify": {
             "mode": "dry_run",
@@ -31,7 +22,7 @@ def _cfg(**overrides) -> AppConfig:
         "output": {
             "daily": {"path": "./reports_out/daily", "public_url_base": ""},
             "weekly": {"path": "./reports_out/weekly"},
-            "memo": {"mode": "notion"},
+            "memo": {"mode": "local"},
         },
     }
     _deep_update(data, overrides)
@@ -39,10 +30,7 @@ def _cfg(**overrides) -> AppConfig:
 
 
 def test_local_demo_ready_with_samples(tmp_path: Path) -> None:
-    samples = tmp_path / "samples"
-    samples.mkdir()
-    for name in _SAMPLE_PAYLOADS:
-        (samples / name).write_text("{}", encoding="utf-8")
+    _write_samples(tmp_path)
 
     report = check_readiness(_cfg(), mode="local-demo", project_root=tmp_path)
 
@@ -53,31 +41,21 @@ def test_local_demo_ready_with_samples(tmp_path: Path) -> None:
 def test_local_demo_flags_placeholder_values(tmp_path: Path) -> None:
     report = check_readiness(
         _cfg(
-            notion={
-                "token": "secret_REPLACE_ME",
-                "databases": {
-                    "students": "REPLACE_ME_STUDENTS_DB_ID",
-                    "lessons": "lessons_db",
-                    "reports": "reports_db",
-                    "memos": "memos_db",
-                },
-            }
+            storage={"path": "REPLACE_ME_STORE.json"},
+            anthropic={"api_key": "REPLACE_ME"},
         ),
         mode="local-demo",
         project_root=tmp_path,
     )
 
     labels = {item.label for item in report.blockers}
-    assert "Notion 토큰" in labels
-    assert "학생 Master DB ID" in labels
+    assert "로컬 저장소 경로" in labels
+    assert "AI API 키" in labels
     assert any(item.label.startswith("샘플 페이로드") for item in report.blockers)
 
 
 def test_local_demo_treats_local_demo_classin_keys_as_warning(tmp_path: Path) -> None:
-    samples = tmp_path / "samples"
-    samples.mkdir()
-    for name in _SAMPLE_PAYLOADS:
-        (samples / name).write_text("{}", encoding="utf-8")
+    _write_samples(tmp_path)
 
     report = check_readiness(
         _cfg(classin={"school_id": "LOCAL_DEMO", "secret_key": "LOCAL_DEMO"}),
@@ -86,17 +64,11 @@ def test_local_demo_treats_local_demo_classin_keys_as_warning(tmp_path: Path) ->
     )
 
     assert report.ready
-    assert any(
-        item.label == "ClassIn API 키" and item.status == "warn"
-        for item in report.items
-    )
+    assert any(item.label == "ClassIn API 키" and item.status == "warn" for item in report.items)
 
 
 def test_classin_live_requires_webhook_secret(tmp_path: Path) -> None:
-    samples = tmp_path / "samples"
-    samples.mkdir()
-    for name in _SAMPLE_PAYLOADS:
-        (samples / name).write_text("{}", encoding="utf-8")
+    _write_samples(tmp_path)
 
     report = check_readiness(
         _cfg(classin={"webhook_secret": "REPLACE_ME"}),
@@ -108,10 +80,7 @@ def test_classin_live_requires_webhook_secret(tmp_path: Path) -> None:
 
 
 def test_kakao_live_is_blocked_until_dispatcher_is_implemented(tmp_path: Path) -> None:
-    samples = tmp_path / "samples"
-    samples.mkdir()
-    for name in _SAMPLE_PAYLOADS:
-        (samples / name).write_text("{}", encoding="utf-8")
+    _write_samples(tmp_path)
 
     report = check_readiness(
         _cfg(
@@ -130,10 +99,17 @@ def test_kakao_live_is_blocked_until_dispatcher_is_implemented(tmp_path: Path) -
     )
 
     assert any(
-        item.status == "blocked" and "알림톡 발송" in item.label
+        item.status == "blocked" and "실제 알림톡 발송" in item.label
         for item in report.items
     )
     assert not report.ready
+
+
+def _write_samples(root: Path) -> None:
+    samples = root / "samples"
+    samples.mkdir()
+    for name in _SAMPLE_PAYLOADS:
+        (samples / name).write_text("{}", encoding="utf-8")
 
 
 def _deep_update(target: dict, updates: dict) -> None:

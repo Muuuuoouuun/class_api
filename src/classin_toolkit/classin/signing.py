@@ -84,15 +84,12 @@ def sign_v2(
 def verify_webhook_safekey(body: dict, secret: str) -> bool:
     """Webhook 페이로드의 SafeKey 필드 검증.
 
-    알고리즘 정확 버전은 datasub/publicfield.html 확인 전이라, 보편 패턴인
-    `MD5(sid + timestamp + secret)` 를 기본값으로 둔다.
-    스펙 확인 후 필요하면 이 함수만 교체.
+    ClassIn DataSub 공통 필드 문서 기준: md5(SECRET + TimeStamp).
     """
     sent = body.get("SafeKey") or body.get("safeKey")
     if not sent:
         return False
-    sid = body.get("SID", "")
     ts = body.get("TimeStamp") or body.get("ActionTime") or ""
-    raw = f"{sid}{ts}{secret}".encode("utf-8")
+    raw = f"{secret}{ts}".encode("utf-8")
     expected = hashlib.md5(raw).hexdigest()
     return str(sent).lower() == expected
