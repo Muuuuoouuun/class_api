@@ -19,6 +19,10 @@ class ClassInConfig(BaseModel):
     secret_key: str
     webhook_secret: str = ""
     default_password: str = "Classin!2026"
+    schedule_api: Literal["lms", "legacy"] = "lms"
+    default_teacher_uid: str | None = None
+    teacher_uids: dict[str, str] = Field(default_factory=dict)
+    lms_unit_prefix: str = "API schedule"
 
 
 class NotionDatabases(BaseModel):
@@ -27,6 +31,8 @@ class NotionDatabases(BaseModel):
     reports: str = ""
     memos: str | None = None
     exams: str | None = None
+    career: str | None = None
+    corpus: str | None = None
 
 
 class NotionConfig(BaseModel):
@@ -84,9 +90,7 @@ class NeisConfig(BaseModel):
     api_key: str = ""
     base_url: str = "https://open.neis.go.kr/hub"
     schools: list[NeisSchoolConfig] = Field(default_factory=list)
-    event_keywords: list[str] = Field(
-        default_factory=lambda: ["시험", "고사", "학력평가", "모의평가", "모의고사", "방학식"]
-    )
+    event_keywords: list[str] = Field(default_factory=list)
 
 
 class NotifyConfig(BaseModel):
@@ -133,7 +137,7 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         raise FileNotFoundError(
             f"{p} not found. Copy config.yaml.example to {p} and fill values."
         )
-    data = yaml.safe_load(p.read_text(encoding="utf-8"))
+    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
     data = _apply_profile_overrides(data, p.parent / "profile.local.yaml")
     return AppConfig.model_validate(data)
 

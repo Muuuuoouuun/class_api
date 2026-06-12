@@ -3,6 +3,9 @@
 `check-ready` 는 API 키를 실제 호출하지 않고, `config.yaml` 이 테스트 단계별로 충분히 채워졌는지 확인한다.
 키 값은 화면에 마스킹되어 출력되며, 실제 토큰을 채팅이나 Git 에 붙여넣지 않는다.
 
+`diagnose-apis` 는 그 다음 단계다. 기본 실행은 offline 표만 보여주고, `--live` 를 붙였을 때만
+ClassIn/Notion/Claude/Aligo 에 비파괴 probe를 보낸다. 수업·Notion row·카톡 메시지는 생성하지 않는다.
+
 ## 모드
 
 | 모드 | 목적 | 필요한 외부 API |
@@ -17,10 +20,20 @@
 classin-toolkit check-ready --mode local-demo --config config.yaml
 classin-toolkit check-ready --mode classin-live --config config.yaml
 classin-toolkit check-ready --mode kakao-live --config config.yaml
+classin-toolkit diagnose-apis --config config.yaml
+classin-toolkit diagnose-apis --live --config config.yaml
 ```
 
 `MISSING` 또는 `BLOCKED` 가 있으면 해당 모드는 아직 준비되지 않은 상태다.
 `WARN` 은 바로 막히지는 않지만 운영 전에 확인해야 하는 항목이다.
+
+`diagnose-apis --live` 의 판정 기준:
+
+- ClassIn v1: 더미 SSO 요청이 파라미터 오류로 거절되면 서버 도달은 성공으로 본다. 실제 인증 확정은 실제 `uid/course_id/class_id/telephone` 로 `sso-link` 를 실행해야 한다.
+- ClassIn v2 LMS: 빈 `createUnit` payload가 서명 오류가 아닌 검증 오류로 거절되면 signing path가 통과한 것으로 본다. `签名异常`/signature 오류는 v2 signing key 또는 LMS API 권한 확인 대상이다.
+- Notion: 각 DB ID를 `retrieve` 로 읽어 Integration 공유 권한을 확인한다.
+- Claude: 아주 짧은 `messages.create` 로 API key, billing, model 접근을 확인한다.
+- Aligo: 카카오 `heartinfo` 잔여건수 조회만 실행한다. 실제 발송은 하지 않는다.
 
 ## local-demo 최소 준비물
 

@@ -11,21 +11,24 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from ..classin.webhook_schemas import (
+    AnswerSheetScoreEvent,
     AttendanceEvent,
     EndEvent,
     HomeworkScoreEvent,
     HomeworkSubmitEvent,
 )
 from ..config import AppConfig
+from ..storage.local_repo import LocalRepo
 from ..storage.notion_repo import NotionRepo
 
 log = logging.getLogger(__name__)
 
 
 async def ingest_attendance(event: AttendanceEvent, cfg: AppConfig) -> None:
-    repo = NotionRepo.from_config(cfg)
+    repo = _repo_from_config(cfg)
     for m in event.Data:
         if m.Identity and m.Identity != 1:  # 학생만 (1=student)
             continue
@@ -45,7 +48,7 @@ async def ingest_attendance(event: AttendanceEvent, cfg: AppConfig) -> None:
 
 
 async def ingest_end_summary(event: EndEvent, cfg: AppConfig) -> None:
-    repo = NotionRepo.from_config(cfg)
+    repo = _repo_from_config(cfg)
     camera = event.camera_minutes_by_uid()
     hand_raise = event.hand_raise_by_uid()
     trophies = event.trophy_by_uid()
@@ -69,7 +72,7 @@ async def ingest_end_summary(event: EndEvent, cfg: AppConfig) -> None:
 
 
 async def ingest_homework_submit(event: HomeworkSubmitEvent, cfg: AppConfig) -> None:
-    repo = NotionRepo.from_config(cfg)
+    repo = _repo_from_config(cfg)
     student = event.Data.StudentInfo
     sid = student.Uid if student else None
     if not sid:
@@ -89,7 +92,7 @@ async def ingest_homework_submit(event: HomeworkSubmitEvent, cfg: AppConfig) -> 
 
 
 async def ingest_homework_score(event: HomeworkScoreEvent, cfg: AppConfig) -> None:
-    repo = NotionRepo.from_config(cfg)
+    repo = _repo_from_config(cfg)
     student = event.Data.StudentInfo
     sid = student.Uid if student else None
     if not sid:
@@ -104,6 +107,41 @@ async def ingest_homework_score(event: HomeworkScoreEvent, cfg: AppConfig) -> No
         course_id=event.course_id,
         event_time=event.ActionTime or event.Data.CorrectionTime,
     )
+
+
+async def ingest_answer_sheet_score(event: AnswerSheetScoreEvent, cfg: AppConfig) -> None:
+    repo = NotionRepo.from_config(cfg)
+    sid = event.Data.StudentInfo.Uid if event.Data.StudentInfo else None
+    if not sid:
+        log.warning("answer sheet score without StudentInfo.Uid event=%s", event.Cmd)
+        return
+    exam_name = event.Data.ActivityName or f"Answer Sheet {event.Data.ActivityId}"
+    exam_date = _event_datetime(
+        event.Data.SubmissionTime or event.Data.CorrectionTime or event.ActionTime or event.TimeStamp
+    )
+    page_id = repo.upsert_exam_result(
+        student_classin_id=str(sid),
+        exam_name=exam_name,
+        exam_date=exam_date,
+        class_name=event.CourseName,
+        attended=True,
+        score=event.Data.earned_score(),
+        max_score=event.Data.max_score(),
+        source="classin-answer-sheet",
+        external_exam_id=f"answer-sheet:{event.Data.ActivityId}:{sid}",
+    )
+    log.info(
+        "answer sheet score ingested activity=%s student=%s page=%s",
+        event.Data.ActivityId,
+        sid,
+        page_id,
+    )
+
+
+def _event_datetime(timestamp: int | None) -> datetime:
+    if not timestamp:
+        return datetime.now(timezone.utc)
+    return datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
 
 
 def _homework_lesson_id(event: HomeworkSubmitEvent | HomeworkScoreEvent) -> str:
@@ -129,3 +167,9 @@ def _number(value: object) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _repo_from_config(cfg: AppConfig):
+    if cfg.storage.backend == "local":
+        return LocalRepo.from_config(cfg)
+    return NotionRepo.from_config(cfg)

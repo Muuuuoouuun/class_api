@@ -1,7 +1,14 @@
-"""ClassIn API v2 서명 + Webhook SafeKey 검증.
+"""ClassIn API v1/v2 서명 + Webhook SafeKey 검증.
 
 출처: https://docs.eeo.cn/api/en/appendix/signature.html
      https://docs.eeo.cn/api/en/appendix/sign_demo.html
+
+## v1 SafeKey 규칙
+
+레거시 `course.api.php?action=...` API 는 body/form 에 `SID`, `safeKey`,
+`timeStamp` 를 포함한다.
+
+- `safeKey = MD5(SECRET + timeStamp)` (lowercase, 32자)
 
 ## v2 서명 규칙 (요청)
 
@@ -28,6 +35,13 @@ import time
 from typing import Any
 
 _MAX_VAL_BYTES = 1024
+
+
+def sign_v1_safekey(secret: str, *, ts: int | None = None) -> tuple[str, int]:
+    """레거시 v1 API safeKey 와 timestamp 를 반환한다."""
+    ts = ts or int(time.time())
+    safe_key = hashlib.md5(f"{secret}{ts}".encode("utf-8")).hexdigest()
+    return safe_key, ts
 
 
 def _should_include(value: Any) -> bool:
@@ -84,12 +98,14 @@ def sign_v2(
 def verify_webhook_safekey(body: dict, secret: str) -> bool:
     """Webhook 페이로드의 SafeKey 필드 검증.
 
-    ClassIn DataSub 공통 필드 문서 기준: md5(SECRET + TimeStamp).
+    Datasub public field 문서 기준 `MD5(SECRET + TimeStamp)` 를 사용한다.
     """
     sent = body.get("SafeKey") or body.get("safeKey")
     if not sent:
         return False
-    ts = body.get("TimeStamp") or body.get("ActionTime") or ""
+    ts = body.get("TimeStamp") or body.get("timeStamp") or ""
+    if not ts:
+        return False
     raw = f"{secret}{ts}".encode("utf-8")
     expected = hashlib.md5(raw).hexdigest()
     return str(sent).lower() == expected

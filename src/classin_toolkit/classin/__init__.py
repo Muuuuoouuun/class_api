@@ -2,6 +2,7 @@ from .ced import CEDClient
 from .client import ClassInAPIError, ClassInClient
 from .schemas import Course, Homework, Lesson, Student
 from .webhook_schemas import (
+    AnswerSheetScoreEvent,
     AttendanceEvent,
     AttendanceMember,
     ClassInEvent,
@@ -25,6 +26,7 @@ __all__ = [
     "EndEvent",
     "HomeworkSubmitEvent",
     "HomeworkScoreEvent",
+    "AnswerSheetScoreEvent",
     "GenericEvent",
     "ClassInEvent",
     "parse_event",

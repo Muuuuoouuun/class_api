@@ -68,9 +68,9 @@ async def test_dispatch_notifications_records_event_type(tmp_path):
         [
             OutgoingMessage(
                 student_classin_id="10002",
-                student_name="Kim Young-hee",
+                student_name="김영희",
                 parent_phone="01055556666",
-                message="Exam reminder",
+                message="시험 미응시 안내",
             )
         ],
         event_type="missing_exam",

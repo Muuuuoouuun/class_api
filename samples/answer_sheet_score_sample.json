@@ -1,0 +1,52 @@
+{
+  "SID": 1000082,
+  "Cmd": "AnswerSheetScore",
+  "CourseID": 132323,
+  "CourseName": "고2-A",
+  "ActionTime": 1777611200,
+  "TimeStamp": 1777611205,
+  "SafeKey": "placeholder_md5_safekey",
+  "Data": {
+    "UnitId": 55511,
+    "UnitName": "6월 OMR",
+    "ActivityId": 99007,
+    "ActivityName": "6월 OMR 답안지",
+    "ClassId": 0,
+    "MaximumScore": 14,
+    "StudentInfo": {
+      "StudentUid": 10001,
+      "StudentName": "박성실",
+      "StudentAccount": "010-0000-0001"
+    },
+    "SubmissionTime": 1777611000,
+    "AnswerDuration": 300,
+    "CorrectionTime": 1777611100,
+    "StudentScoringRate": 0.857143,
+    "TopicDetails": [
+      {
+        "TopicId": 1,
+        "TopicType": "1",
+        "TopicResult": [1],
+        "TopicScore": 5,
+        "TopicMaxScore": 5,
+        "SubTopicDetails": []
+      },
+      {
+        "TopicId": 2,
+        "TopicType": "2",
+        "TopicResult": [3],
+        "TopicScore": 2,
+        "TopicMaxScore": 4,
+        "SubTopicDetails": []
+      },
+      {
+        "TopicId": 3,
+        "TopicType": "3",
+        "TopicResult": [1],
+        "TopicScore": 5,
+        "TopicMaxScore": 5,
+        "SubTopicDetails": []
+      }
+    ]
+  }
+}

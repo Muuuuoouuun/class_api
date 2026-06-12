@@ -1,7 +1,7 @@
 """Test-version readiness checks.
 
 This module is intentionally offline-only: it checks whether config values look
-usable before the operator spends time on ClassIn/Claude calls.
+usable before the operator spends time on Notion/ClassIn/Claude calls.
 """
 from __future__ import annotations
 
@@ -80,15 +80,58 @@ def _local_demo_items(cfg: AppConfig, project_root: Path) -> list[ReadinessItem]
         _required("local-demo", "학원 이름", cfg.academy.name, "academy.name 을 입력하세요."),
         _required(
             "local-demo",
-            "AI API 키",
+            "Notion 토큰",
+            cfg.notion.token,
+            "notion.token 에 학원 Notion Integration 토큰을 넣으세요.",
+        ),
+        _required(
+            "local-demo",
+            "학생 Master DB ID",
+            cfg.notion.databases.students,
+            "notion.databases.students 를 채우세요.",
+        ),
+        _required(
+            "local-demo",
+            "수업 기록 DB ID",
+            cfg.notion.databases.lessons,
+            "notion.databases.lessons 를 채우세요.",
+        ),
+        _required(
+            "local-demo",
+            "리포트 DB ID",
+            cfg.notion.databases.reports,
+            "notion.databases.reports 를 채우세요.",
+        ),
+        _required(
+            "local-demo",
+            "시험 DB ID",
+            cfg.notion.databases.exams,
+            "시험 import/sweep 기능을 쓰려면 notion.databases.exams 를 채우세요.",
+        ),
+        _required(
+            "local-demo",
+            "Claude API 키",
             cfg.anthropic.api_key,
             "anthropic.api_key 를 채우세요.",
         ),
-        _path_value("local-demo", "로컬 저장소 경로", cfg.storage.path),
         _path_value("local-demo", "일일 HTML 출력 경로", cfg.output.daily.path),
         _path_value("local-demo", "주간 HTML 출력 경로", cfg.output.weekly.path),
         _path_value("local-demo", "Webhook 원본 덤프 경로", cfg.webhook.dump_dir),
     ]
+
+    if cfg.output.memo.mode == "notion":
+        items.append(
+            _required(
+                "local-demo",
+                "메모 DB ID",
+                cfg.notion.databases.memos,
+                "메모 기능을 쓸 거면 notion.databases.memos 를 채우세요.",
+            )
+        )
+    else:
+        items.append(
+            ReadinessItem("local-demo", "메모 DB ID", "warn", "memo.mode=off 라서 생략됨")
+        )
 
     if cfg.notify.mode == "dry_run":
         items.append(ReadinessItem("local-demo", "카톡 발송 모드", "ok", "dry_run"))
@@ -151,6 +194,26 @@ def _classin_live_items(cfg: AppConfig) -> list[ReadinessItem]:
             "classin.webhook_secret 값을 확정해 넣으세요.",
         ),
     ]
+    if cfg.classin.schedule_api == "lms":
+        if cfg.classin.teacher_uids or cfg.classin.default_teacher_uid:
+            items.append(
+                ReadinessItem(
+                    "classin-live",
+                    "ClassIn 교사 UID 매핑",
+                    "ok",
+                    "LMS 스케줄 생성용 교사 UID 입력됨",
+                )
+            )
+        else:
+            items.append(
+                ReadinessItem(
+                    "classin-live",
+                    "ClassIn 교사 UID 매핑",
+                    "missing",
+                    "LMS createClass 는 teacherUid 가 필수입니다.",
+                    "classin.teacher_uids 또는 classin.default_teacher_uid 를 채우세요.",
+                )
+            )
     if cfg.output.daily.public_url_base:
         items.append(
             ReadinessItem(

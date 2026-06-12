@@ -1,0 +1,4 @@
+interface:
+  display_name: "ClassIn Academy Ops"
+  short_description: "Run and evolve ClassIn academy automation"
+  default_prompt: "Use $classin-academy-ops to diagnose this ClassIn toolkit setup and choose the safest next operation."

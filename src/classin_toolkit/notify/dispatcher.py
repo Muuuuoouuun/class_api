@@ -30,6 +30,8 @@ async def dispatch_notifications(
     *,
     event_type: str,
 ) -> None:
+    if not messages:
+        return
     if cfg.notify.mode == "dry_run":
         artifact_path = _dry_run_dump(cfg, messages)
         _append_history(

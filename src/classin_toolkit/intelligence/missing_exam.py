@@ -1,4 +1,4 @@
-"""Compose parent messages for students missing an exam."""
+"""시험 미응시자 학생별 카톡 문구 생성 (Layer 3)."""
 from __future__ import annotations
 
 import json
@@ -43,8 +43,8 @@ def compose_messages_from_rows(
 
     system = load_prompt("missing_exam")
     user = (
-        f"Academy: {cfg.academy.name}\n"
-        f"Missing exam rows (JSON):\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
+        f"학원: {cfg.academy.name}\n"
+        f"시험 미응시 학생 목록 (JSON):\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
     )
     data = run_json(cfg, system=system, user=user)
     if not isinstance(data, list):
