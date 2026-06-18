@@ -1,9 +1,11 @@
 """주간 학생 리포트 생성 — 학생별 개인화 Claude 호출."""
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from ..config import AppConfig
 from ..storage.notion_repo import StudentRecord
@@ -32,6 +34,7 @@ def build_weekly_report(
     lessons: list[dict],
     prev_week_lessons: list[dict] | None = None,
     exam_results: list[dict] | None = None,
+    academy_context: dict[str, Any] | None = None,
 ) -> WeeklyReport:
     system = load_prompt("weekly_report")
     payload = {
@@ -48,12 +51,13 @@ def build_weekly_report(
         "this_week_lessons": lessons,
         "prev_week_lessons": prev_week_lessons or [],
         "this_week_exams": exam_results or [],
+        "academy_context": academy_context or {},
     }
     text = run_structured(
         cfg,
         system=system,
         user=json.dumps(payload, ensure_ascii=False, indent=2),
-        model=cfg.anthropic.report_model,
+        tier="report",
         max_tokens=2048,
     )
     return WeeklyReport.parse(text)

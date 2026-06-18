@@ -44,6 +44,16 @@ ClassIn Webhook 에는 `homework_submitted: bool` 단일 이벤트가 **없다**
 `reports_out/notify_dry_run/<timestamp>__<student>.md` — 학생마다 별도 파일, 학원/교사/학생명 치환된 카톡 문구.
 
 `config.notify.mode: live` 로 바꾸면 알리고/솔라피로 실제 발송 (Standard 티어 + 템플릿 심사 후).
+UI에서는 `/api/preview-missing-homework`로 선택 대상의 AI 문구, `ready/review/blocked`, 마스킹 연락처,
+live 발송 가능 여부를 먼저 확인한다. 긴 문구 목록은 번호와 접기/펴기 상세로 제한해 운영 화면이 길어지지 않게 한다.
+
+## 문구 품질 게이트
+
+Claude/Gemini가 만든 숙제 알림 문구는 `intelligence/notification_quality.py`에서 deterministic 검사를 거친다.
+빈 문구, 보호자 연락처 없음, 낙인 표현은 `blocked`로 보고 `sweep-missing-homework` 기본 dispatch에서 제외한다.
+차단된 문구는 notify history에 `provider=quality_gate`, `status=skipped`로 남겨 UI에서 사유를 확인할 수 있게 한다.
+`ready` / `review` / `blocked` 상태, 점수, 경고는 미제출 목록과 알림 발송 현황에서 확인한다.
+live 발송은 `ready` 상태이면서 보호자 연락처가 있는 문구만 허용한다.
 
 ## 흔한 함정
 
@@ -57,6 +67,7 @@ ClassIn Webhook 에는 `homework_submitted: bool` 단일 이벤트가 **없다**
 
 - `src/classin_toolkit/pipelines/missing_homework.py`
 - `src/classin_toolkit/intelligence/missing_homework.py` (Claude 문구 생성)
+- `src/classin_toolkit/intelligence/notification_quality.py` (문구 품질 점검)
 - `src/classin_toolkit/intelligence/prompts/missing_homework.md` (프롬프트)
 - `src/classin_toolkit/notify/dispatcher.py` (dry_run 파일 출력)
 

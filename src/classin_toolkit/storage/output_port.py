@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from typing import Protocol
 
 from ..config import AppConfig
@@ -38,6 +39,8 @@ class WeeklyRenderInput:
     summary_markdown: str            # Claude 생성
     parent_message: str              # Claude 생성 카톡 문구
     exam_results: list[dict] | None = None
+    report_context: dict[str, Any] | None = None
+    quality: dict[str, Any] | None = None
 
 
 @dataclass

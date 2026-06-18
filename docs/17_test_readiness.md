@@ -38,7 +38,7 @@ classin-toolkit diagnose-apis --live --config config.yaml
 ## local-demo 최소 준비물
 
 - Notion Integration token
-- Notion DB ID 4개: 학생 Master, 수업 기록, 리포트, 메모
+- Notion DB ID 5개: 학생 Master, 수업 기록, 리포트, 메모, 시험
 - Claude API key
 - `samples/attendance_sample.json`
 - `samples/end_summary_sample.json`
@@ -50,7 +50,7 @@ ClassIn SID/secret 은 `local-demo` 에서는 없어도 된다. 샘플 JSON 을 
 ## Notion DB 자동 생성
 
 원장님에게는 "테스트용 빈 Notion 페이지 하나"만 만들게 하고, 그 페이지를 Integration에 공유하게 한다.
-그 다음 아래 명령으로 DB 4개를 만든다.
+그 다음 아래 명령으로 DB 5개를 만든다.
 
 ```bash
 classin-toolkit setup-notion --parent-page-id <NOTION_PAGE_ID> --dry-run
@@ -69,5 +69,13 @@ classin-toolkit setup-notion --parent-page-id <NOTION_PAGE_ID> --write --config 
 
 ## kakao-live 주의
 
-현재 MVP 코드는 카톡 dry-run 까지만 완성되어 있다.
-`kakao-live` 모드는 알리고 계정 값이 채워져도 `notify.dispatcher` 의 live 발송 구현 전까지 `BLOCKED` 로 나온다.
+`kakao-live` 모드는 실제 발송 전 최종 게이트다. 아래 값이 모두 있어야 통과한다.
+
+- `notify.mode: live`
+- `notify.provider: aligo`
+- `notify.aligo.api_key`, `user_id`, `sender`
+- `notify.aligo.sender_key`
+- `notify.aligo.template_code_missing_homework`
+
+알리고 알림톡은 승인된 템플릿 서식과 `message` 개행·문구가 일치하지 않으면 전송되지 않는다.
+템플릿 심사 전에는 `notify.mode: dry_run` 을 유지한다.

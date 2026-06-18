@@ -11,11 +11,14 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 from ..config import AppConfig
+from ..intelligence.academy_context import build_report_contexts
+from ..intelligence.report_quality import evaluate_weekly_report_quality
 from ..intelligence.weekly_report import build_weekly_report
 from ..storage.html_renderer import HtmlWeeklyRenderer
 from ..storage.notion_repo import NotionRepo, StudentRecord
@@ -36,8 +39,38 @@ class DraftRecord:
     period_end: str
     summary_markdown: str
     parent_message: str
+    report_context_summary: str = ""
+    quality_status: str = "review"
+    quality_score: int = 0
+    quality_warnings: list[str] = field(default_factory=list)
     approved: bool = False
     notion_page_id: str | None = None
+
+
+@dataclass(frozen=True)
+class ApprovalResult:
+    approved: int
+    skipped_blocked_quality: int = 0
+    skipped_missing_student: int = 0
+    skipped_already_approved: int = 0
+
+    @property
+    def skipped(self) -> int:
+        return (
+            self.skipped_blocked_quality
+            + self.skipped_missing_student
+            + self.skipped_already_approved
+        )
+
+
+@dataclass(frozen=True)
+class DraftListResult:
+    period_start: str
+    period_end: str
+    index_path: str
+    exists: bool
+    summary: dict[str, int]
+    items: list[dict[str, Any]]
 
 
 def generate_drafts(
@@ -63,6 +96,17 @@ def generate_drafts(
     if student_classin_ids is not None:
         selected_ids = set(student_classin_ids)
         students = [student for student in students if student.classin_id in selected_ids]
+    report_contexts = build_report_contexts(
+        cfg,
+        [
+            {
+                "student_classin_id": student.classin_id,
+                "student_name": student.name,
+                "student_class_name": student.class_name,
+            }
+            for student in students
+        ],
+    ).contexts
     log.info(
         "weekly drafts for %d students (%s ~ %s, class=%s, selected=%s)",
         len(students),
@@ -76,7 +120,15 @@ def generate_drafts(
     for student in students:
         try:
             draft = _one_student(
-                cfg, repo, renderer, student, this_start, this_end, prev_start, prev_end
+                cfg,
+                repo,
+                renderer,
+                student,
+                this_start,
+                this_end,
+                prev_start,
+                prev_end,
+                report_contexts.get(student.classin_id),
             )
             if draft:
                 drafts.append(draft)
@@ -86,27 +138,40 @@ def generate_drafts(
     _write_index(cfg, this_start, drafts)
 
     if not cfg.output.weekly.require_approval:
-        return approve_all(cfg, period_start=this_start)
+        return approve_all(cfg, period_start=this_start).approved
     return len(drafts)
 
 
-def approve_all(cfg: AppConfig, *, period_start: datetime) -> int:
+def approve_all(
+    cfg: AppConfig,
+    *,
+    period_start: datetime,
+    force_blocked_quality: bool = False,
+) -> ApprovalResult:
     repo = NotionRepo.from_config(cfg)
     index_path = _index_path(cfg, period_start)
     if not index_path.exists():
         log.warning("no draft index at %s", index_path)
-        return 0
+        return ApprovalResult(approved=0)
     raw = json.loads(index_path.read_text(encoding="utf-8"))
     drafts = [DraftRecord(**d) for d in raw]
 
     approved = 0
+    skipped_blocked_quality = 0
+    skipped_missing_student = 0
+    skipped_already_approved = 0
     mode = cfg.output.weekly.mode
     for d in drafts:
         if d.approved:
+            skipped_already_approved += 1
+            continue
+        if d.quality_status == "blocked" and not force_blocked_quality:
+            skipped_blocked_quality += 1
             continue
         if mode in ("notion", "html+notion"):
             student = repo.find_student_by_classin_id(d.student_classin_id)
             if not student:
+                skipped_missing_student += 1
                 continue
             page_id = repo.archive_approved_weekly_report(
                 student=student,
@@ -121,8 +186,57 @@ def approve_all(cfg: AppConfig, *, period_start: datetime) -> int:
         approved += 1
 
     _write_index_records(index_path, drafts)
-    log.info("approved %d drafts (period=%s, mode=%s)", approved, period_start.date(), mode)
-    return approved
+    result = ApprovalResult(
+        approved=approved,
+        skipped_blocked_quality=skipped_blocked_quality,
+        skipped_missing_student=skipped_missing_student,
+        skipped_already_approved=skipped_already_approved,
+    )
+    log.info(
+        "approved %d drafts (period=%s, mode=%s, skipped=%d, blocked_quality=%d)",
+        result.approved,
+        period_start.date(),
+        mode,
+        result.skipped,
+        result.skipped_blocked_quality,
+    )
+    return result
+
+
+def list_drafts(cfg: AppConfig, *, period_start: datetime) -> DraftListResult:
+    index_path = _index_path(cfg, period_start)
+    period_end = period_start + timedelta(days=6, hours=23, minutes=59)
+    if not index_path.exists():
+        return DraftListResult(
+            period_start=period_start.isoformat(),
+            period_end=period_end.isoformat(),
+            index_path=str(index_path),
+            exists=False,
+            summary=_draft_summary([]),
+            items=[],
+        )
+
+    raw = json.loads(index_path.read_text(encoding="utf-8"))
+    drafts = [DraftRecord(**d) for d in raw]
+    items = [_draft_item(d) for d in drafts]
+    items.sort(
+        key=lambda item: (
+            item["approved"],
+            _quality_priority(item["quality_status"]),
+            item["student_name"],
+            item["student_classin_id"],
+        )
+    )
+    if drafts:
+        period_end = datetime.fromisoformat(drafts[0].period_end)
+    return DraftListResult(
+        period_start=period_start.isoformat(),
+        period_end=period_end.isoformat(),
+        index_path=str(index_path),
+        exists=True,
+        summary=_draft_summary(drafts),
+        items=items,
+    )
 
 
 def _one_student(
@@ -134,6 +248,7 @@ def _one_student(
     this_end: datetime,
     prev_start: datetime,
     prev_end: datetime,
+    report_context: dict[str, Any] | None = None,
 ) -> DraftRecord | None:
     lessons = repo.weekly_student_stats(
         student_page_id=student.page_id, since=this_start, until=this_end
@@ -155,7 +270,16 @@ def _one_student(
         lessons=lessons,
         prev_week_lessons=prev,
         exam_results=exams,
+        academy_context=report_context,
     )
+    quality = evaluate_weekly_report_quality(
+        student_name=student.name,
+        summary_markdown=report.summary_markdown,
+        parent_message=report.parent_message,
+        lessons=lessons,
+        exam_results=exams,
+        academy_context=report_context,
+    ).as_dict()
 
     inp = WeeklyRenderInput(
         student_classin_id=student.classin_id,
@@ -168,6 +292,8 @@ def _one_student(
         summary_markdown=report.summary_markdown,
         parent_message=report.parent_message,
         exam_results=exams,
+        report_context=report_context,
+        quality=quality,
     )
 
     mode = cfg.output.weekly.mode
@@ -184,6 +310,10 @@ def _one_student(
         period_end=this_end.isoformat(),
         summary_markdown=report.summary_markdown,
         parent_message=report.parent_message,
+        report_context_summary=(report_context or {}).get("summary", ""),
+        quality_status=quality["status"],
+        quality_score=quality["score"],
+        quality_warnings=quality["warnings"],
     )
 
 
@@ -202,6 +332,45 @@ def _write_index_records(path: Path, drafts: list[DraftRecord]) -> None:
         json.dumps([asdict(d) for d in drafts], ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def _draft_summary(drafts: list[DraftRecord]) -> dict[str, int]:
+    total = len(drafts)
+    approved = sum(1 for draft in drafts if draft.approved)
+    ready = sum(1 for draft in drafts if draft.quality_status == "ready")
+    review = sum(1 for draft in drafts if draft.quality_status == "review")
+    blocked = sum(1 for draft in drafts if draft.quality_status == "blocked")
+    return {
+        "total": total,
+        "approved": approved,
+        "pending": total - approved,
+        "ready": ready,
+        "review": review,
+        "blocked": blocked,
+        "ready_unapproved": sum(
+            1 for draft in drafts if not draft.approved and draft.quality_status == "ready"
+        ),
+        "review_unapproved": sum(
+            1 for draft in drafts if not draft.approved and draft.quality_status == "review"
+        ),
+        "blocked_unapproved": sum(
+            1 for draft in drafts if not draft.approved and draft.quality_status == "blocked"
+        ),
+        "with_context": sum(1 for draft in drafts if draft.report_context_summary),
+        "with_public_url": sum(1 for draft in drafts if draft.public_url),
+    }
+
+
+def _draft_item(draft: DraftRecord) -> dict[str, Any]:
+    item = asdict(draft)
+    item["preview_url"] = (
+        f"/reports/weekly/{Path(draft.html_path).name}" if draft.html_path else None
+    )
+    return item
+
+
+def _quality_priority(status: str) -> int:
+    return {"blocked": 0, "review": 1, "ready": 2}.get(status, 3)
 
 
 # backward-compat: 기존 CLI 는 run_weekly_reports 를 호출

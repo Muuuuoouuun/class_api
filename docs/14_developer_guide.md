@@ -47,7 +47,7 @@ ruff format src/ tests/
 | `classin-toolkit write-memo --classin-id X --text "..." [--tag ...]` | 원장 메모 기록 | 편집 채널 |
 | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | 학생·교사 ClassIn 앱 링크 | SSO |
 | `classin-toolkit check-ready --mode local-demo` | config/API/DB 준비 상태 점검 | 운영 점검 |
-| `classin-toolkit setup-notion --parent-page-id X --write` | Notion DB 4개 자동 생성 | 초기 세팅 |
+| `classin-toolkit setup-notion --parent-page-id X --write` | Notion DB 5개 자동 생성 | 초기 세팅 |
 | `classin-toolkit seed-demo-data --write` | 5명 페르소나 데모 데이터 생성 | 데모 준비 |
 | `classin-toolkit agent` | 원장·교사 질문 대화 | 수동 오더 에이전트 |
 | `classin-toolkit ui [--port 8790]` | 로컬 브라우저 운영 화면 | 수동 오더 UI |
@@ -114,11 +114,12 @@ UI는 기존 파이프라인을 감싸는 얇은 FastAPI 화면이다. 상태/AP
 2. `_execute_tool` 에 분기 추가. Notion/파이프라인 호출.
 3. 수동으로 `classin-toolkit agent` 실행해서 자연어로 부를 수 있는지 확인.
 
-### 4.5 카톡 실제 발송 연동 (MVP 이후)
-1. [dispatcher.py](../src/classin_toolkit/notify/dispatcher.py) `_send_via_aligo` 구현.
-2. 알림톡 템플릿 ID / 파라미터 placeholder 매핑.
-3. 프롬프트에 템플릿 규칙 반영 (변수명/순서 고정).
-4. `config.yaml` `notify.mode: live` 로 전환.
+### 4.5 카톡 실제 발송 전환
+1. 알리고에서 발신프로필 `sender_key` 와 숙제 미제출 알림톡 템플릿 코드를 확보.
+2. 승인 템플릿의 개행·변수 순서와 AI 생성 문구 규칙이 일치하는지 dry-run 샘플로 검토.
+3. `config.yaml` `notify.aligo.sender_key`, `notify.aligo.template_code_missing_homework` 를 채움.
+4. `classin-toolkit check-ready --mode kakao-live` 와 `diagnose-apis --live` 통과 확인.
+5. 원장 확인 후 `notify.mode: live` 로 전환.
 
 ## 5. 로컬에서 학원 환경 흉내내기
 

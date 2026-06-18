@@ -8,10 +8,11 @@ def _cfg(**overrides) -> AppConfig:
     data = {
         "academy": {"name": "테스트학원", "timezone": "Asia/Seoul"},
         "classin": {
-            "school_id": "sid_123",
-            "secret_key": "secret_123",
-            "webhook_secret": "webhook_123",
-        },
+                "school_id": "sid_123",
+                "secret_key": "secret_123",
+                "webhook_secret": "webhook_123",
+                "default_teacher_uid": "teacher-1",
+            },
         "notion": {
             "token": "secret_test",
             "databases": {
@@ -119,7 +120,35 @@ def test_classin_live_lms_requires_teacher_uid_mapping(tmp_path: Path) -> None:
     assert any(item.label == "ClassIn 교사 UID 매핑" for item in report.blockers)
 
 
-def test_kakao_live_is_blocked_until_dispatcher_is_implemented(tmp_path: Path) -> None:
+def test_kakao_live_ready_when_aligo_template_config_is_complete(tmp_path: Path) -> None:
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    for name in _SAMPLE_PAYLOADS:
+        (samples / name).write_text("{}", encoding="utf-8")
+
+    report = check_readiness(
+        _cfg(
+            notify={
+                "mode": "live",
+                "provider": "aligo",
+                "aligo": {
+                    "api_key": "aligo-key",
+                    "user_id": "moon",
+                    "sender": "01012345678",
+                    "sender_key": "sender-key",
+                    "template_code_missing_homework": "TPL_HOMEWORK",
+                },
+            }
+        ),
+        mode="kakao-live",
+        project_root=tmp_path,
+    )
+
+    assert report.ready
+    assert any(item.label == "실제 알림톡 발송 구현" and item.status == "ok" for item in report.items)
+
+
+def test_kakao_live_requires_aligo_senderkey_and_template_code(tmp_path: Path) -> None:
     samples = tmp_path / "samples"
     samples.mkdir()
     for name in _SAMPLE_PAYLOADS:
@@ -141,10 +170,9 @@ def test_kakao_live_is_blocked_until_dispatcher_is_implemented(tmp_path: Path) -
         project_root=tmp_path,
     )
 
-    assert any(
-        item.status == "blocked" and "알림톡 발송" in item.label
-        for item in report.items
-    )
+    labels = {item.label for item in report.blockers}
+    assert "알리고 senderkey" in labels
+    assert "숙제 미제출 템플릿 코드" in labels
     assert not report.ready
 
 

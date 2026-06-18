@@ -201,6 +201,26 @@ classin:
 - API로 OMR 문항/정답/배점 내용까지 작성하는 별도 엔드포인트는 현재 문서 범위에서 확인되지 않았다. 지금 구현은 ClassIn에 OMR 활동 shell을 만들고, 점수 결과를 자동 수집하는 경로다.
 - 실제 계정에서 draft 생성 후 ClassIn 대시보드에서 문항/정답을 채우고 게시했을 때 `AnswerSheetScore` 샘플 payload를 1건 캡처해 필드 alias를 최종 확정해야 한다.
 
+### 5.6 수신 ack 응답 규격 (필수)
+
+ClassIn 은 수신 엔드포인트의 **응답 본문**으로 성공 여부를 판단한다 (HTTP 200 이어도 본문이 기준).
+
+- 정상 수신: `{"error_info": {"errno": 1, "error": "..."}}` — `errno == 1` 만 인정.
+- `errno != 1` 이거나 형식이 다르면: ClassIn 이 **재전송 반복 → 시간당 에러메일 → 후속 데이터 차단**
+  (미전송분 최대 3개월 보관). ack 형식이 틀리면 단일 이벤트가 아니라 *전체 파이프라인*이 막힌다.
+
+본 구현(`webhook_receiver.py`)의 응답 정책 — 원본 JSON 은 응답 전에 항상 `webhook.dump_dir` 에
+저장되므로(유실 없음), 우리 측 처리 실패도 `replay-webhook` 으로 복구 가능하다:
+
+| 상황 | 응답 | 이유 |
+|---|---|---|
+| 정상 처리 | `errno:1` | 정상 수신 |
+| 미처리 Cmd (구독했으나 핸들러 없음) | `errno:1` | 받긴 함 → 무한 재전송 방지 |
+| 파싱 실패 / 핸들러 예외(Notion 장애 등) | `errno:1` | 원본 dump 됨 → replay 복구, 파이프라인 차단 방지 |
+| SafeKey 불일치 (인증 실패) | `errno:0` | 위조/오설정을 ack 하지 않음. fail-loud(에러메일로 인지 → secret/시계 교정) |
+
+출처: https://docs.eeo.cn/api/en/datasub/description.html
+
 ## 6. 현재 코드의 확정/추정 매트릭스
 
 | 항목 | 상태 | 근거 |

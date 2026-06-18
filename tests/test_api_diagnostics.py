@@ -76,6 +76,15 @@ def test_aligo_live_diagnostics_uses_balance_probe_without_sending() -> None:
     ]
 
 
+def test_aligo_live_diagnostics_flags_missing_template_config() -> None:
+    report = diagnose_apis(_cfg(notify={"mode": "live"}), live=False)
+
+    item = _item(report, "Aligo", "Kakao template config")
+    assert item.status == "missing"
+    assert "sender_key" in item.detail
+    assert "template_code_missing_homework" in item.detail
+
+
 class FakeClassInClient:
     def __init__(self, *, v2_signature_ok: bool = False) -> None:
         self.v2_signature_ok = v2_signature_ok
@@ -102,6 +111,13 @@ class FakeNotionClient:
 
     def retrieve(self, *, database_id: str) -> dict[str, str]:
         return {"id": database_id}
+
+    @property
+    def data_sources(self) -> "FakeNotionClient":
+        return self
+
+    def query(self, *, data_source_id: str, page_size: int = 1) -> dict:
+        return {"object": "list", "results": []}
 
 
 class FakeAnthropicClient:

@@ -4,6 +4,7 @@
 probe layer that verifies credentials and network reachability without creating
 ClassIn lessons, Notion rows, Claude artifacts, or Kakao messages.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -60,6 +61,7 @@ class DiagnosticReport:
 ClassInFactory = Callable[[], ContextClient]
 NotionFactory = Callable[[str], Any]
 AnthropicFactory = Callable[[str], Any]
+GeminiFactory = Callable[[str], Any]
 HttpClientFactory = Callable[[], ContextClient]
 
 
@@ -71,6 +73,7 @@ def diagnose_apis(
     classin_client_factory: ClassInFactory | None = None,
     notion_client_factory: NotionFactory | None = None,
     anthropic_client_factory: AnthropicFactory | None = None,
+    gemini_client_factory: GeminiFactory | None = None,
     http_client_factory: HttpClientFactory | None = None,
 ) -> DiagnosticReport:
     """Return setup diagnostics for all external services.
@@ -82,7 +85,10 @@ def diagnose_apis(
     items: list[DiagnosticItem] = []
     items.extend(_classin_items(cfg, live, timeout, classin_client_factory))
     items.extend(_notion_items(cfg, live, notion_client_factory))
-    items.extend(_anthropic_items(cfg, live, anthropic_client_factory))
+    if cfg.llm.provider == "gemini":
+        items.extend(_gemini_items(cfg, live, gemini_client_factory))
+    else:
+        items.extend(_anthropic_items(cfg, live, anthropic_client_factory))
     items.extend(_aligo_items(cfg, live, timeout, http_client_factory))
     return DiagnosticReport(live=live, items=items)
 
@@ -264,7 +270,9 @@ def _notion_items(
             )
             continue
         try:
-            client.databases.retrieve(database_id=db_id)
+            # config 의 ID 는 신규 Notion API 의 data_source_id (setup-notion 산출).
+            # notion_repo 와 동일하게 data_sources.query 로 접근 권한을 확인한다.
+            client.data_sources.query(data_source_id=db_id, page_size=1)
         except Exception as exc:
             items.append(
                 DiagnosticItem(
@@ -334,6 +342,79 @@ def _anthropic_items(
     ]
 
 
+def _gemini_items(
+    cfg: AppConfig,
+    live: bool,
+    gemini_client_factory: GeminiFactory | None,
+) -> list[DiagnosticItem]:
+    if _is_missing(cfg.gemini.api_key):
+        return [
+            DiagnosticItem(
+                "Gemini",
+                "API key",
+                "missing",
+                "비어 있거나 placeholder 값",
+                "gemini.api_key 를 채우세요.",
+            )
+        ]
+    if not live:
+        return [
+            DiagnosticItem("Gemini", "API key", "ok", "입력됨"),
+            _skipped("Gemini", "generate probe", "--live 로 인증과 모델 접근을 확인하세요."),
+        ]
+
+    try:
+        if gemini_client_factory:
+            client = gemini_client_factory(cfg.gemini.api_key)
+        else:
+            from google import genai
+
+            client = genai.Client(api_key=cfg.gemini.api_key)
+    except Exception as exc:
+        return [
+            DiagnosticItem("Gemini", "API key", "ok", "입력됨"),
+            DiagnosticItem(
+                "Gemini",
+                "SDK",
+                "failed",
+                _safe_error(exc),
+                "google-genai 설치 확인: pip install google-genai",
+            ),
+        ]
+
+    try:
+        response = client.models.generate_content(
+            model=cfg.gemini.model,
+            contents="Reply exactly: OK",
+            # thinking 모델(2.5+/3.x)은 reasoning 토큰을 먼저 소비하므로 8 토큰이면 .text 가
+            # 비어 WARN 오판이 난다. 짧은 답을 확실히 받도록 여유를 둔다.
+            config={"max_output_tokens": 512},
+        )
+        text = getattr(response, "text", "") or ""
+    except Exception as exc:
+        return [
+            DiagnosticItem("Gemini", "API key", "ok", "입력됨"),
+            DiagnosticItem(
+                "Gemini",
+                "generate probe",
+                "failed",
+                _safe_error(exc),
+                "API key, 사용량/billing, model 이름을 확인하세요.",
+            ),
+        ]
+
+    if text.strip().upper().startswith("OK"):
+        detail = f"generate_content 성공 ({cfg.gemini.model})"
+        status: DiagnosticStatus = "ok"
+    else:
+        detail = f"generate_content 응답 확인 필요 ({cfg.gemini.model})"
+        status = "warn"
+    return [
+        DiagnosticItem("Gemini", "API key", "ok", "입력됨"),
+        DiagnosticItem("Gemini", "generate probe", status, detail),
+    ]
+
+
 def _aligo_items(
     cfg: AppConfig,
     live: bool,
@@ -381,12 +462,38 @@ def _aligo_items(
         )
     else:
         items.append(DiagnosticItem("Aligo", "dispatch mode", "warn", "live"))
+        template_missing = [
+            name
+            for name, value in (
+                ("sender_key", cfg.notify.aligo.sender_key),
+                (
+                    "template_code_missing_homework",
+                    cfg.notify.aligo.template_code_missing_homework,
+                ),
+            )
+            if _is_missing(value)
+        ]
+        items.append(
+            DiagnosticItem(
+                "Aligo",
+                "Kakao template config",
+                "missing" if template_missing else "ok",
+                "누락: " + ", ".join(template_missing) if template_missing else "입력됨",
+                "notify.aligo.sender_key/template_code_missing_homework 를 채우세요."
+                if template_missing
+                else "",
+            )
+        )
 
     if "api_key" in missing or "user_id" in missing:
-        items.append(_skipped("Aligo", "Kakao balance probe", "Aligo API 키와 user_id가 필요합니다."))
+        items.append(
+            _skipped("Aligo", "Kakao balance probe", "Aligo API 키와 user_id가 필요합니다.")
+        )
         return items
     if not live:
-        items.append(_skipped("Aligo", "Kakao balance probe", "--live 로 잔여건수 조회를 확인하세요."))
+        items.append(
+            _skipped("Aligo", "Kakao balance probe", "--live 로 잔여건수 조회를 확인하세요.")
+        )
         return items
 
     factory = http_client_factory or (lambda: httpx.Client(timeout=timeout))

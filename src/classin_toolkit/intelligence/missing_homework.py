@@ -11,6 +11,7 @@ from ..config import AppConfig
 from ..notify.message import OutgoingMessage
 from ..storage.notion_repo import StudentRecord
 from .claude_client import load_prompt, run_json
+from .notification_quality import evaluate_missing_homework_message
 
 
 def compose_messages_from_rows(
@@ -56,12 +57,22 @@ def compose_messages_from_rows(
     out: list[OutgoingMessage] = []
     for cid in by_student:
         rec = students_lookup.get(cid)
+        message = by_id.get(cid, "")
+        quality = evaluate_missing_homework_message(
+            student_name=rec.name if rec else "",
+            parent_phone=rec.parent_phone if rec else None,
+            message=message,
+            missing_rows=by_student[cid],
+        )
         out.append(
             OutgoingMessage(
                 student_classin_id=cid,
                 student_name=rec.name if rec else "",
                 parent_phone=rec.parent_phone if rec else None,
-                message=by_id.get(cid, ""),
+                message=message,
+                quality_status=quality.status,
+                quality_score=quality.score,
+                quality_warnings=quality.warnings,
             )
         )
     return out

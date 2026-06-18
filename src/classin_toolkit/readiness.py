@@ -3,6 +3,7 @@
 This module is intentionally offline-only: it checks whether config values look
 usable before the operator spends time on Notion/ClassIn/Claude calls.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -110,9 +111,11 @@ def _local_demo_items(cfg: AppConfig, project_root: Path) -> list[ReadinessItem]
         ),
         _required(
             "local-demo",
-            "Claude API 키",
-            cfg.anthropic.api_key,
-            "anthropic.api_key 를 채우세요.",
+            "LLM API 키 (gemini)" if cfg.llm.provider == "gemini" else "LLM API 키 (claude)",
+            cfg.gemini.api_key if cfg.llm.provider == "gemini" else cfg.anthropic.api_key,
+            "gemini.api_key 를 채우세요."
+            if cfg.llm.provider == "gemini"
+            else "anthropic.api_key 를 채우세요.",
         ),
         _path_value("local-demo", "일일 HTML 출력 경로", cfg.output.daily.path),
         _path_value("local-demo", "주간 HTML 출력 경로", cfg.output.weekly.path),
@@ -129,9 +132,7 @@ def _local_demo_items(cfg: AppConfig, project_root: Path) -> list[ReadinessItem]
             )
         )
     else:
-        items.append(
-            ReadinessItem("local-demo", "메모 DB ID", "warn", "memo.mode=off 라서 생략됨")
-        )
+        items.append(ReadinessItem("local-demo", "메모 DB ID", "warn", "memo.mode=off 라서 생략됨"))
 
     if cfg.notify.mode == "dry_run":
         items.append(ReadinessItem("local-demo", "카톡 발송 모드", "ok", "dry_run"))
@@ -291,6 +292,18 @@ def _kakao_live_items(cfg: AppConfig) -> list[ReadinessItem]:
                     cfg.notify.aligo.sender,
                     "notify.aligo.sender 를 채우세요.",
                 ),
+                _required(
+                    "kakao-live",
+                    "알리고 senderkey",
+                    cfg.notify.aligo.sender_key,
+                    "notify.aligo.sender_key 를 채우세요.",
+                ),
+                _required(
+                    "kakao-live",
+                    "숙제 미제출 템플릿 코드",
+                    cfg.notify.aligo.template_code_missing_homework,
+                    "notify.aligo.template_code_missing_homework 를 채우세요.",
+                ),
             ]
         )
 
@@ -298,9 +311,9 @@ def _kakao_live_items(cfg: AppConfig) -> list[ReadinessItem]:
         ReadinessItem(
             "kakao-live",
             "실제 알림톡 발송 구현",
-            "blocked",
-            "notify.dispatcher 의 aligo live mode 가 아직 미구현",
-            "템플릿 승인 후 _send_via_aligo 를 구현하세요.",
+            "ok" if cfg.notify.provider == "aligo" else "blocked",
+            "aligo live dispatch 구현됨" if cfg.notify.provider == "aligo" else "provider 미지원",
+            "" if cfg.notify.provider == "aligo" else "현재 구현 대상은 aligo 입니다.",
         )
     )
     return items

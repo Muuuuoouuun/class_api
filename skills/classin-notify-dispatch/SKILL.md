@@ -10,13 +10,15 @@ description: Use when modifying the notification layer or switching from dry_run
 ## 현재 상태
 
 - `notify.mode: dry_run` (기본) — `reports_out/notify_dry_run/<timestamp>__<student>.md` 파일로 출력
-- `notify.mode: live` — `_send_via_aligo` (구현 필요) / `_send_via_solapi` 호출
+- `notify.mode: live` — `_send_via_aligo`가 승인 템플릿 코드·senderkey·품질 ready 메시지에 한해 전송
+- notify history에는 발송 상태와 함께 `quality_status`, `quality_score`, `quality_warnings`를 남긴다.
+  품질 게이트에서 막힌 문구는 `provider=quality_gate`, `status=skipped`로 기록된다.
 
 MVP 단계는 dry_run 까지만 완성. 실제 발송은 카카오 알림톡 템플릿 심사 (2~3주) + Standard 티어 후.
 
 ## live 전환 절차
 
-1. `dispatcher.py` `_send_via_aligo` 구현 (HTTP POST + 응답 처리 + 에러 재시도)
+1. 알림톡 템플릿 코드 + 발신프로필 `sender_key` 확보
 2. 알림톡 템플릿 ID + 파라미터 placeholder 매핑
 3. `intelligence/prompts/missing_homework.md` 등에 **템플릿 변수명·순서 고정** 반영 — 템플릿 심사된 변수 외 자유 텍스트 금지
 4. `config.yaml`:
@@ -26,8 +28,9 @@ MVP 단계는 dry_run 까지만 완성. 실제 발송은 카카오 알림톡 템
      provider: aligo            # aligo | solapi
      aligo:
        api_key: "..."
-       sender_id: "..."
-       template_id_missing_homework: "..."
+     sender_id: "..."
+     sender_key: "..."
+     template_code_missing_homework: "..."
    ```
 5. `kakao-live` 모드 [`classin-readiness-check`](../classin-readiness-check/SKILL.md) 통과 확인
 
@@ -63,7 +66,7 @@ MVP 단계는 dry_run 까지만 완성. 실제 발송은 카카오 알림톡 템
 
 ## kakao-live readiness
 
-`kakao-live` 모드는 알리고 키가 채워져도 `_send_via_aligo` live 구현 전까지 `BLOCKED` 로 나옴.
+`kakao-live` 모드는 알리고 키, 발신번호, `sender_key`, 숙제 미제출 템플릿 코드가 모두 채워져야 통과한다.
 
 ## 관련 코드
 

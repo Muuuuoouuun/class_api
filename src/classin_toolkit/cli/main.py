@@ -215,6 +215,11 @@ def weekly_drafts(
 @app.command("approve-weekly")
 def approve_weekly(
     week: str = typer.Option(..., help="주 시작일(월요일) YYYY-MM-DD"),
+    force_blocked_quality: bool = typer.Option(
+        False,
+        "--force-blocked-quality",
+        help="AI 품질 점검 blocked 드래프트도 강제 승인",
+    ),
     config: Path = typer.Option(Path("config.yaml"), "--config"),
 ) -> None:
     """드래프트 HTML 리뷰 후 Notion 아카이브."""
@@ -222,8 +227,20 @@ def approve_weekly(
 
     cfg = load_config(config)
     period_start = datetime.fromisoformat(week).replace(tzinfo=timezone.utc)
-    n = approve_all(cfg, period_start=period_start)
-    console.print(f"[green]approved {n} reports[/green]")
+    result = approve_all(
+        cfg,
+        period_start=period_start,
+        force_blocked_quality=force_blocked_quality,
+    )
+    console.print(f"[green]approved {result.approved} reports[/green]")
+    if result.skipped_blocked_quality:
+        console.print(
+            "[yellow]skipped "
+            f"{result.skipped_blocked_quality} blocked-quality drafts[/yellow] "
+            "(강제 승인: --force-blocked-quality)"
+        )
+    if result.skipped_missing_student:
+        console.print(f"[yellow]skipped {result.skipped_missing_student} drafts without student[/yellow]")
 
 
 @app.command("render-daily")
@@ -427,7 +444,7 @@ def setup_notion_cmd(
     parent_page_id: str = typer.Option(
         ...,
         "--parent-page-id",
-        help="DB 4개를 만들 Notion 부모 페이지 ID",
+        help="DB 5개(학생/수업/리포트/메모/시험)를 만들 Notion 부모 페이지 ID",
     ),
     prefix: str = typer.Option("ClassIn Toolkit", "--prefix"),
     token: str | None = typer.Option(
@@ -438,7 +455,7 @@ def setup_notion_cmd(
     write: bool = typer.Option(False, "--write/--dry-run"),
     config: Path = typer.Option(Path("config.yaml"), "--config"),
 ) -> None:
-    """Notion 테스트 DB 4개를 자동 생성하고 config.yaml용 ID를 출력한다."""
+    """Notion 테스트 DB 5개(학생/수업/리포트/메모/시험)를 자동 생성하고 config.yaml용 ID를 출력한다."""
     if not write:
         table = Table(title="Notion schema dry-run")
         table.add_column("DB")

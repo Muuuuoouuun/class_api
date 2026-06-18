@@ -13,6 +13,7 @@ class CreatedNotionSchema:
     lessons: str
     reports: str
     memos: str
+    exams: str
 
     def config_snippet(self) -> str:
         return (
@@ -23,6 +24,7 @@ class CreatedNotionSchema:
             f'    lessons: "{self.lessons}"\n'
             f'    reports: "{self.reports}"\n'
             f'    memos: "{self.memos}"\n'
+            f'    exams: "{self.exams}"\n'
         )
 
 
@@ -58,11 +60,18 @@ def create_notion_schema(
         title=f"{prefix} - 메모",
         properties=_memo_properties(students),
     )
+    exams = _create_database(
+        nc,
+        parent_page_id=parent_page_id,
+        title=f"{prefix} - 시험",
+        properties=_exam_properties(students),
+    )
     return CreatedNotionSchema(
         students=students,
         lessons=lessons,
         reports=reports,
         memos=memos,
+        exams=exams,
     )
 
 
@@ -72,6 +81,7 @@ def dry_run_schema(prefix: str = "ClassIn Toolkit") -> list[tuple[str, list[str]
         (f"{prefix} - 수업 기록", list(_lesson_properties("학생_DB_ID").keys())),
         (f"{prefix} - 리포트", list(_report_properties("학생_DB_ID").keys())),
         (f"{prefix} - 메모", list(_memo_properties("학생_DB_ID").keys())),
+        (f"{prefix} - 시험", list(_exam_properties("학생_DB_ID").keys())),
     ]
 
 
@@ -140,6 +150,23 @@ def _memo_properties(students_db_id: str) -> dict[str, dict]:
         "학생": {"relation": _relation(students_db_id)},
         "일자": {"date": {}},
         "태그": {"select": {"options": _options(["상담", "행동", "학습", "건강"])}},
+    }
+
+
+def _exam_properties(students_db_id: str) -> dict[str, dict]:
+    # 컬럼명·타입은 notion_repo.upsert_exam_result 의 쓰기 형식과 일치해야 한다.
+    return {
+        "시험명": {"title": {}},
+        "학생": {"relation": _relation(students_db_id)},
+        "시험일": {"date": {}},
+        "반": {"rich_text": {}},
+        "과목": {"rich_text": {}},
+        "응시 여부": {"checkbox": {}},
+        "원점수": {"number": {"format": "number"}},
+        "만점": {"number": {"format": "number"}},
+        "백분율": {"number": {"format": "number"}},
+        "데이터 출처": {"rich_text": {}},
+        "외부 시험 ID": {"rich_text": {}},
     }
 
 

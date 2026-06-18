@@ -40,6 +40,13 @@ anthropic:
   model: "claude-sonnet-4-6"
   report_model: "claude-opus-4-7"
 
+llm:
+  provider: "anthropic"        # anthropic | gemini — 분석/리포트/문구 생성 LLM 공급자
+gemini:                        # provider=gemini 일 때 사용 (google-genai)
+  api_key: "REPLACE_ME_GEMINI_KEY"
+  model: "gemini-2.5-flash"
+  report_model: "gemini-2.5-pro"
+
 neis:
   api_key: "REPLACE_ME_NEIS_KEY"
 
@@ -50,6 +57,8 @@ notify:
     api_key: "REPLACE_ME"
     user_id: "REPLACE_ME"
     sender: "01012345678"
+    sender_key: "REPLACE_ME_ALIGO_SENDERKEY"                # 알리고 발신프로필 키
+    template_code_missing_homework: "REPLACE_ME_TEMPLATE"   # 승인된 숙제 미제출 알림톡 템플릿 코드
 
 webhook:
   host: "0.0.0.0"

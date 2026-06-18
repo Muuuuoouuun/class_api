@@ -4,13 +4,16 @@
 - SafeKey 필드 검증 (신뢰 대상일 때만 통과)
 - Cmd 디스패처 테이블로 이벤트별 파이프라인 호출
 - 원본 JSON 은 항상 dump_dir 에 저장 → 스키마 디버깅·재전송 대응
-- 파싱 실패해도 200 반환 (재전송 폭주 방지)
+- ack 는 ClassIn 규격 `{"error_info":{"errno":1}}` (errno==1 만 정상 수신으로 인정).
+  errno≠1/형식 불일치 시 재전송→차단되므로, dump 후 처리 실패는 errno:1 로 ack 하고
+  SafeKey 불일치(인증 실패)만 errno≠1 로 거절한다.
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -65,11 +68,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             raise HTTPException(status_code=404)
         if "/" in filename or ".." in filename:
             raise HTTPException(status_code=400)
-        base = (
-            Path(cfg.output.daily.path)
-            if kind == "daily"
-            else Path(cfg.output.weekly.path)
-        )
+        base = Path(cfg.output.daily.path) if kind == "daily" else Path(cfg.output.weekly.path)
         path = base / filename
         if not path.exists() or not path.is_file():
             raise HTTPException(status_code=404)
@@ -83,31 +82,50 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         try:
             raw = json.loads(body)
         except json.JSONDecodeError:
-            log.exception("non-json webhook body")
-            return {"ok": False, "reason": "non-json"}
+            log.error("non-json webhook body — dumped, acked to avoid retry storm")
+            return _ack()
 
         if cfg.classin.webhook_secret and not verify_webhook_safekey(
             raw, cfg.classin.webhook_secret
         ):
             log.warning("SafeKey verification failed cmd=%s", raw.get("Cmd"))
-            return {"ok": False, "reason": "safekey-mismatch"}
+            return _ack(errno=0, error="safekey verification failed")
 
         cmd = raw.get("Cmd") or raw.get("cmd") or ""
         handler = dispatch.get(cmd)
         if not handler:
-            log.info("skip unhandled cmd=%s", cmd)
-            return {"ok": True, "skipped": cmd}
+            log.info("ack unhandled cmd=%s", cmd)
+            return _ack()
 
         try:
             event = parse_event(raw)
         except Exception:
-            log.exception("event parse failed cmd=%s", cmd)
-            return {"ok": False, "reason": "parse-failed", "cmd": cmd}
+            log.exception("event parse failed cmd=%s — dumped for replay", cmd)
+            return _ack()
 
-        await handler(event, cfg)
-        return {"ok": True, "cmd": cmd}
+        try:
+            await handler(event, cfg)
+        except Exception:
+            log.exception("ingest failed cmd=%s — dumped for replay", cmd)
+            return _ack()
+
+        return _ack()
 
     return app
+
+
+def _ack(errno: int = 1, error: str = "程序正常执行") -> dict:
+    """ClassIn Datasub 수신 확인 응답.
+
+    ClassIn 은 `error_info.errno == 1` 만 '정상 수신'으로 인정한다. 그 외 값/형식이면
+    재전송 → 시간당 에러메일 → 후속 데이터 차단(미전송분 최대 3개월 보관).
+    원본 body 는 항상 먼저 dump 되므로, 우리 측 처리 실패(파싱/핸들러)는 errno:1 로
+    ack 해 파이프라인 차단을 막고 dump+replay 로 복구한다. SafeKey 불일치(인증 실패)만
+    errno≠1 로 거절한다.
+
+    출처: https://docs.eeo.cn/api/en/datasub/description.html
+    """
+    return {"error_info": {"errno": errno, "error": error}}
 
 
 def _wrap(func, expected_type):
@@ -121,7 +139,7 @@ def _wrap(func, expected_type):
 
 
 def _dump_raw(dump_dir: Path, body: bytes) -> None:
-    stamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S_%f")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%f")
     (dump_dir / f"{stamp}.json").write_bytes(body)
 
 

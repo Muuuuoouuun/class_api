@@ -124,7 +124,7 @@ def seed_demo_data(
             class_name=student.class_name,
         )
     for row in dataset.lesson_rows:
-        page_id = repo.upsert_lesson_record(
+        repo.upsert_lesson_record(
             lesson_id=row.lesson_id,
             course_id=row.course_id,
             student_classin_id=row.student.classin_id,
@@ -145,7 +145,6 @@ def seed_demo_data(
             homework_submitted_late=row.homework_late,
             homework_score=row.homework_score,
             homework_activity_id=DEMO_ACTIVITY_ID,
-            page_id=page_id,
         )
     return DemoSeedResult(
         students=len(dataset.students),
@@ -196,9 +195,15 @@ def build_demo_notification_history(
         if student_id == "10002":
             status = "dry_run"
             message = "김지각 학생 숙제 제출 안내 문구입니다. 오늘 중 제출 부탁드립니다."
+            quality_status = "ready"
+            quality_score = 90
+            quality_warnings: list[str] = []
         elif student_id == "10003":
             status = "failed"
             message = "이하락 학생 최근 숙제 누락 안내 문구입니다."
+            quality_status = "review"
+            quality_score = 76
+            quality_warnings = ["다음 액션: 제출 기한이 더 구체적이면 좋습니다."]
         else:
             continue
         history.append(
@@ -211,6 +216,9 @@ def build_demo_notification_history(
                 "student_name": row.get("student_name") or "",
                 "parent_phone": row.get("parent_phone") or "",
                 "message": message,
+                "quality_status": quality_status,
+                "quality_score": quality_score,
+                "quality_warnings": quality_warnings,
                 "artifact_path": "demo://notify_history",
                 "error": "demo failure" if status == "failed" else None,
             }

@@ -60,7 +60,7 @@ classin-toolkit diagnose-apis --live    # 실제 probe
 
 ## local-demo 최소 준비물
 
-- Notion Integration token + DB ID 4개 (학생 Master, 수업 기록, 리포트, 메모)
+- Notion Integration token + DB ID 5개 (학생 Master, 수업 기록, 리포트, 메모, 시험)
 - Claude API key
 - `samples/{attendance,end_summary,homework_submit}_sample.json`
 - `notify.mode: dry_run`
@@ -69,7 +69,9 @@ ClassIn SID / secret 은 local-demo 에서 **없어도 됨** — 샘플 JSON 을
 
 ## kakao-live 주의
 
-현재 코드는 dry-run 까지만 완성. 알리고 키가 채워져도 `notify.dispatcher` live 구현 전까지 `BLOCKED`.
+Aligo live dispatch 경로는 구현되어 있다. `kakao-live` 통과 조건은 알리고 API 키, user_id, 발신번호,
+발신프로필 `sender_key`, 승인된 숙제 미제출 템플릿 코드가 모두 채워지는 것이다.
+템플릿 심사 전에는 `notify.mode: dry_run` 을 유지한다.
 
 ## 관련 코드
 

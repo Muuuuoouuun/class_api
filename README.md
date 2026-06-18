@@ -44,7 +44,8 @@ classin-toolkit diagnose-apis --live
 
 # 수동 오더 라인
 classin-toolkit agent    # 원장 대화형 AI 어시스턴트
-classin-toolkit ui       # 로컬 브라우저 운영 UI
+classin-toolkit ui       # 로컬 브라우저 운영 UI / Academy Ops Hub
+classin-toolkit ui --demo # config 없이 5명 페르소나 허브 데모
 ```
 
 ## 커맨드 레퍼런스
@@ -62,11 +63,31 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 | 자동 (SSO)  | `classin-toolkit sso-link --uid ... --course-id ... --class-id ... --telephone ...` | ClassIn 앱 호출 링크 |
 | 점검 | `classin-toolkit check-ready --mode local-demo` | 테스트 단계별 API 키·DB ID 누락 확인 |
 | 점검 | `classin-toolkit diagnose-apis [--live]` | ClassIn/Notion/Claude/Aligo 연결을 비파괴 probe로 확인 |
-| 수동 (Agent) | `classin-toolkit agent` | 원장/교사 자연어 질문 → Claude tool-use (미제출·미응시 조회 포함) |
-| 수동 (UI) | `classin-toolkit ui` | 로컬 브라우저에서 상태 점검, 미제출 선택 발송, 스케줄 생성, 리포트, 시험 CSV import, 메모·AI 질문 실행 |
+| 수동 (Agent) | `classin-toolkit agent` | 원장/교사 자연어 질문 → Claude tool-use (미제출·미응시·학원 데이터 맥락 조회 포함) |
+| 수동 (UI) | `classin-toolkit ui` | 로컬 브라우저 Academy Ops Hub: ClassIn API Push, Data Subscription, 학원 데이터 융합, 개별 리포트 운영 |
 
 ## MVP 상태
 
+- [x] Academy Ops Hub: 원장/교사용 첫 화면에서 4축 운영 상태 + 오늘 처리할 학생 큐 표시
+- [x] 운영 전환 체크리스트: 허브 UI에서 local-demo/classin-live/kakao-live 준비 상태 확인
+- [x] Notion DB 설계 미리보기: 허브 UI에서 학생·수업·리포트·메모·시험 5 DB dry-run 확인
+- [x] 파일럿 브링업 브리프: 허브 UI에서 DataSub 신청 메일·Cloudflare 명령·Windows 상시 구동 체크리스트 생성/복사
+- [x] 오늘의 운영 브리핑: 설정·미제출·데이터 매칭·리포트 품질을 실행 순서로 정리
+- [x] 오늘의 자동화 실행계획: 설정 점검·데이터 확인·미제출 알림·리포트 보강·마감 리포트를 안전 게이트와 함께 Markdown으로 생성/복사
+- [x] 오늘의 운영 리포트: 숙제 알림·데이터 수신·학원 데이터 융합·리포트 품질을 Markdown 인수인계로 생성/복사
+- [x] 통합 교사 액션 큐: 숙제 알림, 데이터 매칭, 리포트 품질/구성 보강을 우선순위로 정렬
+- [x] ClassIn 접속 링크 생성: 허브 UI에서 UID/Course/Class/전화번호 기반 SSO 링크 생성·복사
+- [x] ClassIn Data Subscription 수신함: Webhook 원본 dump를 Cmd·수업·학생 신호별로 읽기 전용 확인
+- [x] 학원 데이터 융합 context를 주간 리포트와 원장/교사용 AI 질문 응답에 재사용
+- [x] 학원 데이터 융합 패널: 학생별 오프라인 출결·성적·메모·지난 리포트 연결 상태와 확인 필요 항목 표시
+- [x] 개별 리포트 구성 preflight: 학생별 출결·숙제·시험·메모 섹션 준비도와 보강 항목 표시
+- [x] 개별 리포트 초안 패키지: 학생별 ClassIn 근거·학원 데이터·학부모 문안·교사 체크리스트를 Markdown으로 생성/복사
+- [x] 숙제 미제출 알림 문구 품질 점검: 빈 문구·연락처 없음·낙인 표현은 자동 발송 제외
+- [x] 숙제 미제출 알림 문구 미리보기: 선택 대상 발송 전 AI 문구·품질·연락처 게이트 확인
+- [x] Aligo 알림톡 live dispatch 경로: 승인 템플릿 코드·senderkey·품질 ready 게이트 통과 시 전송
+- [x] 주간 리포트 드래프트 품질 점검: 근거·다음 액션·표현 안전·개인화 경고 표시
+- [x] `blocked` 품질 리포트는 기본 승인/아카이브에서 제외
+- [x] 허브 UI에서 주간 드래프트 품질 큐 조회 후 승인 처리
 - [x] 코어 엔진: 스케줄 → Claude 파싱 → CED API (addCourse/addCourseClass)
 - [x] MVP1: After-Class Webhook → Notion 적재 → 미제출 sweep → 카톡 dry-run
 - [x] MVP2: 주간 학생별 개인화 리포트 → Notion 페이지 + 학부모 문구
@@ -74,7 +95,7 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 - [x] OMR Answer Sheet 생성 + `AnswerSheetScore` Webhook → Notion 시험 DB 적재
 - [x] 에이전트: tool-use 채팅 (수동 오더, 시험 미응시 조회 포함)
 - [x] LMS 스케줄 생성 체인 (Unit/Classroom/Homework Activity/releaseActivity) Layer 1 + core engine mock 검증
-- [ ] 실제 카톡 알림톡 연동 (템플릿 심사 후 Standard 티어)
+- [ ] 실제 카톡 알림톡 운영 전환 (템플릿 심사·Standard 티어·학원 계정 live 검증)
 - [ ] Notion DB 5종 스키마 세팅 (학원별 1회) — [docs/12_notion_schema.md](docs/12_notion_schema.md)
 - [ ] 파일럿 학원 1곳 확보 → 실 데이터 검증
 
@@ -107,4 +128,4 @@ classin-toolkit ui       # 로컬 브라우저 운영 UI
 3. Notion DB 5종 실제 생성 후 `config.yaml` 의 DB ID 채우기
 4. 5 페르소나 페이크 데이터로 MVP2 리포트 차별화 수동 검증
 5. 파일럿 학원 확보 → 실 Webhook 스트림 1~2주 캡처
-6. `cloudflared` 패키징 + Windows 작업 스케줄러 스크립트 정리
+6. 실학원 고정 URL 기준으로 설정 탭 `파일럿 브링업` 브리프 복사 → ClassIn DataSub 등록 요청

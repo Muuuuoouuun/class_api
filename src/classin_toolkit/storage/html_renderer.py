@@ -83,6 +83,8 @@ class HtmlWeeklyRenderer:
             hw_rate=hw_rate,
             summary_html=summary_html,
             parent_message=inp.parent_message,
+            report_context=inp.report_context or {},
+            quality=inp.quality or {},
         )
         path.write_text(html, encoding="utf-8")
         log.info("weekly draft html: %s", path)

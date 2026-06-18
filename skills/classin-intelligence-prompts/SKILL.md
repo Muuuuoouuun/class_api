@@ -42,7 +42,7 @@ intelligence/
 2. `_execute_tool` 의 `if tool_name == ...` 분기 추가 — Notion 또는 파이프라인 호출
 3. 수동으로 `classin-toolkit agent` 실행해 자연어로 부를 수 있는지 확인
 
-기존 도구 5종: `query_missing_homework`, `query_missing_exam`, `query_student_stats`, `list_students`, `trigger_weekly_report`. 사용법은 [`classin-agent-usage`](../classin-agent-usage/SKILL.md).
+기존 도구 6종: `query_missing_homework`, `query_missing_exam`, `query_student_stats`, `list_students`, `query_academy_context`, `trigger_weekly_report`. 사용법은 [`classin-agent-usage`](../classin-agent-usage/SKILL.md).
 
 ## Claude 응답이 이상할 때
 

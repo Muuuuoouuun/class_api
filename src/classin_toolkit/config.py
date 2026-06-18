@@ -31,8 +31,8 @@ class NotionDatabases(BaseModel):
     reports: str
     memos: str | None = None
     exams: str | None = None
-    career: str | None = None    # DB6 진로 프로필
-    corpus: str | None = None    # DB7 진학 코퍼스 (비식별)
+    career: str | None = None  # DB6 진로 프로필
+    corpus: str | None = None  # DB7 진학 코퍼스 (비식별)
 
 
 class NotionConfig(BaseModel):
@@ -68,6 +68,18 @@ class AnthropicConfig(BaseModel):
     report_model: str = "claude-opus-4-7"
 
 
+class GeminiConfig(BaseModel):
+    api_key: str = ""
+    model: str = "gemini-2.5-flash"  # 일반 tier (분류/문구). 최신 3.x 계열로 교체 가능
+    report_model: str = "gemini-2.5-pro"  # report tier (리포트/OCR 등 고난도)
+
+
+class LLMConfig(BaseModel):
+    """LLM 공급자 선택. 기본 anthropic — gemini 로 바꾸면 intelligence 계층이 Gemini 사용."""
+
+    provider: Literal["anthropic", "gemini"] = "anthropic"
+
+
 class NeisConfig(BaseModel):
     api_key: str
     base_url: str = "https://open.neis.go.kr/hub"
@@ -77,6 +89,8 @@ class AligoConfig(BaseModel):
     api_key: str = ""
     user_id: str = ""
     sender: str = ""
+    sender_key: str = ""
+    template_code_missing_homework: str = ""
 
 
 class NotifyConfig(BaseModel):
@@ -102,6 +116,8 @@ class AppConfig(BaseModel):
     classin: ClassInConfig
     notion: NotionConfig
     anthropic: AnthropicConfig
+    llm: LLMConfig = Field(default_factory=LLMConfig)
+    gemini: GeminiConfig = Field(default_factory=GeminiConfig)
     neis: NeisConfig | None = None
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
     webhook: WebhookConfig = Field(default_factory=WebhookConfig)
@@ -116,8 +132,6 @@ DEFAULT_CONFIG_PATH = Path("config.yaml")
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
     p = Path(path)
     if not p.exists():
-        raise FileNotFoundError(
-            f"{p} not found. Copy config.yaml.example to {p} and fill values."
-        )
+        raise FileNotFoundError(f"{p} not found. Copy config.yaml.example to {p} and fill values.")
     data = yaml.safe_load(p.read_text(encoding="utf-8"))
     return AppConfig.model_validate(data)

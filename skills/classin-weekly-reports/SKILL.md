@@ -23,11 +23,24 @@ classin-toolkit generate-weekly-drafts
 
 # 3) 승인된 주차를 Notion 아카이브로 푸시
 classin-toolkit approve-weekly --week 2026-04-22
+
+# blocked 품질 드래프트를 정말 승인해야 할 때만
+classin-toolkit approve-weekly --week 2026-04-22 --force-blocked-quality
 ```
 
 ## 두 단계 분리 이유
 
 피드백 (2026-04-24): Notion 리포트 DB 는 "승인된 최종본 영구 보관소" 다. AI 가 곧바로 Notion 에 쓰면 검토 흔적이 남지 않고, 학부모 발송 직전 톤 수정도 어렵다. 그래서 **HTML 드래프트 → 승인 → 아카이브** 로 분리.
+
+드래프트 HTML에는 `AI 품질 점검` 섹션이 함께 표시된다. 근거 표현, 다음 액션, 표현 안전, 학생 개인화,
+학원 데이터 반영 여부를 deterministic rule로 검사해 `ready` / `review` / `blocked` 상태와 경고를 붙인다.
+`blocked`는 기본 승인에서 제외된다. 원장/교사가 수정하거나 재생성한 뒤 승인하는 것을 기본으로 하며,
+정말 아카이브해야 할 때만 `--force-blocked-quality` 를 붙인다.
+
+운영 UI에서는 리포트 탭의 `주간 드래프트 검토` 큐가 `/api/weekly-drafts`를 통해 `drafts.json`을 읽는다.
+여기서 학생별 품질 상태, 점수, 경고, 학생 맥락, HTML 링크를 확인한 뒤 승인한다.
+같은 리포트 탭의 `개별 리포트 구성` 패널은 `/api/report-compositions`를 통해 드래프트 생성 전
+학생별 출결·숙제·시험·메모·다음 액션 섹션 준비도와 보강 항목을 확인한다.
 
 ## config
 
@@ -69,7 +82,10 @@ reports_out/weekly/<week>/
 ## 관련 코드
 
 - `src/classin_toolkit/pipelines/weekly.py` (`generate_drafts`, `approve_all`)
+- `src/classin_toolkit/ui.py` (`/api/report-compositions`, `/api/weekly-drafts`, 리포트 탭 UI)
+- `src/classin_toolkit/intelligence/report_composition.py` (드래프트 생성 전 개별 리포트 구성 preflight)
 - `src/classin_toolkit/intelligence/weekly_report.py` (Claude 리포트 생성)
+- `src/classin_toolkit/intelligence/report_quality.py` (드래프트 품질 점검)
 - `src/classin_toolkit/intelligence/prompts/weekly_report.md` (프롬프트)
 - `src/classin_toolkit/storage/notion_repo.py` (`archive_approved_weekly_report`)
 - `src/classin_toolkit/storage/templates/weekly.html`

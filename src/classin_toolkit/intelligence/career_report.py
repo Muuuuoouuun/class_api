@@ -1,4 +1,5 @@
 """진학 리포트 생성기 — 진학 적합도 진단 결과 리포트."""
+
 from __future__ import annotations
 
 import json
@@ -22,9 +23,7 @@ class CareerReport:
         return cls(summary_markdown=summary, parent_message=parent)
 
 
-def build_career_report(
-    cfg: AppConfig, *, major: str, items: list[ScoreItem]
-) -> CareerReport:
+def build_career_report(cfg: AppConfig, *, major: str, items: list[ScoreItem]) -> CareerReport:
     system = load_prompt("career_report")
     payload = {
         "major": major,
@@ -42,7 +41,7 @@ def build_career_report(
         cfg,
         system=system,
         user=json.dumps(payload, ensure_ascii=False, indent=2),
-        model=cfg.anthropic.report_model,
+        tier="report",
         max_tokens=2048,
     )
     return CareerReport.parse(text)

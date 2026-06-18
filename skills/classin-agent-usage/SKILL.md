@@ -19,7 +19,7 @@ description: Use when the academy director needs to ask classin-toolkit question
 classin-toolkit agent
 ```
 
-## 등록된 도구 (5종)
+## 등록된 도구 (6종)
 
 | 도구 | 호출 시 동작 |
 |---|---|
@@ -27,6 +27,7 @@ classin-toolkit agent
 | `query_missing_exam` | 특정 시험 미응시자 조회 |
 | `query_student_stats` | 학생 단일 스탯 (출석률 / 참여도 / 숙제 제출률 etc.) |
 | `list_students` | 재원생 목록 / 반별 필터 |
+| `query_academy_context` | 주간 리포트 상태 + 로컬/오프라인 출결·성적·상담 메모 병합 맥락 조회 |
 | `trigger_weekly_report` | `pipelines/weekly` 실행 → Notion 페이지 생성 |
 
 ## 사용 예

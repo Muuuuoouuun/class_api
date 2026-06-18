@@ -124,6 +124,23 @@ def test_weekly_draft_html(tmp_path) -> None:
                 "attended": True,
             }
         ],
+        report_context={
+            "has_context": True,
+            "summary": "오프라인 시험 1건 · 상담 메모 1건",
+            "sources": [
+                {
+                    "kind": "offline_score",
+                    "date": "2026-04-23",
+                    "detail": "단원평가 68점",
+                    "source": "local_data/inbox/scores/april.xlsx",
+                }
+            ],
+        },
+        quality={
+            "status": "review",
+            "score": 80,
+            "warnings": ["학원 데이터: 병합된 학원 데이터가 있지만 본문에서 드러나지 않습니다."],
+        },
     )
     result = HtmlWeeklyRenderer().write_draft(cfg, inp)
     assert result.path is not None and result.path.exists()
@@ -132,6 +149,11 @@ def test_weekly_draft_html(tmp_path) -> None:
     assert "<h3>이번 주 요약</h3>" in body  # md_to_html h2 -> h3
     assert "4월 월말평가" in body
     assert "92" in body
+    assert "학생 맥락" in body
+    assert "AI 품질 점검" in body
+    assert "점수 80/100" in body
+    assert "오프라인 시험 1건" in body
+    assert "단원평가 68점" in body
     assert "성실 어머님" in body
 
 

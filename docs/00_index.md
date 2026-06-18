@@ -17,7 +17,7 @@
 |---|---|---|
 | 10 | [architecture](10_architecture.md) | Layer 분리 구조 + 실 코드 파일 매핑 + 데이터 흐름 |
 | 11 | [api_integration](11_api_integration.md) | ClassIn API v2 서명·엔드포인트·Webhook Cmd + 미확정 항목 |
-| 12 | [notion_schema](12_notion_schema.md) | Notion DB 3종 컬럼 정의 (학생·수업 기록·리포트) |
+| 12 | [notion_schema](12_notion_schema.md) | Notion DB 5종 컬럼 정의 (학생·수업 기록·리포트·메모·시험) |
 
 ## 운영 (Ops) — 어떻게 굴리는가
 
@@ -29,12 +29,13 @@
 | 16 | [roadmap](16_roadmap.md) | Week 단위 실행 체크리스트 (진행 상태 추적) |
 | 17 | [test_readiness](17_test_readiness.md) | 테스트 버전 준비물·API 키·config 누락 점검 |
 | 18 | [teacher_dashboard_data_merge](18_teacher_dashboard_data_merge.md) | 선생님 상황판 UX + 보고서·로컬/오프라인 데이터 병합 기준 |
+| 19 | [academy_ops_hub](19_academy_ops_hub.md) | ClassIn API Push, Data Subscription, 학원 데이터 융합, 개별 리포트 허브 구조 |
 
 ## 읽는 순서 (역할별)
 
 - **MOON (본인)**: 01 → 03 → 10 → 11 → 16
 - **새로 합류한 개발자**: 00 → 10 → 14 → 11 → 13
-- **상황판/보고서 병합 작업자**: 00 → 18 → 10 → 14 → 15
+- **상황판/보고서 병합 작업자**: 00 → 19 → 18 → 10 → 14 → 15
 - **학원 원장에게 전달할 때**: 01(요약만) + 13 (고지사항 섹션) + 15
 - **ClassIn 한국 지사 이해충돌 확인**: 01 §1 + 02 §3.4
 

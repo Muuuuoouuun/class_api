@@ -8,8 +8,9 @@
 - [ ] `config.yaml` 학원별 복사본 생성 (`config.yaml.example` 기반)
 - [ ] ClassIn SID / secret_key / webhook_secret 확인 (학원 측과 공유 전 확인)
 - [ ] Notion 통합(Integration) 생성 → 토큰 발급
-- [ ] Notion DB 3종 세팅 (12_notion_schema.md 기준) → DB ID 3개 확보
+- [ ] Notion DB 5종 세팅 (12_notion_schema.md 기준) → 학생·수업·리포트·메모·시험 DB ID 확보
 - [ ] Anthropic API 키 발급 (학원 고유 키 vs MOON 공용 키 정책 결정)
+- [ ] 알리고 알림톡 계정·발신프로필·숙제 미제출 템플릿 코드 확보 (live 전환 시)
 - [ ] Cloudflare 계정 + `cloudflared` 바이너리 확보
 
 ### 1.2 학원 PC 설치 단계
@@ -35,9 +36,13 @@
 - [ ] Postman 등으로 `Attendance` 샘플 페이로드 수신 테스트
 
 ### 1.3 Windows 자동 기동
-- 작업 스케줄러에 2개 작업 등록:
-  1. **Webhook 서버** — 트리거: 시작 시 / 동작: `python -m classin_toolkit.cli.webhook`
-  2. **Cloudflare Tunnel** — 트리거: 시작 시 / 동작: `cloudflared tunnel run <name>`
+- 권장: 관리자 PowerShell에서 아래 스크립트로 작업 스케줄러 2개를 등록:
+  ```powershell
+  .\scripts\install-windows-tasks.ps1 -TunnelName <academy-slug>
+  ```
+  등록되는 작업:
+  1. **ClassIn Toolkit Webhook Receiver** — 로그인 시 `scripts/windows-start-webhook.ps1`
+  2. **ClassIn Toolkit Cloudflare Tunnel** — 로그인 시 `scripts/windows-start-tunnel.ps1 -TunnelName <academy-slug>`
 - **절전 모드 해제 필수**. 제어판 → 전원옵션에서 "디스플레이 끄기"만 허용, "컴퓨터 절전 상태로 전환" = "사용 안 함".
 - 대안: 라즈베리파이 4 (5~10만원)에서 상시 구동 → 학원 PC 독립.
 
@@ -46,6 +51,20 @@
 - `classin-toolkit render-daily` — 매일 22:00 (일일 HTML 현황)
 - `classin-toolkit generate-weekly-drafts` — 매주 금 17:00 (드래프트 생성)
 - `classin-toolkit approve-weekly --week YYYY-MM-DD` — 원장 리뷰 후 수동 실행 (컨설턴트 가이드 따라)
+
+### 1.5 Webhook 공개 노출 (로컬 → 인터넷)
+
+ClassIn 은 Push 전용이라 수신기(:8787)를 공개 HTTPS 로 노출해야 등록·수신이 된다.
+
+- **빠른 테스트** (계정/DNS 불필요, URL 매번 바뀜 → 1회 Cmd:Test 용):
+  ```bash
+  brew install cloudflared          # 최초 1회
+  scripts/serve-webhook.sh          # 터미널 A: 로컬 수신기 :8787
+  scripts/tunnel-quick.sh           # 터미널 B: https://<랜덤>.trycloudflare.com 발급
+  ```
+  외부 도달 확인: 발급 URL `/health` → `{"ok":true,...}`. 등록 엔드포인트: 발급 URL `/classin/webhook`.
+- **운영 (고정 URL)**: `scripts/cloudflared-config.example.yml` 의 named tunnel 절차 사용 (§1.2 와 동일 흐름).
+- **제약**: ClassIn 은 "1기관 1엔드포인트" — 등록 후 URL 변경 시 ClassIn 재등록 필요.
 
 ## 2. 학원 고지 사항 (계약 시 필수 전달)
 

@@ -10,6 +10,43 @@
 <h2>이번 주 요약</h2>
 <div>{{ summary_html | safe }}</div>
 
+{% if quality %}
+<h2>AI 품질 점검</h2>
+<p>
+  <span class="badge {% if quality.status == 'ready' %}badge-ok{% elif quality.status == 'blocked' %}badge-bad{% endif %}">
+    {{ quality.status or 'review' }}
+  </span>
+  <span class="muted">점수 {{ quality.score or 0 }}/100</span>
+</p>
+{% if quality.warnings %}
+<ul>
+  {% for warning in quality.warnings %}
+  <li>{{ warning }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endif %}
+
+{% if report_context and report_context.has_context %}
+<h2>학생 맥락</h2>
+{% if report_context.summary %}
+<p>{{ report_context.summary }}</p>
+{% endif %}
+{% if report_context.sources %}
+<table>
+  <tr><th>종류</th><th>일자</th><th>내용</th><th>출처</th></tr>
+  {% for s in report_context.sources[:6] %}
+  <tr>
+    <td>{{ s.kind or '-' }}</td>
+    <td>{{ s.date or '-' }}</td>
+    <td>{{ s.detail or '-' }}</td>
+    <td>{{ s.source or '-' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endif %}
+
 <h2>수업 기록</h2>
 {% if lessons %}
 <table>
