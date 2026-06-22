@@ -44,6 +44,7 @@ def test_ui_home_renders_with_config(tmp_path):
     assert "fetchNeisSchedules" in res.text
     assert "테스트학원" in res.text
     assert "다음 액션" in res.text
+    assert "자료 확인 필요" in res.text
     assert "성과 대시보드" in res.text
     assert "수성구 주요 고교 시험 기간 종합 예시" in res.text
     assert "경북고등학교" in res.text

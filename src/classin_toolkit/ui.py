@@ -5361,6 +5361,41 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-size: 13px;
       line-height: 1.32;
     }}
+    .data-review {{
+      display: grid;
+      gap: 7px;
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      border: 1px solid #b7dcf3;
+      border-radius: 8px;
+      background: var(--blue-soft);
+      color: var(--text);
+    }}
+    .data-review-title {{
+      font-size: 12px;
+      font-weight: 900;
+      color: var(--blue);
+    }}
+    .data-review-list {{
+      display: grid;
+      gap: 5px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 12px;
+      color: var(--text-2);
+    }}
+    .data-review-list li {{
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }}
+    .data-review-list span {{
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
     .empty {{
       display: grid;
       gap: 6px;
@@ -7404,6 +7439,29 @@ def _render_shell(status: dict[str, Any]) -> str:
       return `<span class="context-summary">${{escapeHtml(context.summary)}}</span>`;
     }}
 
+    function dataReviewHtml(dataContext) {{
+      const items = (((dataContext || {{}}).needs_review_items) || []).slice(0, 5);
+      if (!items.length) return "";
+      const kindLabels = {{
+        offline_attendance: "출결",
+        offline_score: "성적",
+        memo: "메모",
+        attachment: "첨부",
+        weekly_report: "리포트",
+      }};
+      const rows = items.map((item) => {{
+        const kind = kindLabels[item.kind] || item.kind || "자료";
+        const name = item.student_name || item.student_classin_id || "학생 미확인";
+        const source = String(item.source || "").split(/[\\\\/]/).pop() || item.source || "-";
+        return `<li><span>${{escapeHtml(kind)}} · ${{escapeHtml(name)}}</span><span>${{escapeHtml(source)}}</span></li>`;
+      }}).join("");
+      return `
+        <div class="data-review">
+          <div class="data-review-title">자료 확인 필요 ${{items.length}}건</div>
+          <ul class="data-review-list">${{rows}}</ul>
+        </div>`;
+    }}
+
     async function callApi(path, payload) {{
       const response = await fetch(path, {{
         method: "POST",
@@ -7947,8 +8005,9 @@ def _render_shell(status: dict[str, Any]) -> str:
       const items = (data.items || []).filter(itemMatchesFilter);
       updateBulkSendUi(items, summary);
       const target = document.querySelector("#missingTable");
+      const reviewHtml = dataReviewHtml(data.data_context);
       if (!items.length) {{
-        target.innerHTML = `<div class="empty">선택한 조건에 해당하는 학생이 없습니다.</div>`;
+        target.innerHTML = `${{reviewHtml}}<div class="empty">선택한 조건에 해당하는 학생이 없습니다.</div>`;
         return;
       }}
       const allSendable = items.filter((it) => it.has_parent_phone && it.action_required !== "done");
@@ -8003,6 +8062,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
 
       target.innerHTML = `
+        ${{reviewHtml}}
         <div class="missing-list-head">
           <label class="select-all">
             <input type="checkbox" id="bulkSelectAll" ${{allChecked ? "checked" : ""}} ${{allSendable.length ? "" : "disabled"}}>
