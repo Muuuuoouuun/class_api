@@ -124,6 +124,7 @@ def test_course_dashboard_aggregates_attendance_scores_and_options(tmp_path: Pat
     assert dashboard["score_trend"][-1]["avg_score"] == 90.0
     assert dashboard["students"][0]["student_classin_id"] == "10002"
     assert dashboard["students"][0]["risk_level"] == "high"
+    assert dashboard["summary"]["anomaly_count"] == len(dashboard["anomaly_alerts"])
 
 
 def test_student_dashboard_filters_to_single_student(tmp_path: Path) -> None:
@@ -139,6 +140,64 @@ def test_student_dashboard_filters_to_single_student(tmp_path: Path) -> None:
     assert dashboard["summary"]["lesson_count"] == 2
     assert dashboard["summary"]["attendance_rate"] == 1.0
     assert dashboard["students"][0]["student_name"] == "박서연"
+
+
+def test_dashboard_detects_score_decline_anomaly(tmp_path: Path) -> None:
+    class Repo(FakeRepo):
+        students = [
+            StudentRecord("p1", "10001", "박하락", "01011112222", "고2-A"),
+        ]
+        rows = [
+            {
+                "student_page_id": "p1",
+                "student_classin_id": "10001",
+                "student_name": "박하락",
+                "student_class_name": "고2-A",
+                "lesson_classin_id": "L1",
+                "course_classin_id": "C-A",
+                "date": "2026-04-01T09:00:00+00:00",
+                "attendance": "출석",
+                "homework_submitted": True,
+                "homework_score": 95,
+            },
+            {
+                "student_page_id": "p1",
+                "student_classin_id": "10001",
+                "student_name": "박하락",
+                "student_class_name": "고2-A",
+                "lesson_classin_id": "L2",
+                "course_classin_id": "C-A",
+                "date": "2026-04-08T09:00:00+00:00",
+                "attendance": "출석",
+                "homework_submitted": True,
+                "homework_score": 84,
+            },
+            {
+                "student_page_id": "p1",
+                "student_classin_id": "10001",
+                "student_name": "박하락",
+                "student_class_name": "고2-A",
+                "lesson_classin_id": "L3",
+                "course_classin_id": "C-A",
+                "date": "2026-04-15T09:00:00+00:00",
+                "attendance": "출석",
+                "homework_submitted": True,
+                "homework_score": 68,
+            },
+        ]
+        exams = []
+
+    dashboard = build_course_dashboard(
+        _cfg(tmp_path),
+        course_id="C-A",
+        repo=Repo(),
+        now=datetime(2026, 5, 12, tzinfo=timezone.utc),
+    )
+
+    assert dashboard["summary"]["anomaly_count"] == 1
+    assert dashboard["anomaly_alerts"][0]["kind"] == "score_decline"
+    assert dashboard["anomaly_alerts"][0]["severity"] == "high"
+    assert dashboard["anomaly_alerts"][0]["student_name"] == "박하락"
 
 
 def test_exam_score_uses_score_max_when_percent_missing(tmp_path: Path) -> None:

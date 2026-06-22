@@ -6620,6 +6620,10 @@ def _render_shell(status: dict[str, Any]) -> str:
             <div class="chart-head"><h3>상승 학생</h3><span id="moverMeta">0명</span></div>
             <div id="moverList" class="attention-list"></div>
           </div>
+          <div class="chart-card">
+            <div class="chart-head"><h3>감지 알림</h3><span id="anomalyMeta">0건</span></div>
+            <div id="anomalyList" class="attention-list"></div>
+          </div>
         </div>
         <div id="studentCards" class="student-card-grid" style="margin-top:14px"></div>
       </details>
@@ -7665,7 +7669,7 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     async function loadDashboard() {{
       if (!status.ok) {{
-        renderDashboard({{ summary: {{}}, students: [], score_trend: [], attendance_trend: [], needs_attention: [], top_movers: [] }});
+        renderDashboard({{ summary: {{}}, students: [], score_trend: [], attendance_trend: [], needs_attention: [], top_movers: [], anomaly_alerts: [] }});
         return;
       }}
       const params = new URLSearchParams();
@@ -7710,8 +7714,10 @@ def _render_shell(status: dict[str, Any]) -> str:
       document.querySelector("#attendanceTrendChart").innerHTML = attendanceChart(attendanceTrend);
       renderAttentionList("#attentionList", data.needs_attention || [], false);
       renderAttentionList("#moverList", data.top_movers || [], true);
+      renderAnomalyList(data.anomaly_alerts || []);
       document.querySelector("#attentionMeta").textContent = `${{(data.needs_attention || []).length}}명`;
       document.querySelector("#moverMeta").textContent = `${{(data.top_movers || []).length}}명`;
+      document.querySelector("#anomalyMeta").textContent = `${{(data.anomaly_alerts || []).length}}건`;
       renderStudentCards(data.students || []);
       renderStudentTable(data.students || []);
       const label = document.querySelector("#studentCountLabel");
@@ -7773,6 +7779,23 @@ def _render_shell(status: dict[str, Any]) -> str:
             <span class="mini-bar">미제출 <span class="mini-track"><span class="mini-fill" style="width:${{Math.min((item.homework_missing || 0) * 24, 100)}}%; background: var(--accent)"></span></span></span>
           </div>
           <span class="cell-sub">${{movers ? deltaText(item.score_delta) : riskText(item)}}</span>
+        </div>
+      `).join("");
+    }}
+
+    function renderAnomalyList(items) {{
+      const target = document.querySelector("#anomalyList");
+      if (!target) return;
+      if (!items.length) {{
+        target.innerHTML = `<div class="empty">감지된 변화 알림이 없습니다.</div>`;
+        return;
+      }}
+      target.innerHTML = items.map((item) => `
+        <div class="attention-item ${{item.severity === "high" ? "high" : "medium"}}">
+          <strong>${{escapeHtml(item.title || "변화 감지")}}</strong>
+          <span class="cell-sub">${{escapeHtml(item.student_name || "미등록")}} · ${{escapeHtml(item.class_name || "-")}}</span>
+          <span class="cell-sub">${{escapeHtml(item.detail || "")}}</span>
+          <span class="cell-sub">${{escapeHtml(item.next_action || "")}}</span>
         </div>
       `).join("");
     }}

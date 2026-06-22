@@ -245,6 +245,7 @@ def build_course_dashboard(
     attendance_trend = _attendance_trend(rows)
     score_trend = _score_trend(score_points)
     summary = _summary(rows, score_points, metrics, course_id=course_id, student_id=student_id)
+    anomaly_alerts = _anomaly_alerts(metrics)
 
     options = _course_options(all_rows, students=active_students, query="", limit=50, cfg=cfg)
     student_options = _student_option_items(active_students, limit=80)
@@ -259,7 +260,7 @@ def build_course_dashboard(
             "since": since.date().isoformat(),
             "until": now.date().isoformat(),
         },
-        "summary": {**summary, "scope_label": scope_label},
+        "summary": {**summary, "scope_label": scope_label, "anomaly_count": len(anomaly_alerts)},
         "course_options": options,
         "student_options": student_options,
         "score_trend": score_trend,
@@ -267,6 +268,7 @@ def build_course_dashboard(
         "students": metrics,
         "needs_attention": _needs_attention(metrics),
         "top_movers": _top_movers(metrics),
+        "anomaly_alerts": anomaly_alerts,
     }
     if warnings:
         payload["warning"] = "storage_unavailable"
@@ -345,6 +347,7 @@ def demo_course_dashboard(
     students_by_id = {student.classin_id: student for student in students}
     metrics = _student_metrics(rows, exams, students_by_id)
     score_points = _grade_points(rows, exams)
+    anomaly_alerts = _anomaly_alerts(metrics)
     options = _course_options(all_rows, students=students, query="", limit=50)
     student_options = _student_option_items(students, limit=80)
     summary = _summary(rows, score_points, metrics, course_id=course_id, student_id=student_id)
@@ -358,7 +361,11 @@ def demo_course_dashboard(
             "since": since.date().isoformat(),
             "until": now.date().isoformat(),
         },
-        "summary": {**summary, "scope_label": _scope_label(summary, options, student_options)},
+        "summary": {
+            **summary,
+            "scope_label": _scope_label(summary, options, student_options),
+            "anomaly_count": len(anomaly_alerts),
+        },
         "course_options": options,
         "student_options": student_options,
         "score_trend": _score_trend(score_points),
@@ -366,6 +373,7 @@ def demo_course_dashboard(
         "students": metrics,
         "needs_attention": _needs_attention(metrics),
         "top_movers": _top_movers(metrics),
+        "anomaly_alerts": anomaly_alerts,
     }
     return payload
 
@@ -917,6 +925,100 @@ def _top_movers(metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
     movers = [item for item in metrics if item.get("score_delta") is not None]
     movers.sort(key=lambda item: item["score_delta"], reverse=True)
     return movers[:5]
+
+
+def _anomaly_alerts(metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
+    for item in metrics:
+        alerts.extend(_student_anomaly_alerts(item))
+    alerts.sort(
+        key=lambda alert: (
+            _severity_rank(alert["severity"]),
+            alert["student_name"],
+            alert["kind"],
+        )
+    )
+    return alerts[:12]
+
+
+def _student_anomaly_alerts(item: dict[str, Any]) -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
+    recent_scores = [
+        float(point["value"])
+        for point in item.get("score_points", [])[-3:]
+        if point.get("value") is not None
+    ]
+    if len(recent_scores) == 3 and recent_scores[0] > recent_scores[1] > recent_scores[2]:
+        drop = round(recent_scores[0] - recent_scores[2], 1)
+        severity = "high" if drop >= 15 or recent_scores[-1] < 70 else "medium"
+        alerts.append(
+            _anomaly_alert(
+                item,
+                kind="score_decline",
+                severity=severity,
+                title="성적 3회 연속 하락",
+                detail=f"{recent_scores[0]:.1f}점 → {recent_scores[-1]:.1f}점 ({drop:.1f}점 하락)",
+                next_action="최근 시험/숙제 난도와 오답 유형을 확인하세요.",
+            )
+        )
+
+    attendance_rates = [
+        float(point["attendance_rate"])
+        for point in item.get("attendance_points", [])[-3:]
+        if point.get("attendance_rate") is not None
+    ]
+    if len(attendance_rates) == 3 and attendance_rates[0] > attendance_rates[1] > attendance_rates[2]:
+        drop_pct = round((attendance_rates[0] - attendance_rates[2]) * 100, 1)
+        severity = "high" if attendance_rates[-1] < 0.72 else "medium"
+        alerts.append(
+            _anomaly_alert(
+                item,
+                kind="attendance_decline",
+                severity=severity,
+                title="출석률 3주 연속 하락",
+                detail=f"{attendance_rates[0] * 100:.0f}% → {attendance_rates[-1] * 100:.0f}% ({drop_pct:.1f}%p 하락)",
+                next_action="결석/지각 사유와 보강 필요 여부를 확인하세요.",
+            )
+        )
+
+    homework_missing = int(item.get("homework_missing") or 0)
+    if homework_missing >= 3:
+        alerts.append(
+            _anomaly_alert(
+                item,
+                kind="homework_repeated",
+                severity="high",
+                title="반복 미제출 누적",
+                detail=f"최근 기간 미제출 {homework_missing}건",
+                next_action="보호자 안내 전 제출 가능 일정을 먼저 확인하세요.",
+            )
+        )
+    return alerts
+
+
+def _anomaly_alert(
+    item: dict[str, Any],
+    *,
+    kind: str,
+    severity: str,
+    title: str,
+    detail: str,
+    next_action: str,
+) -> dict[str, Any]:
+    return {
+        "kind": kind,
+        "severity": severity,
+        "title": title,
+        "detail": detail,
+        "next_action": next_action,
+        "student_classin_id": item.get("student_classin_id", ""),
+        "student_name": item.get("student_name", "미등록"),
+        "class_name": item.get("class_name", ""),
+    }
+
+
+def _severity_rank(value: str) -> int:
+    return {"high": 0, "medium": 1, "low": 2}.get(value, 3)
 
 
 def _exam_score(row: dict[str, Any]) -> float | None:
