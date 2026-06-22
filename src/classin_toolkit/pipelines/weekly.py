@@ -17,6 +17,7 @@ from pathlib import Path
 
 from ..config import AppConfig
 from ..intelligence.weekly_report import build_weekly_report
+from .data_merge import build_report_contexts
 from ..storage.html_renderer import HtmlWeeklyRenderer
 from ..storage.notion_repo import NotionRepo, StudentRecord
 from ..storage.output_port import WeeklyRenderInput
@@ -63,6 +64,7 @@ def generate_drafts(
     if student_classin_ids is not None:
         selected_ids = set(student_classin_ids)
         students = [student for student in students if student.classin_id in selected_ids]
+    report_contexts = build_report_contexts(cfg, [_student_context_row(student) for student in students]).contexts
     log.info(
         "weekly drafts for %d students (%s ~ %s, class=%s, selected=%s)",
         len(students),
@@ -76,7 +78,15 @@ def generate_drafts(
     for student in students:
         try:
             draft = _one_student(
-                cfg, repo, renderer, student, this_start, this_end, prev_start, prev_end
+                cfg,
+                repo,
+                renderer,
+                student,
+                this_start,
+                this_end,
+                prev_start,
+                prev_end,
+                report_context=report_contexts.get(student.classin_id),
             )
             if draft:
                 drafts.append(draft)
@@ -134,6 +144,7 @@ def _one_student(
     this_end: datetime,
     prev_start: datetime,
     prev_end: datetime,
+    report_context: dict[str, object] | None = None,
 ) -> DraftRecord | None:
     lessons = repo.weekly_student_stats(
         student_page_id=student.page_id, since=this_start, until=this_end
@@ -155,6 +166,7 @@ def _one_student(
         lessons=lessons,
         prev_week_lessons=prev,
         exam_results=exams,
+        report_context=report_context,
     )
 
     inp = WeeklyRenderInput(
@@ -191,6 +203,14 @@ def _index_path(cfg: AppConfig, period_start: datetime) -> Path:
     out_dir = Path(cfg.output.weekly.path)
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir / f"{period_start.date()}_{DRAFT_INDEX_NAME}"
+
+
+def _student_context_row(student: StudentRecord) -> dict[str, str]:
+    return {
+        "student_classin_id": student.classin_id,
+        "student_name": student.name,
+        "student_class_name": student.class_name,
+    }
 
 
 def _write_index(cfg: AppConfig, period_start: datetime, drafts: list[DraftRecord]) -> None:

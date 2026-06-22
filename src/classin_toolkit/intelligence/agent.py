@@ -8,12 +8,14 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from rich.console import Console
 from rich.markdown import Markdown
 
 from ..config import AppConfig
 from ..intelligence.claude_client import get_claude
+from ..pipelines.data_merge import build_report_contexts
 from ..pipelines.exams import query_missing_exam
 from ..pipelines.weekly import run_weekly_reports
 from ..storage.notion_repo import NotionRepo
@@ -70,6 +72,19 @@ TOOLS: list[dict] = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "query_report_context",
+        "description": "학생별 주간 리포트와 로컬/오프라인 병합 context를 조회합니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "student_name": {
+                    "type": "string",
+                    "description": "학생 이름 부분 검색 (선택)",
+                },
+            },
+        },
+    },
+    {
         "name": "trigger_weekly_report",
         "description": "이번 주 전체 학생 개인화 리포트를 생성하고 Notion에 저장합니다.",
         "input_schema": {"type": "object", "properties": {}},
@@ -79,6 +94,7 @@ TOOLS: list[dict] = [
 _SYSTEM = """\
 당신은 학원 운영 AI 어시스턴트입니다. ClassIn 수업 데이터와 Notion DB를 기반으로 원장·교사의 질문에 답합니다.
 - 학생 데이터가 필요하면 반드시 도구를 먼저 호출하세요.
+- 상담 메모, 오프라인 성적, 첨부 자료처럼 보고서 맥락이 필요하면 query_report_context를 호출하세요.
 - 숫자는 구체적으로, 판단은 간결하게.
 - 학부모 발송용 문구를 요청받으면 따뜻하고 전문적인 한국어로 작성하세요.
 """
@@ -148,11 +164,62 @@ def _execute_tool(name: str, tool_input: dict, repo: NotionRepo, cfg: AppConfig)
             for s in students
         ]
 
+    if name == "query_report_context":
+        student_name = str(tool_input.get("student_name") or "").strip()
+        students = repo.list_active_students()
+        if student_name:
+            students = [student for student in students if student_name in student.name]
+        result = build_report_contexts(cfg, [_student_context_row(student) for student in students])
+        return {
+            "summary": result.summary,
+            "students": [
+                {
+                    "student_name": student.name,
+                    "class": student.class_name,
+                    "classin_id": student.classin_id,
+                    "context": _compact_report_context(result.contexts.get(student.classin_id)),
+                }
+                for student in students
+            ],
+            "needs_review_items": result.needs_review_items[:10],
+        }
+
     if name == "trigger_weekly_report":
         n = run_weekly_reports(cfg)
         return {"reports_generated": n}
 
     return {"error": f"알 수 없는 도구: {name}"}
+
+
+def _student_context_row(student: Any) -> dict[str, str]:
+    return {
+        "student_classin_id": student.classin_id,
+        "student_name": student.name,
+        "student_class_name": student.class_name,
+    }
+
+
+def _compact_report_context(context: dict[str, Any] | None) -> dict[str, Any]:
+    if not context:
+        return {"has_context": False}
+    return {
+        "has_context": bool(context.get("has_context")),
+        "summary": context.get("summary", ""),
+        "badges": list(context.get("badges") or [])[:6],
+        "offline_attendance": int(context.get("offline_attendance") or 0),
+        "offline_scores": int(context.get("offline_scores") or 0),
+        "memos": int(context.get("memos") or 0),
+        "attachments": int(context.get("attachments") or 0),
+        "sources": [
+            {
+                "kind": source.get("kind", ""),
+                "date": source.get("date", ""),
+                "detail": source.get("detail", ""),
+            }
+            for source in list(context.get("sources") or [])[:8]
+            if isinstance(source, dict)
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------

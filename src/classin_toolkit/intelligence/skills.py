@@ -7,10 +7,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from ..config import AppConfig
+from ..pipelines.data_merge import build_report_contexts
 from ..pipelines.demo_filter import without_seed_demo_rows, without_seed_demo_students
 from ..pipelines.exams import query_missing_exam
 from ..pipelines.weekly import run_weekly_reports
-from ..storage.notion_repo import NotionRepo
+from ..storage.notion_repo import NotionRepo, StudentRecord
 
 ToolResult = dict[str, Any] | list[Any]
 SkillHandler = Callable[[dict[str, Any], NotionRepo, AppConfig], ToolResult]
@@ -98,6 +99,32 @@ def _list_students(
     ]
 
 
+def _query_report_context(
+    tool_input: dict[str, Any],
+    repo: NotionRepo,
+    cfg: AppConfig,
+) -> ToolResult:
+    student_name = str(tool_input.get("student_name") or "").strip()
+    students = without_seed_demo_students(repo.list_active_students())
+    if student_name:
+        students = [student for student in students if student_name in student.name]
+    rows = [_student_context_row(student) for student in students]
+    result = build_report_contexts(cfg, rows)
+    return {
+        "summary": result.summary,
+        "students": [
+            {
+                "student_name": student.name,
+                "class": student.class_name,
+                "classin_id": student.classin_id,
+                "context": _compact_report_context(result.contexts.get(student.classin_id)),
+            }
+            for student in students
+        ],
+        "needs_review_items": result.needs_review_items[:10],
+    }
+
+
 def _query_missing_exam(
     tool_input: dict[str, Any],
     repo: NotionRepo,
@@ -128,6 +155,37 @@ def _trigger_weekly_report(
     cfg: AppConfig,
 ) -> ToolResult:
     return {"reports_generated": run_weekly_reports(cfg)}
+
+
+def _student_context_row(student: StudentRecord) -> dict[str, str]:
+    return {
+        "student_classin_id": student.classin_id,
+        "student_name": student.name,
+        "student_class_name": student.class_name,
+    }
+
+
+def _compact_report_context(context: dict[str, Any] | None) -> dict[str, Any]:
+    if not context:
+        return {"has_context": False}
+    return {
+        "has_context": bool(context.get("has_context")),
+        "summary": context.get("summary", ""),
+        "badges": list(context.get("badges") or [])[:6],
+        "offline_attendance": int(context.get("offline_attendance") or 0),
+        "offline_scores": int(context.get("offline_scores") or 0),
+        "memos": int(context.get("memos") or 0),
+        "attachments": int(context.get("attachments") or 0),
+        "sources": [
+            {
+                "kind": source.get("kind", ""),
+                "date": source.get("date", ""),
+                "detail": source.get("detail", ""),
+            }
+            for source in list(context.get("sources") or [])[:8]
+            if isinstance(source, dict)
+        ],
+    }
 
 
 SKILLS: tuple[AgentSkill, ...] = (
@@ -163,6 +221,20 @@ SKILLS: tuple[AgentSkill, ...] = (
         description="List active students from the Notion student master.",
         input_schema={"type": "object", "properties": {}},
         handler=_list_students,
+    ),
+    AgentSkill(
+        name="query_report_context",
+        description="Query weekly report and local/offline context merged by student.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "student_name": {
+                    "type": "string",
+                    "description": "Optional student name substring.",
+                },
+            },
+        },
+        handler=_query_report_context,
     ),
     AgentSkill(
         name="query_missing_exam",

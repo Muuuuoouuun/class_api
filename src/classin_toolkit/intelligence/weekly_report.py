@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from ..config import AppConfig
 from ..storage.notion_repo import StudentRecord
@@ -32,6 +33,7 @@ def build_weekly_report(
     lessons: list[dict],
     prev_week_lessons: list[dict] | None = None,
     exam_results: list[dict] | None = None,
+    report_context: dict[str, Any] | None = None,
 ) -> WeeklyReport:
     system = load_prompt("weekly_report")
     payload = {
@@ -48,6 +50,7 @@ def build_weekly_report(
         "this_week_lessons": lessons,
         "prev_week_lessons": prev_week_lessons or [],
         "this_week_exams": exam_results or [],
+        "report_context": _compact_report_context(report_context),
     }
     text = run_structured(
         cfg,
@@ -57,3 +60,25 @@ def build_weekly_report(
         max_tokens=2048,
     )
     return WeeklyReport.parse(text)
+
+
+def _compact_report_context(context: dict[str, Any] | None) -> dict[str, Any]:
+    if not context or not context.get("has_context"):
+        return {}
+    return {
+        "summary": context.get("summary", ""),
+        "badges": list(context.get("badges") or [])[:6],
+        "offline_attendance": int(context.get("offline_attendance") or 0),
+        "offline_scores": int(context.get("offline_scores") or 0),
+        "memos": int(context.get("memos") or 0),
+        "attachments": int(context.get("attachments") or 0),
+        "sources": [
+            {
+                "kind": source.get("kind", ""),
+                "date": source.get("date", ""),
+                "detail": source.get("detail", ""),
+            }
+            for source in list(context.get("sources") or [])[:8]
+            if isinstance(source, dict)
+        ],
+    }
