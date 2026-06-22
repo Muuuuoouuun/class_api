@@ -75,7 +75,8 @@ local_data/inbox/
 local_data/normalized/
   ├─ attendance.jsonl
   ├─ scores.jsonl
-  └─ memos.jsonl
+  ├─ memos.jsonl
+  └─ attachments.jsonl
 
         ↓
 
@@ -84,6 +85,15 @@ local_data/normalized/
 
 상황판의 상담 후보, 주간 보고서, AI 질문 응답에 반영
 ```
+
+현재 구현은 정규화 파일을 별도로 쓰지 않고, `src/classin_toolkit/pipelines/data_merge.py`에서
+읽기 전용으로 메모리 context를 만든다. 지원하는 입력 규칙은 아래와 같다.
+
+- `attendance/*.csv`: `student_classin_id` 또는 `classin_id`, `student_name`, `class_name`, `date`, `attendance` 컬럼을 우선 사용한다.
+- `scores/*.xlsx`: `student_classin_id` 또는 `classin_id`, `student_name`, `class_name`, `subject`, `score`, `date` 컬럼을 우선 사용한다.
+- `memos/*.md`: 상단 12줄 안의 `student_classin_id`, `student_name`, `class_name`, `date` 메타데이터를 읽는다.
+- `attachments/*`: 파일명에 ClassIn ID가 있거나 같은 이름의 JSON 보조 파일에 `student_classin_id`가 있으면 자동 연결한다.
+- 자동 연결이 되지 않은 항목은 `needs_review_items`로 남기고, 원본 파일은 수정하지 않는다.
 
 규칙:
 

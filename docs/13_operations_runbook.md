@@ -8,7 +8,7 @@
 - [ ] `config.yaml` 학원별 복사본 생성 (`config.yaml.example` 기반)
 - [ ] ClassIn SID / secret_key / webhook_secret 확인 (학원 측과 공유 전 확인)
 - [ ] Notion 통합(Integration) 생성 → 토큰 발급
-- [ ] Notion DB 3종 세팅 (12_notion_schema.md 기준) → DB ID 3개 확보
+- [ ] Notion DB 5종 세팅 (12_notion_schema.md 기준) → DB ID 5개 확보
 - [ ] Anthropic API 키 발급 (학원 고유 키 vs MOON 공용 키 정책 결정)
 - [ ] Cloudflare 계정 + `cloudflared` 바이너리 확보
 

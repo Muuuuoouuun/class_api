@@ -16,8 +16,8 @@
 | 번호 | 문서 | 요지 |
 |---|---|---|
 | 10 | [architecture](10_architecture.md) | Layer 분리 구조 + 실 코드 파일 매핑 + 데이터 흐름 |
-| 11 | [api_integration](11_api_integration.md) | ClassIn API v2 서명·엔드포인트·Webhook Cmd + 미확정 항목 |
-| 12 | [notion_schema](12_notion_schema.md) | Notion DB 3종 컬럼 정의 (학생·수업 기록·리포트) |
+| 11 | [api_integration](11_api_integration.md) | ClassIn API v2 서명·엔드포인트·Webhook Cmd + 운영 확인 항목 |
+| 12 | [notion_schema](12_notion_schema.md) | Notion DB 5종 컬럼 정의 (학생·수업 기록·리포트·메모·시험) |
 
 ## 운영 (Ops) — 어떻게 굴리는가
 

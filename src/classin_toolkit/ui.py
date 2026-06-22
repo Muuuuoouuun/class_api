@@ -1449,6 +1449,7 @@ def _empty_report_context() -> dict[str, Any]:
         "offline_attendance": 0,
         "offline_scores": 0,
         "memos": 0,
+        "attachments": 0,
         "badges": [],
         "summary": "",
         "sources": [],
@@ -1557,6 +1558,7 @@ def _demo_missing_homework_payload() -> dict[str, Any]:
                 ),
                 "offline_scores": sum(context["offline_scores"] for context in contexts.values()),
                 "memos": sum(context["memos"] for context in contexts.values()),
+                "attachments": sum(context["attachments"] for context in contexts.values()),
                 "needs_review": 1,
             },
             "needs_review_items": [
@@ -1638,12 +1640,14 @@ def _demo_report_contexts() -> dict[str, dict[str, Any]]:
             "offline_attendance": 1,
             "offline_scores": 1,
             "memos": 1,
-            "badges": ["리포트 초안", "오프라인 시험 1건", "상담 메모 1건"],
+            "attachments": 1,
+            "badges": ["리포트 초안", "오프라인 시험 1건", "상담 메모 1건", "공유 자료 1건"],
             "summary": "리포트 초안 · 오프라인 시험 1건 · 상담 메모 1건",
             "sources": [
                 {"kind": "weekly_report", "source": "demo://weekly", "detail": "초안"},
                 {"kind": "offline_score", "source": "demo://scores", "detail": "단원평가 68점"},
                 {"kind": "memo", "source": "demo://memos", "detail": "등원 시간 상담"},
+                {"kind": "attachment", "source": "demo://attachments", "detail": "공유 자료: 상담지"},
             ],
         }
     )
@@ -1661,6 +1665,7 @@ def _demo_report_contexts() -> dict[str, dict[str, Any]]:
             "offline_attendance": 0,
             "offline_scores": 1,
             "memos": 2,
+            "attachments": 0,
             "badges": ["리포트 초안", "오프라인 시험 1건", "상담 메모 2건"],
             "summary": "리포트 초안 · 오프라인 시험 1건 · 상담 메모 2건",
             "sources": [
@@ -1684,6 +1689,7 @@ def _demo_report_contexts() -> dict[str, dict[str, Any]]:
             "offline_attendance": 1,
             "offline_scores": 0,
             "memos": 1,
+            "attachments": 0,
             "badges": ["리포트 승인됨", "오프라인 출결 1건", "상담 메모 1건"],
             "summary": "리포트 승인됨 · 오프라인 출결 1건 · 상담 메모 1건",
             "sources": [

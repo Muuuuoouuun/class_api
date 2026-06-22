@@ -79,6 +79,7 @@ def build_report_contexts(
         "offline_attendance": sum(context["offline_attendance"] for context in contexts.values()),
         "offline_scores": sum(context["offline_scores"] for context in contexts.values()),
         "memos": sum(context["memos"] for context in contexts.values()),
+        "attachments": sum(context["attachments"] for context in contexts.values()),
         "needs_review": len(needs_review),
     }
     return MergeResult(contexts=contexts, needs_review_items=needs_review, summary=summary)
@@ -116,6 +117,7 @@ def _empty_context() -> dict[str, Any]:
         "offline_attendance": 0,
         "offline_scores": 0,
         "memos": 0,
+        "attachments": 0,
         "badges": [],
         "summary": "",
         "sources": [],
@@ -165,6 +167,7 @@ def _local_inbox_items(inbox_dir: Path) -> list[MergeItem]:
         *_attendance_items(inbox_dir / "attendance"),
         *_score_items(inbox_dir / "scores"),
         *_memo_items(inbox_dir / "memos"),
+        *_attachment_items(inbox_dir / "attachments"),
     ]
 
 
@@ -245,6 +248,36 @@ def _memo_items(path: Path) -> list[MergeItem]:
     return items
 
 
+def _attachment_items(path: Path) -> list[MergeItem]:
+    items: list[MergeItem] = []
+    if not path.exists():
+        return items
+    for attachment_path in sorted(item for item in path.glob("*") if item.is_file()):
+        if attachment_path.suffix.lower() == ".json":
+            continue
+        meta = _attachment_metadata(attachment_path)
+        classin_id = _clean(meta.get("student_classin_id") or meta.get("classin_id"))
+        if not classin_id:
+            classin_id = _id_from_filename(attachment_path)
+        title = _clean(meta.get("detail") or meta.get("title")) or attachment_path.name
+        items.append(
+            MergeItem(
+                kind="attachment",
+                source=str(attachment_path),
+                student_classin_id=classin_id,
+                student_name=_clean(meta.get("student_name") or meta.get("student")),
+                class_name=_clean(meta.get("class_name") or meta.get("class")),
+                date=_clean(meta.get("date")),
+                detail=f"공유 자료: {title}",
+                metadata={
+                    "filename": attachment_path.name,
+                    "extension": attachment_path.suffix.lower(),
+                },
+            )
+        )
+    return items
+
+
 def _match_student(item: MergeItem, known: list[KnownStudent]) -> str:
     if item.student_classin_id:
         for student in known:
@@ -286,6 +319,8 @@ def _apply_item(
         context["offline_scores"] += 1
     elif item.kind == "memo":
         context["memos"] += 1
+    elif item.kind == "attachment":
+        context["attachments"] += 1
 
     context["sources"].append(
         {
@@ -311,6 +346,8 @@ def _finalize_context(context: dict[str, Any]) -> None:
         badges.append(f"오프라인 시험 {context['offline_scores']}건")
     if context["memos"]:
         badges.append(f"상담 메모 {context['memos']}건")
+    if context["attachments"]:
+        badges.append(f"공유 자료 {context['attachments']}건")
     context["badges"] = badges
     context["summary"] = " · ".join(badges[:3])
 
@@ -355,8 +392,22 @@ def _memo_excerpt(text: str) -> str:
     return "상담 메모"
 
 
+def _attachment_metadata(path: Path) -> dict[str, Any]:
+    candidates = [path.with_suffix(path.suffix + ".json"), path.with_suffix(".json")]
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        try:
+            raw = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(raw, dict):
+            return raw
+    return {}
+
+
 def _id_from_filename(path: Path) -> str:
-    match = re.search(r"\b\d{4,}\b", path.stem)
+    match = re.search(r"(?<!\d)\d{4,}(?!\d)", path.stem)
     return match.group(0) if match else ""
 
 

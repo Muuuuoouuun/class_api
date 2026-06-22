@@ -183,7 +183,7 @@ docs/18_teacher_dashboard_data_merge.md를 먼저 읽고 작업하세요.
 ## 9. 현재 우선순위
 
 1. 파일럿 학원 1곳 기준으로 Notion DB 5종을 실제 생성하고 `config.yaml`을 채운다.
-2. Webhook SafeKey 검증 알고리즘을 ClassIn 담당자에게 확인한다.
+2. 실 Webhook 샘플 1~2주 캡처로 SafeKey 검증 로그를 보관한다.
 3. 로컬 UI를 선생님용 상황판 중심으로 정리해 미제출, 발송 여부, 확인 필요 학생을 바로 처리하게 한다.
 4. 보고서와 로컬/오프라인 공유 데이터 병합 구조를 추가해 상담 맥락을 상황판과 주간 리포트에 반영한다.
 5. 코스/학생 성과 대시보드(`pipelines/course_dashboard.py`)는 Notion lesson+exam 기록을

@@ -60,9 +60,11 @@ def test_build_report_contexts_merges_weekly_csv_xlsx_and_memos(tmp_path: Path) 
     attendance = inbox / "attendance"
     scores = inbox / "scores"
     memos = inbox / "memos"
+    attachments = inbox / "attachments"
     attendance.mkdir(parents=True)
     scores.mkdir()
     memos.mkdir()
+    attachments.mkdir()
 
     attendance_file = attendance / "offline.csv"
     attendance_file.write_text(
@@ -85,6 +87,8 @@ def test_build_report_contexts_merges_weekly_csv_xlsx_and_memos(tmp_path: Path) 
         "집중도 하락으로 상담 필요",
         encoding="utf-8",
     )
+    (attachments / "10002_parent_note.pdf").write_bytes(b"%PDF-1.4\n")
+    (attachments / "unmatched_scan.pdf").write_bytes(b"%PDF-1.4\n")
     before = attendance_file.read_text(encoding="utf-8")
 
     result = build_report_contexts(
@@ -108,12 +112,53 @@ def test_build_report_contexts_merges_weekly_csv_xlsx_and_memos(tmp_path: Path) 
     assert context["weekly_report"]["status"] == "draft_ready"
     assert context["offline_attendance"] == 1
     assert context["offline_scores"] == 1
+    assert context["attachments"] == 1
     assert "리포트 초안" in context["badges"]
+    assert "공유 자료 1건" in context["badges"]
     assert "오프라인 시험 1건" in context["summary"]
     assert result.contexts["10003"]["memos"] == 1
-    assert result.summary["needs_review"] == 1
+    assert result.summary["attachments"] == 1
+    assert result.summary["needs_review"] == 2
     assert result.needs_review_items[0]["student_name"] == "미등록"
     assert attendance_file.read_text(encoding="utf-8") == before
+
+
+def test_build_report_contexts_matches_attachment_sidecar(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    inbox = tmp_path / "local_data" / "inbox"
+    attachments = inbox / "attachments"
+    attachments.mkdir(parents=True)
+    attachment = attachments / "parent_note.pdf"
+    attachment.write_bytes(b"%PDF-1.4\n")
+    (attachments / "parent_note.pdf.json").write_text(
+        json.dumps(
+            {
+                "student_classin_id": "10003",
+                "date": "2026-04-25",
+                "detail": "학부모 상담 자료",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    result = build_report_contexts(
+        cfg,
+        [
+            {
+                "student_classin_id": "10003",
+                "student_name": "이하락",
+                "student_class_name": "고2-A",
+            },
+        ],
+        inbox_dir=inbox,
+    )
+
+    context = result.contexts["10003"]
+    assert context["attachments"] == 1
+    assert context["sources"][0]["detail"] == "공유 자료: 학부모 상담 자료"
+    assert result.summary["attachments"] == 1
+    assert result.summary["needs_review"] == 0
 
 
 def _write_xlsx(path: Path, rows: list[list[str]]) -> None:

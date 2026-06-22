@@ -98,7 +98,7 @@ classin-toolkit ui --demo # config/Notion 없이 데모 상황판
 
 ## 다음 할 일
 
-1. ClassIn 담당자에게 `datasub/publicfield.html` 내 SafeKey 정확 알고리즘 확인
+1. 실 Webhook 샘플 1~2주 캡처로 SafeKey 검증 로그 보관
 2. Notion DB 5종 실제 생성 후 `config.yaml` 의 DB ID 채우기
 3. 5 페르소나 페이크 데이터로 MVP2 리포트 차별화 수동 검증
 4. 선생님 상황판을 "오늘 처리할 학생 큐"로 재구성하고 보고서·로컬/오프라인 데이터 병합 반영
