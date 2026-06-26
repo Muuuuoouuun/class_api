@@ -524,9 +524,9 @@ def create_app(
         try:
             result = run_core_engine(cfg, schedule_text=schedule_text, dry_run=True)
         except Exception as exc:
-            raise _service_error("스케줄 dry-run", exc) from exc
+            raise _service_error("스케줄 사전 검토", exc) from exc
         return _ok(
-            "스케줄 dry-run을 완료했습니다.",
+            "스케줄 사전 검토를 완료했습니다.",
             summary={
                 "courses": result.courses_created,
                 "lessons": result.lessons_created,
@@ -644,7 +644,7 @@ def create_app(
         except Exception as exc:
             raise _service_error("OMR 답안지 생성", exc) from exc
         return _ok(
-            "OMR 답안지 dry-run을 완료했습니다." if result.dry_run else "OMR 답안지를 생성했습니다.",
+            "OMR 답안지 생성 전 검토를 완료했습니다." if result.dry_run else "OMR 답안지를 생성했습니다.",
             activity_id=result.activity_id,
             name=result.name,
             released=result.released,
@@ -654,9 +654,9 @@ def create_app(
     @app.post("/api/sso-link")
     async def api_sso_link(request: Request) -> JSONResponse:
         payload = await _json_payload(request)
-        uid = _required_payload_text(payload, "uid", "UID")
-        course_id = _required_payload_text(payload, "course_id", "Course ID")
-        class_id = _required_payload_text(payload, "class_id", "Class ID")
+        uid = _required_payload_text(payload, "uid", "사용자 식별번호")
+        course_id = _required_payload_text(payload, "course_id", "강좌 ID")
+        class_id = _required_payload_text(payload, "class_id", "수업 ID")
         telephone = _required_payload_text(payload, "telephone", "전화번호")
         device_type = _parse_sso_device_type(payload.get("device_type", 1))
         life_time = _parse_sso_life_time(payload.get("life_time", 86400))
@@ -670,7 +670,7 @@ def create_app(
                 life_time=life_time,
             )
             return _demo_ok(
-                "Demo mode: ClassIn 접속 링크를 생성했습니다.",
+                "데모 접속 링크를 생성했습니다.",
                 link=link,
                 masked_link=_mask_sso_link(link),
                 device_type=device_type,
@@ -693,9 +693,9 @@ def create_app(
                 life_time=life_time,
             )
         except Exception as exc:
-            raise _service_error("ClassIn 접속 링크 생성", exc) from exc
+            raise _service_error("ClassIn 앱 접속 링크 생성", exc) from exc
         return _ok(
-            "ClassIn 접속 링크를 생성했습니다.",
+            "ClassIn 앱 접속 링크를 생성했습니다.",
             link=link,
             masked_link=_mask_sso_link(link),
             device_type=device_type,
@@ -729,7 +729,7 @@ def create_app(
             tmp_path.unlink(missing_ok=True)
 
         return _ok(
-            "시험 결과 dry-run을 완료했습니다." if result.dry_run else "시험 결과를 가져왔습니다.",
+            "시험 결과 매칭 검토를 완료했습니다." if result.dry_run else "시험 결과를 가져왔습니다.",
             summary={
                 "total": result.total_rows,
                 "merged": result.merged_rows,
@@ -772,7 +772,7 @@ def create_app(
             question = (payload.get("question") or "").strip()
             answer = (
                 "데모 기준으로 김지각, 이하락, 최결석 학생이 숙제 확인 대상입니다. "
-                "연락처가 없는 학생은 먼저 학생 Master를 보완해야 합니다."
+                "연락처가 없는 학생은 먼저 학생 정보를 보완해야 합니다."
             )
             return _demo_ok(
                 "Demo mode: AI 응답을 샘플로 생성했습니다.",
@@ -1280,7 +1280,7 @@ def _demo_readiness_payload(mode: str) -> dict[str, Any]:
     items = [
         _readiness_item("local-demo", "데모 데이터", "ok", "5명 페르소나와 샘플 이벤트 준비됨"),
         _readiness_item("local-demo", "Webhook 샘플", "ok", "Attendance/Homework/OMR 이벤트 표시 가능"),
-        _readiness_item("local-demo", "알림 모드", "ok", "dry_run - 외부 발송 없음"),
+        _readiness_item("local-demo", "알림 모드", "ok", "외부 발송 없이 검토"),
     ]
     if mode in ("classin-live", "kakao-live"):
         items.extend(
@@ -1293,7 +1293,7 @@ def _demo_readiness_payload(mode: str) -> dict[str, Any]:
     if mode == "kakao-live":
         items.extend(
             [
-                _readiness_item("kakao-live", "카톡 live 모드", "missing", "데모는 dry_run 전용", "notify.mode 를 live 로 바꾸세요."),
+                _readiness_item("kakao-live", "카톡 실발송 모드", "missing", "데모는 외부 발송 없는 검토 전용", "notify.mode 를 live 로 바꾸세요."),
                 _readiness_item("kakao-live", "알리고 senderkey", "missing", "승인된 발신프로필 키 필요", "notify.aligo.sender_key 를 채우세요."),
                 _readiness_item("kakao-live", "숙제 미제출 템플릿 코드", "missing", "알림톡 템플릿 심사 후 확보", "notify.aligo.template_code_missing_homework 를 채우세요."),
             ]
@@ -1547,16 +1547,16 @@ def _pilot_checklist(
         ),
         _pilot_step(
             "classin",
-            "ClassIn live 키",
+            "ClassIn 실연동 키",
             "ok" if classin_ready else "missing",
-            "SID, secret_key, webhook_secret 입력됨" if classin_ready else "ClassIn live 키 누락",
+            "SID, secret_key, webhook_secret 입력됨" if classin_ready else "ClassIn 실연동 키 누락",
             "ClassIn 대시보드에서 SID/signing key/SafeKey secret을 확정하세요.",
         ),
         _pilot_step(
             "teacher_uid",
-            "교사 UID 매핑",
+            "교사 식별번호 매핑",
             "ok" if teacher_ready else "missing",
-            "LMS 스케줄 생성 가능" if teacher_ready else "LMS createClass용 teacherUid 누락",
+            "LMS 스케줄 생성 가능" if teacher_ready else "ClassIn 수업 생성용 교사 식별번호 누락",
             "classin.teacher_uids 또는 classin.default_teacher_uid를 채우세요.",
         ),
         _pilot_step(
@@ -1727,6 +1727,40 @@ def _webhook_inbox_payload(dump_dir: Path, *, limit: int) -> dict[str, Any]:
     }
 
 
+def _webhook_event_label(cmd: Any) -> str:
+    return {
+        "Attendance": "출결 기록",
+        "End": "수업 종료",
+        "HomeworkSubmit": "숙제 제출",
+        "HomeworkScore": "숙제 점수",
+        "AnswerSheetScore": "OMR 점수",
+        "unreadable": "읽을 수 없음",
+        "unknown": "알 수 없는 이벤트",
+    }.get(str(cmd or "unknown"), str(cmd or "알 수 없는 이벤트"))
+
+
+def _webhook_status_label(status: Any) -> str:
+    return {
+        "parsed": "정리 완료",
+        "review": "확인 필요",
+    }.get(str(status or "review"), "확인 필요")
+
+
+def _webhook_course_label(course_id: Any, class_id: Any, class_name: Any) -> str:
+    class_text = str(class_name or "").strip()
+    if class_text:
+        return class_text
+    course_text = str(course_id or "").strip()
+    class_id_text = str(class_id or "").strip()
+    if course_text and class_id_text:
+        return f"수업 {course_text} · {class_id_text}"
+    if course_text:
+        return f"강좌 {course_text}"
+    if class_id_text:
+        return f"수업 {class_id_text}"
+    return "수업 정보 없음"
+
+
 def _webhook_event_item(path: Path) -> dict[str, Any]:
     stat = path.stat()
     received_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
@@ -1737,47 +1771,63 @@ def _webhook_event_item(path: Path) -> dict[str, Any]:
             "file_name": path.name,
             "received_at": received_at,
             "status": "review",
+            "status_label": _webhook_status_label("review"),
             "cmd": "unreadable",
+            "event_label": _webhook_event_label("unreadable"),
             "detail": _safe_exception(exc),
             "course_id": "",
             "class_id": "",
+            "course_label": _webhook_course_label("", "", ""),
             "class_name": "",
             "activity": "",
             "student_count": 0,
             "students": [],
             "action_at": "",
+            "source_label": "파일 확인 필요",
         }
     if not isinstance(raw, dict):
         return {
             "file_name": path.name,
             "received_at": received_at,
             "status": "review",
+            "status_label": _webhook_status_label("review"),
             "cmd": "unknown",
-            "detail": "JSON object가 아닙니다.",
+            "event_label": _webhook_event_label("unknown"),
+            "detail": "수신 파일 구조를 확인해야 합니다.",
             "course_id": "",
             "class_id": "",
+            "course_label": _webhook_course_label("", "", ""),
             "class_name": "",
             "activity": "",
             "student_count": 0,
             "students": [],
             "action_at": "",
+            "source_label": "파일 확인 필요",
         }
 
     data = raw.get("Data")
     students = _webhook_students(data)
+    cmd = str(raw.get("Cmd") or raw.get("cmd") or "unknown")
+    course_id = str(raw.get("CourseID") or raw.get("courseId") or "")
+    class_id = str(raw.get("ClassID") or raw.get("ClassId") or "")
+    class_name = str(raw.get("ClassName") or raw.get("CourseName") or "")
     return {
         "file_name": path.name,
         "received_at": received_at,
         "status": "parsed",
-        "cmd": str(raw.get("Cmd") or raw.get("cmd") or "unknown"),
+        "status_label": _webhook_status_label("parsed"),
+        "cmd": cmd,
+        "event_label": _webhook_event_label(cmd),
         "detail": "",
-        "course_id": str(raw.get("CourseID") or raw.get("courseId") or ""),
-        "class_id": str(raw.get("ClassID") or raw.get("ClassId") or ""),
-        "class_name": str(raw.get("ClassName") or raw.get("CourseName") or ""),
+        "course_id": course_id,
+        "class_id": class_id,
+        "course_label": _webhook_course_label(course_id, class_id, class_name),
+        "class_name": class_name,
         "activity": _webhook_activity(raw, data),
         "student_count": _webhook_student_count(data, students),
         "students": students[:4],
         "action_at": _epoch_iso(raw.get("ActionTime") or raw.get("TimeStamp")),
+        "source_label": "보관됨",
     }
 
 
@@ -1838,9 +1888,12 @@ def _epoch_iso(value: Any) -> str:
 
 def _webhook_inbox_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
     by_cmd: dict[str, int] = {}
+    by_event_label: dict[str, int] = {}
     for item in items:
         cmd = str(item.get("cmd") or "unknown")
         by_cmd[cmd] = by_cmd.get(cmd, 0) + 1
+        label = str(item.get("event_label") or _webhook_event_label(cmd))
+        by_event_label[label] = by_event_label.get(label, 0) + 1
     return {
         "total": len(items),
         "parsed": sum(1 for item in items if item.get("status") == "parsed"),
@@ -1848,6 +1901,7 @@ def _webhook_inbox_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
         "student_events": sum(int(item.get("student_count") or 0) for item in items),
         "newest_received_at": items[0]["received_at"] if items else "",
         "by_cmd": by_cmd,
+        "by_event_label": by_event_label,
     }
 
 
@@ -2286,9 +2340,9 @@ def _missing_preview_block_reason(
     if not has_parent_phone:
         return "보호자 연락처가 없습니다."
     if message.quality_status == "blocked":
-        return "문구 품질 blocked 상태입니다."
+        return "문구 품질이 발송 제외 상태입니다."
     if notify_mode == "live" and message.quality_status != "ready":
-        return "live 발송은 ready 문구만 허용됩니다."
+        return "실제 발송은 품질 검토를 통과한 문구만 허용됩니다."
     return ""
 
 
@@ -2975,9 +3029,9 @@ def _ops_playbook_steps(hub: dict[str, Any]) -> list[dict[str, Any]]:
             "dashboard",
             "refreshDiagnostics",
             "classin-toolkit check-ready --mode local-demo",
-            f"blockers={int(readiness.get('blockers') or 0)}, warnings={int(readiness.get('warnings') or 0)}, notify={_md_text(notify_mode or 'dry_run')}",
+            f"막힘 {int(readiness.get('blockers') or 0)}건, 확인 {int(readiness.get('warnings') or 0)}건, 발송 방식 {_notify_mode_text(notify_mode)}",
             3,
-            notes=["실 API 점검과 live 생성은 원장 확인 후 실행"],
+            notes=["실 API 점검과 실제 생성은 원장 확인 후 실행"],
         )
     ]
 
@@ -2987,7 +3041,7 @@ def _ops_playbook_steps(hub: dict[str, Any]) -> list[dict[str, Any]]:
                 "data_subscription",
                 "데이터",
                 "ClassIn 수신 데이터 확인",
-                "Webhook 수신함에서 출결·숙제·OMR 이벤트가 정상적으로 들어왔는지 확인합니다.",
+                "ClassIn 수신 기록에서 출결·숙제·OMR 이벤트가 정상적으로 들어왔는지 확인합니다.",
                 "교사",
                 "review" if int(summary.get("data_needs_review") or 0) else "ready",
                 "safe",
@@ -2995,9 +3049,9 @@ def _ops_playbook_steps(hub: dict[str, Any]) -> list[dict[str, Any]]:
                 "data",
                 "refreshWebhookInbox",
                 "classin-toolkit replay-webhook <sample.json>",
-                f"webhook={int(summary.get('incoming_json') or 0)}, needs_review={int(summary.get('data_needs_review') or 0)}",
+                f"수신 원본 {int(summary.get('incoming_json') or 0)}건, 매칭 확인 {int(summary.get('data_needs_review') or 0)}건",
                 4,
-                notes=["원본 dump는 개인정보가 있을 수 있어 외부 공유 금지"],
+                notes=["원본 파일은 개인정보가 있을 수 있어 외부 공유 금지"],
             )
         )
 
@@ -3009,7 +3063,7 @@ def _ops_playbook_steps(hub: dict[str, Any]) -> list[dict[str, Any]]:
                 "missing_homework",
                 "알림",
                 "미제출 알림 큐 처리",
-                "연락처·실패 이력·문구 품질을 확인한 뒤 dry-run 문구를 생성합니다.",
+                "연락처·실패 이력·문구 품질을 확인한 뒤 발송 전 검토 기록을 만듭니다.",
                 "교사",
                 "review" if retry or needs_phone else "ready",
                 "dry_run",
@@ -3017,9 +3071,9 @@ def _ops_playbook_steps(hub: dict[str, Any]) -> list[dict[str, Any]]:
                 "missing",
                 "focusMissingCore",
                 "classin-toolkit sweep-missing-homework",
-                f"missing={int(summary.get('total_missing') or 0)}, retry={retry}, needs_phone={needs_phone}",
+                f"미제출 {int(summary.get('total_missing') or 0)}명, 재시도 {retry}명, 연락처 보완 {needs_phone}명",
                 8,
-                notes=["notify.mode가 dry_run이 아니면 발송 전 다시 확인"],
+                notes=["실제 발송 모드라면 발송 전 다시 확인"],
             )
         )
 
@@ -3037,7 +3091,7 @@ def _ops_playbook_steps(hub: dict[str, Any]) -> list[dict[str, Any]]:
                 "data",
                 "refreshAcademyContexts",
                 "local_data/inbox 확인",
-                f"context={int(summary.get('students_with_context') or 0)}, needs_review={int(summary.get('data_needs_review') or 0)}",
+                f"학생 맥락 {int(summary.get('students_with_context') or 0)}명, 확인 필요 {int(summary.get('data_needs_review') or 0)}건",
                 6,
                 notes=["동명이인·반 누락 자료는 리포트에 자동 반영하지 않음"],
             )
@@ -3057,7 +3111,7 @@ def _ops_playbook_steps(hub: dict[str, Any]) -> list[dict[str, Any]]:
                 "report_quality",
                 "리포트",
                 "개별 리포트 품질·구성 확인",
-                "blocked/review 드래프트와 섹션 preflight를 먼저 보강합니다.",
+                "차단·확인 필요 드래프트와 섹션 구성 점검을 먼저 보강합니다.",
                 "교사",
                 "blocked" if report_risk else ("review" if report_review else "ready"),
                 "review",
@@ -3065,9 +3119,9 @@ def _ops_playbook_steps(hub: dict[str, Any]) -> list[dict[str, Any]]:
                 "reports",
                 "refreshReportCompositions",
                 "classin-toolkit weekly-reports",
-                f"blocked={report_risk}, review={report_review}, ready={int(summary.get('report_ready') or 0)}",
+                f"차단 {report_risk}건, 확인 필요 {report_review}건, 승인 가능 {int(summary.get('report_ready') or 0)}건",
                 10,
-                notes=["blocked 리포트는 기본 승인 대상에서 제외"],
+                notes=["차단 리포트는 기본 승인 대상에서 제외"],
             )
         )
 
@@ -3076,7 +3130,7 @@ def _ops_playbook_steps(hub: dict[str, Any]) -> list[dict[str, Any]]:
             _playbook_step(
                 "report_approval",
                 "리포트",
-                "ready 리포트 승인",
+                "통과 리포트 승인",
                 "품질 점검을 통과한 주간 드래프트만 승인 대상으로 검토합니다.",
                 "원장",
                 "review",
@@ -3085,7 +3139,7 @@ def _ops_playbook_steps(hub: dict[str, Any]) -> list[dict[str, Any]]:
                 "reports",
                 "refreshWeeklyDrafts",
                 "classin-toolkit approve-weekly --week YYYY-MM-DD",
-                f"ready={int(summary.get('report_ready') or 0)}, pending={int(summary.get('report_pending') or 0)}",
+                f"승인 가능 {int(summary.get('report_ready') or 0)}건, 승인 대기 {int(summary.get('report_pending') or 0)}건",
                 5,
                 notes=["Notion 아카이브 쓰기 전 승인 범위 확인"],
             )
@@ -3104,9 +3158,9 @@ def _ops_playbook_steps(hub: dict[str, Any]) -> list[dict[str, Any]]:
             "dashboard",
             "generateOpsReport",
             "classin-toolkit ui --demo",
-            f"brief={len(hub.get('ops_brief') or [])}, work_queue={len(hub.get('work_queue') or [])}",
+            f"브리핑 {len(hub.get('ops_brief') or [])}건, 학생 큐 {len(hub.get('work_queue') or [])}명",
             3,
-            notes=["학부모 연락처·SSO 링크는 운영 리포트에 포함하지 않음"],
+            notes=["학부모 연락처·접속 링크는 운영 리포트에 포함하지 않음"],
         )
     )
     return steps
@@ -3153,14 +3207,14 @@ def _ops_playbook_markdown(
     steps: list[dict[str, Any]],
     generated_at: str,
 ) -> str:
-    academy = _md_text(hub.get("academy") or "Academy Ops")
+    academy = _md_text(hub.get("academy") or "운영 허브")
     summary = hub.get("summary") or {}
     lines = [
         f"# {academy} 자동화 실행계획",
         "",
         f"- 생성: {_md_text(generated_at)}",
         f"- 예상 소요: {sum(int(step.get('duration_min') or 0) for step in steps)}분",
-        f"- 오늘 큐: 미제출 {int(summary.get('total_missing') or 0)}명, 데이터 확인 {int(summary.get('data_needs_review') or 0)}건, 리포트 blocked {int(summary.get('report_blocked') or 0) + int(summary.get('composition_blocked') or 0)}건",
+        f"- 오늘 큐: 미제출 {int(summary.get('total_missing') or 0)}명, 데이터 확인 {int(summary.get('data_needs_review') or 0)}건, 리포트 차단 {int(summary.get('report_blocked') or 0) + int(summary.get('composition_blocked') or 0)}건",
         "",
         "## 실행 순서",
     ]
@@ -3168,8 +3222,8 @@ def _ops_playbook_markdown(
         lines.extend(
             [
                 f"{index}. {_md_text(step.get('phase'))} - {_md_text(step.get('title'))}",
-                f"   - 상태: {_md_text(step.get('status'))} / 위험도: {_md_text(step.get('risk'))} / 담당: {_md_text(step.get('owner'))}",
-                f"   - 실행: {_md_text(step.get('action_label'))} ({_md_text(step.get('tab'))})",
+                f"   - 상태: {_ops_status_text(step.get('status'))} / 위험도: {_ops_risk_text(step.get('risk'))} / 담당: {_md_text(step.get('owner'))}",
+                f"   - 실행: {_md_text(step.get('action_label'))} ({_ops_tab_text(step.get('tab'))})",
                 f"   - 근거: {_md_text(step.get('evidence'))}",
             ]
         )
@@ -3179,8 +3233,8 @@ def _ops_playbook_markdown(
         [
             "",
             "## 안전 게이트",
-            "- live ClassIn 생성·게시·Notion 아카이브는 설정 점검과 원장 확인 후 실행",
-            "- 보호자 발송은 dry_run 문구·연락처·품질 상태를 먼저 확인",
+            "- ClassIn 실제 생성·게시·Notion 아카이브는 설정 점검과 원장 확인 후 실행",
+            "- 보호자 발송은 검토 문구·연락처·품질 상태를 먼저 확인",
             "- 매칭 애매한 학원 데이터는 리포트 문장에 자동 반영하지 않음",
         ]
     )
@@ -3194,7 +3248,7 @@ def _ops_report_markdown(
     academy_contexts: dict[str, Any],
     generated_at: str,
 ) -> str:
-    academy = _md_text(hub.get("academy") or "Academy Ops")
+    academy = _md_text(hub.get("academy") or "운영 허브")
     summary = hub.get("summary") or {}
     readiness = hub.get("readiness") or {}
     webhook_summary = webhook_inbox.get("summary") or {}
@@ -3206,8 +3260,8 @@ def _ops_report_markdown(
         f"# {academy} 운영 리포트",
         "",
         f"- 생성: {_md_text(generated_at)}",
-        f"- 준비 상태: {'ready' if readiness.get('ready') else 'check'} / blockers {int(readiness.get('blockers') or 0)} / warnings {int(readiness.get('warnings') or 0)}",
-        f"- 핵심 큐: 미제출 {int(summary.get('total_missing') or 0)}명, 데이터 확인 {int(summary.get('data_needs_review') or 0)}건, 리포트 blocked {int(summary.get('report_blocked') or 0)}건",
+        f"- 준비 상태: {'준비 완료' if readiness.get('ready') else '확인 필요'} / 막힘 {int(readiness.get('blockers') or 0)}건 / 확인 {int(readiness.get('warnings') or 0)}건",
+        f"- 핵심 큐: 미제출 {int(summary.get('total_missing') or 0)}명, 데이터 확인 {int(summary.get('data_needs_review') or 0)}건, 리포트 차단 {int(summary.get('report_blocked') or 0)}건",
         "",
         "## 1. 오늘 우선순위",
     ]
@@ -3217,7 +3271,7 @@ def _ops_report_markdown(
             lines.append(
                 "- "
                 f"{_md_text(item.get('title') or '-')} "
-                f"({_md_text(item.get('lane') or 'Academy Ops')}): "
+                f"({_md_text(item.get('lane') or '운영 허브')}): "
                 f"{_md_text(item.get('detail') or '')} "
                 f"-> {_md_text(item.get('action_label') or '확인')}"
             )
@@ -3250,9 +3304,9 @@ def _ops_report_markdown(
         [
             "",
             "## 3. ClassIn 데이터 상태",
-            f"- Webhook 원본: {int(summary.get('incoming_json') or 0)}건",
+            f"- 수신 원본: {int(summary.get('incoming_json') or 0)}건",
             f"- 수신함 파싱: {int(webhook_summary.get('parsed') or 0)}건 / 확인 필요 {int(webhook_summary.get('review') or 0)}건",
-            f"- Cmd 분포: {_cmd_summary_text(webhook_summary.get('by_cmd') or {})}",
+            f"- 이벤트 종류: {_cmd_summary_text(webhook_summary.get('by_event_label') or webhook_summary.get('by_cmd') or {})}",
             f"- 숙제 알림: 발송 필요 {int(summary.get('needs_message') or 0)}건, 재시도 {int(summary.get('needs_retry') or 0)}건, 연락처 보완 {int(summary.get('needs_phone') or 0)}건",
             "",
             "## 4. 학원 데이터 융합",
@@ -3274,8 +3328,8 @@ def _ops_report_markdown(
             "",
             "## 5. 개별 리포트 품질",
             f"- 드래프트: 전체 {int(weekly_summary.get('total') or summary.get('report_total') or 0)}건 / 승인 대기 {int(weekly_summary.get('pending') or summary.get('report_pending') or 0)}건",
-            f"- 품질: ready {int(weekly_summary.get('ready_unapproved') or summary.get('report_ready') or 0)}건 / review {int(weekly_summary.get('review_unapproved') or summary.get('report_review') or 0)}건 / blocked {int(weekly_summary.get('blocked_unapproved') or summary.get('report_blocked') or 0)}건",
-            f"- 구성 preflight: review {int(composition_summary.get('review') or summary.get('composition_review') or 0)}건 / blocked {int(composition_summary.get('blocked') or summary.get('composition_blocked') or 0)}건",
+            f"- 품질: 통과 {int(weekly_summary.get('ready_unapproved') or summary.get('report_ready') or 0)}건 / 확인 필요 {int(weekly_summary.get('review_unapproved') or summary.get('report_review') or 0)}건 / 차단 {int(weekly_summary.get('blocked_unapproved') or summary.get('report_blocked') or 0)}건",
+            f"- 구성 점검: 확인 필요 {int(composition_summary.get('review') or summary.get('composition_review') or 0)}건 / 차단 {int(composition_summary.get('blocked') or summary.get('composition_blocked') or 0)}건",
             "",
             "## 6. 다음 액션 체크리스트",
         ]
@@ -3313,6 +3367,40 @@ def _cmd_summary_text(by_cmd: dict[str, Any]) -> str:
     if not by_cmd:
         return "-"
     return ", ".join(f"{_md_text(cmd)} {int(count or 0)}" for cmd, count in sorted(by_cmd.items()))
+
+
+def _notify_mode_text(mode: Any) -> str:
+    return {
+        "dry_run": "외부 발송 없음",
+        "live": "실제 발송",
+    }.get(str(mode or "dry_run"), _md_text(mode or "외부 발송 없음"))
+
+
+def _ops_status_text(status: Any) -> str:
+    return {
+        "ready": "준비 완료",
+        "review": "확인 필요",
+        "blocked": "차단",
+    }.get(str(status or ""), _md_text(status or "-"))
+
+
+def _ops_risk_text(risk: Any) -> str:
+    return {
+        "safe": "안전",
+        "review": "검토 필요",
+        "dry_run": "외부 발송 없음",
+        "live_guard": "실행 전 승인 필요",
+    }.get(str(risk or ""), _md_text(risk or "-"))
+
+
+def _ops_tab_text(tab: Any) -> str:
+    return {
+        "dashboard": "대시보드",
+        "missing": "미제출",
+        "data": "데이터",
+        "reports": "리포트",
+        "settings": "설정",
+    }.get(str(tab or ""), _md_text(tab or "-"))
 
 
 def _md_text(value: Any) -> str:
@@ -3379,7 +3467,7 @@ def _hub_lanes(
     return [
         {
             "id": "api_push",
-            "title": "ClassIn API Push",
+            "title": "ClassIn 생성 작업",
             "label": "수업·숙제·OMR 생성",
             "state": classin_state,
             "metric": "준비" if classin_state != "blocked" else "설정 필요",
@@ -3388,8 +3476,8 @@ def _hub_lanes(
         },
         {
             "id": "data_subscription",
-            "title": "ClassIn Data Sub",
-            "label": "Webhook·출결·숙제 데이터",
+            "title": "ClassIn 수신 데이터",
+            "label": "출결·숙제·시험 수신",
             "state": "warn" if missing_error else ("ready" if notion_state != "blocked" else "blocked"),
             "metric": f"원본 {counts.get('incoming_json', 0)}건",
             "count": summary["total_missing"],
@@ -3465,13 +3553,13 @@ def _hub_focus_items(
     for item in (
         ("needs_message", "연락 필요", "warn", "학부모 알림", "missing"),
         ("needs_retry", "재발송 필요", "danger", "발송 실패", "missing"),
-        ("needs_phone", "연락처 보완", "danger", "학생 Master", "missing"),
-        ("report_blocked", "리포트 blocked", "danger", "품질 점검", "reports"),
-        ("composition_blocked", "구성 blocked", "danger", "근거 부족", "reports"),
+        ("needs_phone", "연락처 보완", "danger", "학생 정보", "missing"),
+        ("report_blocked", "리포트 수정", "danger", "품질 차단", "reports"),
+        ("composition_blocked", "구성 보강", "danger", "근거 부족", "reports"),
         ("report_review", "리포트 검토", "warn", "AI 품질", "reports"),
-        ("composition_review", "구성 보강", "warn", "리포트 preflight", "reports"),
+        ("data_needs_review", "데이터 확인", "warn", "자동 매칭", "data"),
+        ("composition_review", "구성 보강", "warn", "리포트 점검", "reports"),
         ("report_ready", "승인 가능", "info", "주간 리포트", "reports"),
-        ("data_needs_review", "데이터 확인", "warn", "자동 매칭", "missing"),
         ("weekly_indexes", "드래프트 있음", "info", "주간 리포트", "reports"),
     ):
         key, label, tone, detail, tab = item
@@ -3509,7 +3597,6 @@ def _hub_ops_brief(
     lanes: list[dict[str, Any]],
     missing_error: str | None,
 ) -> list[dict[str, Any]]:
-    lane_state = {lane["id"]: lane.get("state", "unknown") for lane in lanes}
     brief: list[dict[str, Any]] = []
     if not status.get("ok"):
         brief.append(
@@ -3520,7 +3607,7 @@ def _hub_ops_brief(
                 "config.yaml을 읽지 못해 자동화 판단을 멈췄습니다.",
                 "설정 열기",
                 "settings",
-                "Academy Ops",
+                "운영 허브",
                 "config.yaml",
                 1,
             )
@@ -3534,8 +3621,8 @@ def _hub_ops_brief(
                 f"ClassIn/Notion/LLM/알림 설정 중 {readiness['blockers']}개가 막혀 있습니다.",
                 "설정 점검",
                 "dashboard",
-                "Academy Ops",
-                "diagnose-apis",
+                "운영 허브",
+                "비파괴 API 진단",
                 1,
             )
         )
@@ -3547,9 +3634,9 @@ def _hub_ops_brief(
                 "데이터 구독 조회 실패",
                 missing_error,
                 "미제출 확인",
-                "missing",
-                "ClassIn Data Sub",
-                "missing-homework query",
+                "data",
+                "수신 데이터",
+                "미제출 조회",
                 2,
             )
         )
@@ -3560,7 +3647,7 @@ def _hub_ops_brief(
             "알림 전송 실패 학생이 있습니다. 연락 전 로그와 번호를 확인하세요.",
             "미제출 확인",
             "missing",
-            "ClassIn Data Sub",
+                "수신 데이터",
             3,
             "danger",
         ),
@@ -3576,7 +3663,7 @@ def _hub_ops_brief(
         ),
         (
             "report_blocked",
-            "blocked 리포트 수정",
+            "차단 리포트 수정",
             "AI 품질 점검에서 막힌 드래프트가 있습니다. 근거·표현·다음 액션을 보강하세요.",
             "리포트 검토",
             "reports",
@@ -3586,7 +3673,7 @@ def _hub_ops_brief(
         ),
         (
             "report_review",
-            "review 리포트 확인",
+            "확인 필요 리포트 검토",
             "교사 확인이 필요한 리포트 드래프트가 있습니다.",
             "리포트 검토",
             "reports",
@@ -3617,10 +3704,10 @@ def _hub_ops_brief(
         (
             "needs_message",
             "미제출 알림 발송",
-            "보호자 연락처가 있는 미제출 학생에게 dry-run 문구를 생성할 수 있습니다.",
+            "보호자 연락처가 있는 미제출 학생에게 발송 전 검토 문구를 만들 수 있습니다.",
             "문자 발송",
             "missing",
-            "ClassIn Data Sub",
+            "수신 데이터",
             8,
             "warn",
         ),
@@ -3629,14 +3716,14 @@ def _hub_ops_brief(
             "학원 데이터 매칭 확인",
             "오프라인 성적·출결·메모 중 자동 매칭이 애매한 자료가 있습니다.",
             "데이터 확인",
-            "missing",
+            "data",
             "학원 데이터 융합",
-            9,
+            6,
             "warn",
         ),
         (
             "report_ready",
-            "ready 리포트 승인",
+            "통과 리포트 승인",
             "품질 점검을 통과한 주간 드래프트를 승인 대기 중입니다.",
             "승인하기",
             "reports",
@@ -3656,7 +3743,7 @@ def _hub_ops_brief(
                     action,
                     tab,
                     lane,
-                    f"{key}={count}",
+                    f"대상 {count}건",
                     priority,
                     count=count,
                 )
@@ -3671,8 +3758,8 @@ def _hub_ops_brief(
                 "즉시 처리할 알림·데이터·리포트 위험 신호가 없습니다.",
                 "허브 보기",
                 "dashboard",
-                "Academy Ops",
-                f"lanes={lane_state}",
+                "운영 허브",
+                "운영 축 정상",
                 99,
             )
         )
@@ -4037,24 +4124,25 @@ def _render_shell(status: dict[str, Any]) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ClassIn 운영 콘솔 · {title}</title>
+  <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
   <style>
     :root {{
       color-scheme: light;
-      --primary: #2A6FDB;
-      --primary-d: #1f57b0;
-      --primary-soft: #eaf1fc;
-      --primary-softer: #f4f8fe;
+      --primary: #4f8f56;
+      --primary-d: #326f3c;
+      --primary-soft: #e8f5e6;
+      --primary-softer: #f5fbf3;
 
-      --bg: #f6f7f9;
+      --bg: #f7faf4;
       --panel: #ffffff;
-      --surface-2: #fbfcfd;
-      --line: #e7eaef;
-      --line-strong: #d6dbe3;
-      --text: #1a2230;
-      --muted: #57606e;
-      --text-3: #8a93a2;
+      --surface-2: #fbfdf8;
+      --line: #e4ecdf;
+      --line-strong: #cfdcc8;
+      --text: #1b251d;
+      --muted: #59665b;
+      --text-3: #8a9788;
 
       --ok: #1f8a5b;
       --ok-soft: #e6f4ed;
@@ -4062,8 +4150,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       --accent-soft: #fdf3e2;
       --danger: #d23f3f;
       --danger-soft: #fbeaea;
-      --info: #2a6fdb;
-      --info-soft: #eaf1fc;
+      --info: #477f8a;
+      --info-soft: #e7f3f5;
 
       --radius: 8px;
       --radius-sm: 7px;
@@ -4071,26 +4159,28 @@ def _render_shell(status: dict[str, Any]) -> str:
       --shadow-md: 0 4px 16px rgba(20,30,50,.08), 0 1px 3px rgba(20,30,50,.05);
       --shadow-lg: 0 20px 50px rgba(15,25,45,.22), 0 6px 16px rgba(15,25,45,.12);
 
-      --sidebar-w: 232px;
+      --sidebar-w: 202px;
       --font: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", system-ui, sans-serif;
       --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
     }}
     [data-theme="dark"] {{
       color-scheme: dark;
-      --bg: #0e1320;
-      --panel: #161c2b;
-      --surface-2: #131927;
-      --line: #263049;
-      --line-strong: #33405e;
-      --text: #e9edf5;
-      --muted: #a6b0c2;
-      --text-3: #6f7a90;
-      --primary-soft: #1a2842;
-      --primary-softer: #151d31;
+      --bg: #10170f;
+      --panel: #182018;
+      --surface-2: #131b13;
+      --line: #2a3828;
+      --line-strong: #3a4d37;
+      --text: #edf4ea;
+      --muted: #aab7a7;
+      --text-3: #74806f;
+      --primary: #8bcf7d;
+      --primary-d: #6eaf64;
+      --primary-soft: #20351f;
+      --primary-softer: #172617;
       --ok-soft: #142a22;
       --accent-soft: #2e2414;
       --danger-soft: #2e1a1c;
-      --info-soft: #1a2842;
+      --info-soft: #173036;
       --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
       --shadow-md: 0 4px 16px rgba(0,0,0,.4);
       --shadow-lg: 0 24px 60px rgba(0,0,0,.6);
@@ -4098,7 +4188,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      min-width: 320px;
+      min-width: 0;
       background: var(--bg);
       color: var(--text);
       font-family: var(--font);
@@ -4130,22 +4220,22 @@ def _render_shell(status: dict[str, Any]) -> str:
     .brand {{
       display: flex;
       align-items: center;
-      gap: 10px;
-      height: 60px;
-      padding: 0 18px;
+      gap: 9px;
+      height: 56px;
+      padding: 0 14px;
       border-bottom: 1px solid var(--line);
       flex-shrink: 0;
     }}
     .brand-mark {{
       display: grid;
       place-items: center;
-      width: 30px;
-      height: 30px;
+      width: 28px;
+      height: 28px;
       border-radius: 8px;
       background: linear-gradient(135deg, var(--primary), var(--primary-d));
       color: #fff;
       font-weight: 800;
-      font-size: 15px;
+      font-size: 14px;
       box-shadow: var(--shadow-sm);
       flex-shrink: 0;
     }}
@@ -4156,75 +4246,80 @@ def _render_shell(status: dict[str, Any]) -> str:
       text-overflow: ellipsis;
       white-space: nowrap;
       color: var(--text);
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
     }}
     .brand span {{
       display: block;
       margin-top: 1px;
       color: var(--text-3);
-      font-size: 11px;
+      font-size: 10.5px;
       white-space: nowrap;
     }}
     .sidebar .tabs {{
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 0;
       flex: 1;
       margin: 0;
-      padding: 10px;
+      padding: 7px;
       overflow-y: auto;
       border: 0;
       background: transparent;
       box-shadow: none;
     }}
     .nav-sep {{
-      padding: 14px 12px 5px;
+      padding: 9px 9px 3px;
       color: var(--text-3);
-      font-size: 10.5px;
+      font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0;
     }}
     .sidebar .tab-button {{
-      display: flex;
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr);
       align-items: center;
-      gap: 11px;
+      justify-content: stretch;
+      justify-items: start;
+      column-gap: 8px;
       width: 100%;
       min-height: 0;
-      padding: 9px 11px;
+      padding: 7px 9px;
       border: none;
       border-radius: var(--radius-sm);
       background: none;
       color: var(--muted);
-      font-size: 13.5px;
+      font-size: 12.8px;
       font-weight: 550;
       text-align: left;
       white-space: nowrap;
     }}
-    .sidebar .tab-button .ic {{ width: 19px; height: 19px; flex-shrink: 0; }}
+    .sidebar .tab-button .ic {{ width: 18px; height: 18px; justify-self: center; flex-shrink: 0; }}
+    .sidebar .tab-button .label {{ min-width: 0; overflow: hidden; text-overflow: ellipsis; }}
     .sidebar .tab-button:hover {{ background: var(--surface-2); color: var(--text); }}
     .sidebar .tab-button.active {{
       background: var(--primary-soft);
       color: var(--primary);
       font-weight: 650;
+      box-shadow: inset 3px 0 0 var(--primary);
     }}
-    [data-theme="dark"] .sidebar .tab-button.active {{ color: #7da9ee; }}
+    [data-theme="dark"] .sidebar .tab-button.active {{ color: var(--primary); }}
     .sidebar-footer {{
       flex-shrink: 0;
       margin: 0;
-      padding: 12px;
+      padding: 8px;
       border-top: 1px solid var(--line);
     }}
     .server-pill {{
       display: flex;
       align-items: center;
-      gap: 9px;
-      padding: 8px 10px;
+      gap: 7px;
+      padding: 6px 8px;
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11.5px;
       white-space: nowrap;
       overflow: hidden;
     }}
@@ -4243,15 +4338,16 @@ def _render_shell(status: dict[str, Any]) -> str:
       display: flex;
       align-items: center;
       gap: 14px;
-      height: 60px;
-      padding: 0 22px;
+      height: 56px;
+      padding: 0 20px;
       background: var(--panel);
       border-bottom: 1px solid var(--line);
     }}
     .topbar-title {{ display: flex; align-items: baseline; gap: 10px; min-width: 0; }}
     .topbar-title h2 {{ margin: 0; font-size: 16px; font-weight: 700; }}
     .topbar-title span {{ color: var(--text-3); font-size: 13px; }}
-    .topbar .inline-actions {{ margin-left: auto; }}
+    .topbar .inline-actions {{ margin-left: auto; min-width: 0; }}
+    .quick-run-button svg {{ width: 15px; height: 15px; }}
     .icon-btn {{
       display: grid;
       place-items: center;
@@ -4265,35 +4361,44 @@ def _render_shell(status: dict[str, Any]) -> str:
       color: var(--muted);
     }}
     .icon-btn:hover {{ background: var(--surface-2); color: var(--text); border-color: var(--line-strong); }}
-    .topbar-user {{ display: flex; align-items: center; gap: 8px; }}
+    .topbar-user {{
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 34px;
+      padding: 2px 9px 2px 3px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface-1);
+      color: var(--text);
+      white-space: nowrap;
+    }}
     .topbar-user .avatar {{
       display: grid;
       place-items: center;
-      width: 30px;
-      height: 30px;
-      border-radius: 8px;
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
       background: var(--primary);
       color: #fff;
       font-weight: 700;
       font-size: 12px;
     }}
-    .topbar-user div {{ line-height: 1.2; }}
-    .topbar-user .nm {{ font-size: 12.5px; font-weight: 650; }}
-    .topbar-user .rl {{ font-size: 11px; color: var(--text-3); }}
+    .topbar-user .rl {{ font-size: 12.5px; font-weight: 650; }}
     .workspace main {{
       flex: 1;
       width: auto;
       margin: 0;
-      padding: 24px;
+      padding: 20px 22px 28px;
     }}
 
     /* ── Metrics ─────────────────────────── */
     .status-strip {{
       display: flex;
       gap: 0;
-      margin: -24px -24px 20px;
-      padding: 0 22px;
-      height: 64px;
+      margin: -20px -22px 18px;
+      padding: 0 20px;
+      height: 58px;
       background: var(--panel);
       border-bottom: 1px solid var(--line);
       overflow-x: auto;
@@ -4303,8 +4408,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       flex-direction: column;
       justify-content: center;
       gap: 2px;
-      min-width: 118px;
-      padding: 0 22px;
+      min-width: 108px;
+      padding: 0 18px;
       border: none;
       border-right: 1px solid var(--line);
       border-radius: 0;
@@ -4319,7 +4424,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       align-items: center;
       gap: 7px;
       margin: 0;
-      font-size: 21px;
+      font-size: 19px;
       font-weight: 750;
       line-height: 1;
     }}
@@ -4334,6 +4439,227 @@ def _render_shell(status: dict[str, Any]) -> str:
     .metric.alert strong::before, .metric.danger strong::before {{ background: var(--danger); }}
     .metric.info strong::before {{ background: var(--info); }}
     .metric.ok strong::before {{ background: var(--ok); }}
+
+    .quick-run-overlay {{
+      position: fixed;
+      inset: 0;
+      z-index: 120;
+      display: grid;
+      place-items: start center;
+      padding: 72px 18px 18px;
+      background: rgba(15, 23, 42, .36);
+      backdrop-filter: blur(8px);
+    }}
+    .quick-run-overlay[hidden] {{ display: none !important; }}
+    .quick-run-panel {{
+      width: min(720px, 100%);
+      max-height: min(720px, calc(100vh - 104px));
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow-lg);
+    }}
+    .quick-run-head {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }}
+    .quick-run-head h2 {{
+      flex-shrink: 0;
+      margin: 0;
+      font-size: 15px;
+      font-weight: 760;
+    }}
+    .quick-run-search {{
+      flex: 1 1 auto;
+      min-width: 0;
+      width: 100%;
+      height: 42px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text);
+      font: inherit;
+      font-weight: 620;
+    }}
+    .quick-run-list {{
+      display: grid;
+      gap: 7px;
+      max-height: calc(100vh - 230px);
+      overflow: auto;
+      padding: 10px;
+    }}
+    .quick-command-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 62px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text);
+      text-align: left;
+    }}
+    .quick-command-row:hover,
+    .quick-command-row.active {{
+      border-color: rgba(79,143,86,.45);
+      background: var(--primary-softer);
+    }}
+    .quick-command-row strong {{
+      display: block;
+      font-size: 13.5px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }}
+    .quick-command-row span:not(.badge) {{
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }}
+    .quick-command-row .badge {{
+      align-self: center;
+      white-space: nowrap;
+    }}
+    .student-brief-overlay {{
+      position: fixed;
+      inset: 0;
+      z-index: 110;
+      display: grid;
+      justify-content: end;
+      background: rgba(15, 23, 42, .28);
+      backdrop-filter: blur(7px);
+    }}
+    .student-brief-overlay[hidden] {{ display: none !important; }}
+    .student-brief-panel {{
+      width: min(560px, 100vw);
+      height: 100vh;
+      overflow: auto;
+      border-left: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: var(--shadow-lg);
+    }}
+    .student-brief-head {{
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      backdrop-filter: blur(12px);
+    }}
+    .student-brief-head h2 {{
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.25;
+    }}
+    .student-brief-head span {{
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12.5px;
+    }}
+    .student-brief-body {{
+      display: grid;
+      gap: 12px;
+      padding: 14px 18px 20px;
+    }}
+    .student-brief-hero {{
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--primary);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }}
+    .student-brief-hero strong {{
+      display: block;
+      font-size: 15px;
+      line-height: 1.3;
+    }}
+    .student-brief-hero p {{
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }}
+    .student-brief-actions,
+    .student-brief-meta,
+    .student-brief-badges {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 10px;
+    }}
+    .student-brief-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }}
+    .student-brief-card {{
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+    }}
+    .student-brief-card span {{
+      display: block;
+      color: var(--text-3);
+      font-size: 11px;
+      font-weight: 700;
+    }}
+    .student-brief-card strong {{
+      display: block;
+      margin-top: 5px;
+      font-size: 18px;
+      line-height: 1.2;
+    }}
+    .student-brief-section {{
+      padding: 13px 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }}
+    .student-brief-section h3 {{
+      margin: 0 0 9px;
+      font-size: 13.5px;
+      line-height: 1.3;
+    }}
+    .student-brief-list {{
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }}
+    .student-brief-list li {{
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }}
+    .student-brief-list strong {{
+      display: block;
+      color: var(--text);
+      font-size: 12.5px;
+      line-height: 1.35;
+    }}
     .metric.warn strong, .metric.alert strong, .metric.danger strong,
     .metric.info strong, .metric.ok strong {{ color: var(--text); }}
 
@@ -4343,26 +4669,26 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     .panel {{
       min-width: 0;
-      padding: var(--pad, 20px);
+      padding: var(--pad, 18px);
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow-sm);
     }}
-    .panel + .panel {{ margin-top: 16px; }}
-    h2 {{ margin: 0 0 14px; font-size: 15px; font-weight: 700; line-height: 1.2; }}
+    .panel + .panel {{ margin-top: 14px; }}
+    h2 {{ margin: 0 0 12px; font-size: 14.5px; font-weight: 700; line-height: 1.2; }}
     .panel-head {{
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }}
     .panel-head h2 {{ margin: 0; }}
     .grid {{
       display: grid;
       grid-template-columns: 1.2fr .8fr;
-      gap: 16px;
+      gap: 14px;
       align-items: start;
     }}
     .grid > *,
@@ -4378,14 +4704,14 @@ def _render_shell(status: dict[str, Any]) -> str:
       align-items: center;
       justify-content: center;
       gap: 7px;
-      min-height: 38px;
-      padding: 0 16px;
+      min-height: 36px;
+      padding: 0 14px;
       border: 1px solid transparent;
       border-radius: var(--radius-sm);
       background: var(--primary);
       color: #fff;
       font: inherit;
-      font-size: 13.5px;
+      font-size: 13px;
       font-weight: 650;
       white-space: nowrap;
       cursor: pointer;
@@ -4401,42 +4727,227 @@ def _render_shell(status: dict[str, Any]) -> str:
     button:disabled {{ cursor: progress; opacity: .6; filter: none; }}
 
     /* ── Action hub ─────────────────────────── */
-    .action-layout {{ display: grid; gap: 16px; align-items: start; }}
-    .core-panel {{ padding: var(--pad, 20px); }}
-    .core-panel .panel-head {{ margin-bottom: 14px; }}
-    .core-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }}
+    .action-layout {{ display: grid; gap: 14px; align-items: start; }}
+    .core-panel {{ padding: var(--pad, 18px); }}
+    .core-panel .panel-head {{ margin-bottom: 12px; }}
+    .core-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }}
     .core-button {{
       display: grid;
-      grid-template-columns: 44px minmax(0, 1fr);
+      grid-template-columns: 38px minmax(0, 1fr);
       grid-template-rows: auto auto;
-      gap: 4px 12px;
+      gap: 3px 11px;
       align-content: start;
-      min-height: 92px;
-      padding: 18px;
+      min-height: 84px;
+      padding: 15px;
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--panel);
       color: var(--text);
       text-align: left;
+      white-space: normal;
       box-shadow: var(--shadow-sm);
       transition: border-color .14s, box-shadow .14s, transform .14s;
     }}
     .core-button:hover {{ background: var(--panel); filter: none; border-color: var(--primary); box-shadow: var(--shadow-md); transform: translateY(-2px); }}
+    .core-button.active {{
+      border-color: rgba(79,143,86,.55);
+      background: var(--primary-softer);
+      box-shadow: inset 0 0 0 1px rgba(79,143,86,.12), var(--shadow-sm);
+    }}
     .core-button strong {{ display: block; min-width: 0; overflow-wrap: anywhere; font-size: 15px; font-weight: 700; line-height: 1.3; }}
-    .core-button span {{ display: block; color: var(--muted); font-size: 12.5px; line-height: 1.45; font-weight: 500; }}
+    .core-button span {{ display: block; min-width: 0; color: var(--muted); font-size: 12.5px; line-height: 1.45; font-weight: 500; overflow-wrap: anywhere; }}
     .core-button .core-number {{
       display: inline-flex;
       align-items: center;
       justify-content: center;
       grid-row: 1 / span 2;
-      width: 44px;
-      height: 44px;
+      width: 38px;
+      height: 38px;
       border-radius: 8px;
       background: var(--primary);
       color: #fff;
-      font-size: 17px;
+      font-size: 15px;
       font-weight: 800;
       line-height: 1;
+    }}
+
+    .action-command {{
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(300px, .92fr);
+      gap: 11px;
+      padding: 12px 13px;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--primary);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow-sm);
+    }}
+    .action-command-main,
+    .action-command-side {{
+      min-width: 0;
+    }}
+    .action-command strong {{
+      display: block;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 780;
+      line-height: 1.22;
+      overflow-wrap: anywhere;
+    }}
+    .action-command p {{
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.34;
+      overflow-wrap: anywhere;
+    }}
+    .action-command-main > p {{
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
+    }}
+    .action-command .command-meta {{
+      flex-wrap: nowrap;
+      gap: 4px;
+      margin-top: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }}
+    .action-command .command-meta::-webkit-scrollbar {{
+      display: none;
+    }}
+    .action-command .command-meta .badge {{
+      flex: 0 0 auto;
+    }}
+    .action-command-actions {{
+      display: flex;
+      gap: 6px;
+      flex-wrap: nowrap;
+      margin-top: 7px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }}
+    .action-command-actions::-webkit-scrollbar {{
+      display: none;
+    }}
+    .action-command-actions button {{
+      flex: 0 0 auto;
+      min-height: 30px;
+      padding-inline: 10px;
+      font-size: 12px;
+    }}
+    .workflow-steps {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
+      gap: 6px;
+    }}
+    .workflow-step {{
+      min-width: 0;
+      padding: 6px 7px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+    }}
+    .workflow-step span {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 19px;
+      height: 19px;
+      margin-bottom: 4px;
+      border-radius: 6px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 10.5px;
+      font-weight: 750;
+    }}
+    .workflow-step strong {{
+      font-size: 12px;
+      font-weight: 720;
+      line-height: 1.22;
+    }}
+    .workflow-step p {{
+      display: -webkit-box;
+      margin-top: 2px;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
+      font-size: 11.2px;
+      line-height: 1.25;
+    }}
+    .workflow-step.active {{
+      border-color: rgba(79,143,86,.42);
+      background: var(--primary-softer);
+    }}
+    .workflow-step.active span {{
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }}
+    .action-command .command-gate {{
+      gap: 6px;
+      margin-top: 7px;
+      padding-top: 7px;
+    }}
+    .action-command .command-gate p {{
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
+      line-height: 1.35;
+    }}
+    .missing-command,
+    .schedule-command,
+    .report-command,
+    .data-command,
+    .agent-command,
+    .settings-command,
+    .exam-command {{
+      margin-bottom: 16px;
+      border-left-color: var(--ok);
+    }}
+    .missing-command.warn,
+    .schedule-command.warn,
+    .report-command.warn,
+    .data-command.warn,
+    .agent-command.warn,
+    .settings-command.warn,
+    .exam-command.warn {{
+      border-left-color: var(--accent);
+    }}
+    .missing-command.danger,
+    .schedule-command.danger,
+    .report-command.danger,
+    .data-command.danger,
+    .agent-command.danger,
+    .settings-command.danger,
+    .exam-command.danger {{
+      border-left-color: var(--danger);
+    }}
+    .missing-command .workflow-steps,
+    .schedule-command .workflow-steps,
+    .report-command .workflow-steps,
+    .data-command .workflow-steps,
+    .agent-command .workflow-steps,
+    .settings-command .workflow-steps,
+    .exam-command .workflow-steps {{
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }}
+    .agent-prompt-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }}
+    .agent-prompt-grid button {{
+      justify-content: flex-start;
+      min-height: 46px;
+      white-space: normal;
+      text-align: left;
+      line-height: 1.3;
     }}
 
     .action-controls {{
@@ -4446,6 +4957,245 @@ def _render_shell(status: dict[str, Any]) -> str:
       align-items: start;
     }}
     .action-controls .panel {{ margin-top: 0; }}
+    .missing-action-panel {{
+      --pad: 16px;
+      grid-column: span 2;
+    }}
+    .missing-action-panel .stack {{
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) minmax(250px, .9fr);
+    }}
+    .missing-action-panel .range-picker {{
+      gap: 7px;
+    }}
+    .missing-action-panel input,
+    .missing-action-panel select {{
+      min-height: 32px;
+      padding: 7px 10px;
+      font-size: 12.5px;
+    }}
+    .missing-action-panel .segmented[aria-label="미제출 조회 범위"] {{
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      width: 100%;
+    }}
+    .missing-action-panel .segmented[aria-label="미제출 조회 범위"] button {{
+      min-height: 30px;
+      padding-inline: 8px;
+      font-size: 12px;
+    }}
+    .missing-action-panel .mini-grid {{
+      gap: 8px;
+    }}
+    .missing-action-panel .inline-actions {{
+      grid-column: 1 / -1;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }}
+    .missing-action-panel .inline-actions::-webkit-scrollbar {{
+      display: none;
+    }}
+    .missing-action-panel .inline-actions button {{
+      flex: 0 0 auto;
+      min-height: 32px;
+      padding-inline: 10px;
+      font-size: 12px;
+    }}
+    .missing-action-panel .missing-filter {{
+      grid-column: 1 / -1;
+      margin-bottom: 0;
+    }}
+    .missing-action-panel .selection-summary {{
+      grid-column: 1 / -1;
+      align-items: flex-start;
+      min-height: 34px;
+      padding: 7px 10px;
+      font-size: 12px;
+    }}
+    .missing-action-panel .selection-summary span {{
+      min-width: 0;
+      text-align: right;
+      overflow-wrap: anywhere;
+    }}
+    .missing-action-panel .missing-action-list {{
+      max-height: 204px;
+      overflow: auto;
+      padding: 6px;
+      scrollbar-width: thin;
+    }}
+    .missing-action-panel .missing-action-list .pager {{
+      position: sticky;
+      bottom: 0;
+      margin: 6px -6px -6px;
+      padding: 7px 6px 6px;
+      border-top: 1px solid var(--line);
+      background: color-mix(in srgb, var(--surface-2) 94%, white);
+    }}
+    .missing-action-panel .selectable-row {{
+      gap: 8px;
+      padding: 8px;
+      line-height: 1.32;
+    }}
+    .missing-action-panel .selectable-row strong {{
+      font-size: 12.5px;
+    }}
+    .missing-action-panel .selectable-row span {{
+      font-size: 12px;
+      line-height: 1.35;
+    }}
+    .missing-action-panel .action-preview {{
+      height: 100%;
+      min-height: 66px;
+      max-height: 204px;
+      overflow: auto;
+      line-height: 1.5;
+    }}
+    .schedule-action-panel {{
+      --pad: 16px;
+    }}
+    .schedule-action-panel .stack {{
+      gap: 10px;
+    }}
+    .schedule-action-panel .inline-actions {{
+      flex-wrap: nowrap;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }}
+    .schedule-action-panel .inline-actions::-webkit-scrollbar {{
+      display: none;
+    }}
+    .schedule-action-panel .inline-actions button {{
+      flex: 0 0 auto;
+      min-height: 32px;
+      padding-inline: 10px;
+      font-size: 12px;
+    }}
+    .schedule-action-panel .action-preview {{
+      min-height: 74px;
+      max-height: 88px;
+      overflow: auto;
+      padding: 9px 10px;
+      line-height: 1.5;
+    }}
+    .sso-action-panel {{
+      --pad: 16px;
+    }}
+    .sso-action-panel .stack {{
+      gap: 10px;
+    }}
+    .sso-action-panel .sso-fields {{
+      gap: 8px;
+    }}
+    .sso-action-panel input,
+    .sso-action-panel select {{
+      min-height: 32px;
+      padding: 7px 10px;
+      font-size: 12.5px;
+    }}
+    .sso-action-panel .inline-actions {{
+      gap: 6px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }}
+    .sso-action-panel .inline-actions::-webkit-scrollbar {{
+      display: none;
+    }}
+    .sso-action-panel .inline-actions button {{
+      flex: 0 0 auto;
+      min-height: 32px;
+      padding-inline: 10px;
+      font-size: 12px;
+    }}
+    .sso-action-panel .action-preview {{
+      min-height: 64px;
+      max-height: 86px;
+      overflow: auto;
+      padding: 9px 10px;
+      line-height: 1.5;
+    }}
+    .report-action-panel {{
+      --pad: 16px;
+      grid-column: span 2;
+    }}
+    .report-action-panel .stack {{
+      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) minmax(230px, .8fr);
+    }}
+    .report-action-panel .mini-grid,
+    .report-action-panel .inline-actions,
+    .report-action-panel .selection-summary {{
+      grid-column: 1 / -1;
+    }}
+    .report-action-panel .inline-actions {{
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }}
+    .report-action-panel .inline-actions::-webkit-scrollbar {{
+      display: none;
+    }}
+    .report-action-panel .inline-actions button {{
+      flex: 0 0 auto;
+      min-height: 32px;
+      padding-inline: 10px;
+      font-size: 12px;
+    }}
+    .report-action-panel #reportTargetList {{
+      max-height: 238px;
+      overflow: auto;
+      scrollbar-width: thin;
+    }}
+    .report-action-panel #reportPreview {{
+      height: 100%;
+      min-height: 86px;
+      max-height: 238px;
+      overflow: auto;
+    }}
+    #tab-actions .action-layout {{
+      gap: 12px;
+    }}
+    #tab-actions .core-panel {{
+      --pad: 14px;
+    }}
+    #tab-actions .core-grid {{
+      gap: 10px;
+    }}
+    #tab-actions .core-button {{
+      grid-template-columns: 34px minmax(0, 1fr);
+      min-height: 76px;
+      padding: 12px;
+    }}
+    #tab-actions .core-button .core-number {{
+      width: 34px;
+      height: 34px;
+      font-size: 14px;
+    }}
+    #tab-actions .action-controls {{
+      gap: 12px;
+    }}
+    #tab-actions .missing-action-panel .missing-action-list,
+    #tab-actions .missing-action-panel .action-preview {{
+      max-height: 180px;
+    }}
+    #tab-actions .schedule-action-panel textarea.large {{
+      min-height: 126px;
+    }}
+    #tab-actions .schedule-action-panel .action-preview,
+    #tab-actions .sso-action-panel .action-preview {{
+      min-height: 56px;
+      max-height: 74px;
+    }}
+    #tab-actions .report-action-panel #reportTargetList,
+    #tab-actions .report-action-panel #reportPreview {{
+      max-height: 188px;
+    }}
     .action-button {{
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -4509,7 +5259,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     [data-theme="dark"] .segmented button.active {{ background: var(--line); }}
 
     /* ── Forms ─────────────────────────── */
-    label {{ display: grid; gap: 6px; color: var(--muted); font-size: 12.5px; font-weight: 600; line-height: 1.3; }}
+    label {{ display: grid; min-width: 0; gap: 6px; color: var(--muted); font-size: 12.5px; font-weight: 600; line-height: 1.3; }}
     .checkbox-field {{
       grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
@@ -4522,6 +5272,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
     input, select, textarea {{
       width: 100%;
+      min-width: 0;
       min-height: 38px;
       padding: 9px 12px;
       border: 1px solid var(--line-strong);
@@ -4548,6 +5299,146 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     .panel-head, .inline-actions {{ }}
     .inline-actions {{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }}
+    .settings-panel {{
+      --pad: 16px;
+    }}
+    .settings-panel .panel-head {{
+      margin-bottom: 10px;
+    }}
+    .settings-panel .inline-actions {{
+      gap: 6px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }}
+    .settings-panel .inline-actions::-webkit-scrollbar {{
+      display: none;
+    }}
+    .settings-panel .inline-actions > * {{
+      flex: 0 0 auto;
+    }}
+    .settings-panel button {{
+      min-height: 32px;
+      padding: 0 11px;
+      font-size: 12.5px;
+    }}
+    .settings-panel label {{
+      margin: 0;
+    }}
+    .settings-panel input {{
+      min-height: 32px;
+      padding: 7px 10px;
+      font-size: 12.5px;
+    }}
+    #tab-settings.active {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+    }}
+    #tab-settings > .action-command {{
+      grid-column: 1 / -1;
+      margin-bottom: 0;
+    }}
+    #tab-settings > .settings-panel {{
+      margin-top: 0;
+      min-width: 0;
+    }}
+    #tab-settings .settings-panel-strip {{
+      display: contents;
+    }}
+    #tab-settings .settings-panel {{
+      margin-top: 0;
+      min-width: 0;
+    }}
+    #tab-settings .settings-panel .readiness-list,
+    #tab-settings .settings-panel .schema-list,
+    #tab-settings #settings {{
+      overflow: auto;
+      padding-right: 2px;
+      scrollbar-width: thin;
+    }}
+    #tab-settings .schedule-summary {{
+      gap: 6px;
+      margin: 9px 0 10px;
+    }}
+    #tab-settings #readinessSummary,
+    #tab-settings #pilotBriefSummary {{
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }}
+    #tab-settings #notionSchemaSummary {{
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }}
+    #tab-settings .diagnostic-count {{
+      min-height: 50px;
+      padding: 8px 9px;
+    }}
+    #tab-settings .diagnostic-count strong {{
+      margin-top: 3px;
+      font-size: 17px;
+    }}
+    #tab-settings #readinessList {{
+      max-height: 220px;
+    }}
+    #tab-settings #notionSchemaList,
+    #tab-settings #pilotBriefList {{
+      max-height: 204px;
+    }}
+    #tab-settings .schema-command.is-collapsed {{
+      min-height: 72px;
+      max-height: 76px !important;
+      padding: 9px 10px;
+      overflow: hidden;
+    }}
+    #tab-settings #settings {{
+      max-height: 204px;
+    }}
+    #tab-data.active {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+    }}
+    #tab-data > .action-command {{
+      grid-column: 1 / -1;
+      margin-bottom: 0;
+    }}
+    #tab-data > .panel {{
+      margin-top: 0;
+      min-width: 0;
+    }}
+    #tab-data .data-panel-strip {{
+      display: contents;
+    }}
+    #tab-data .data-panel-strip > .panel {{
+      margin-top: 0;
+      min-width: 0;
+    }}
+    .data-inbox-panel,
+    .data-context-panel {{
+      --pad: 16px;
+    }}
+    .data-inbox-panel .schedule-summary,
+    .data-context-panel .schedule-summary {{
+      grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+      gap: 7px;
+      margin: 10px 0;
+    }}
+    .data-inbox-panel .diagnostic-count,
+    .data-context-panel .diagnostic-count {{
+      min-height: 52px;
+      padding: 9px 10px;
+    }}
+    .data-inbox-panel .diagnostic-count strong,
+    .data-context-panel .diagnostic-count strong {{
+      margin-top: 3px;
+      font-size: 17px;
+    }}
+    .data-inbox-panel .table-wrap,
+    .data-context-panel .table-wrap {{
+      max-height: min(470px, calc(100vh - 250px));
+    }}
 
     .action-preview {{
       min-height: 86px;
@@ -4634,6 +5525,26 @@ def _render_shell(status: dict[str, Any]) -> str:
       gap: 8px;
       margin-top: 10px;
     }}
+    .dashboard-playbook-panel .inline-actions,
+    .dashboard-report-panel .inline-actions {{
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }}
+    .dashboard-playbook-panel .inline-actions::-webkit-scrollbar,
+    .dashboard-report-panel .inline-actions::-webkit-scrollbar {{
+      display: none;
+    }}
+    .dashboard-playbook-panel .inline-actions button,
+    .dashboard-report-panel .inline-actions button {{
+      flex: 0 0 auto;
+    }}
+    .dashboard-log-panel .log {{
+      min-height: 160px;
+      max-height: 180px;
+      overflow: auto;
+    }}
     .handoff-row {{
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -4673,6 +5584,14 @@ def _render_shell(status: dict[str, Any]) -> str:
       gap: 8px;
       margin-top: 10px;
     }}
+    .settings-panel .readiness-list,
+    .settings-panel .schema-list {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      align-items: start;
+      gap: 7px;
+      margin-top: 8px;
+    }}
     .readiness-row {{
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -4682,6 +5601,15 @@ def _render_shell(status: dict[str, Any]) -> str:
       border: 1px solid var(--line);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
+    }}
+    .settings-panel .readiness-row {{
+      padding: 9px 10px;
+    }}
+    .settings-panel .readiness-fix {{
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
     }}
     .readiness-row strong {{
       display: block;
@@ -4726,6 +5654,10 @@ def _render_shell(status: dict[str, Any]) -> str:
       border: 1px solid var(--line);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
+    }}
+    .settings-panel .schema-row {{
+      gap: 7px;
+      padding: 9px 10px;
     }}
     .schema-row strong {{
       color: var(--text);
@@ -4776,6 +5708,13 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-family: var(--mono);
       font-size: 12px;
     }}
+    .settings-panel .schema-command {{
+      margin-top: 8px;
+    }}
+    .settings-panel .schema-command.is-collapsed {{
+      min-height: 64px;
+      max-height: 96px !important;
+    }}
     .playbook-list {{ display: grid; gap: 10px; margin-top: 10px; }}
     .playbook-step {{
       display: grid;
@@ -4784,7 +5723,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       padding: 12px;
       border: 1px solid var(--line);
       border-radius: var(--radius-sm);
-      background: var(--surface);
+      background: var(--surface-2);
     }}
     .playbook-step strong {{ display: block; margin-bottom: 4px; color: var(--text); font-size: 14px; }}
     .playbook-step span {{ display: block; color: var(--muted); font-size: 12px; line-height: 1.45; }}
@@ -4863,6 +5802,101 @@ def _render_shell(status: dict[str, Any]) -> str:
     .selectable-row span {{ display: block; color: var(--muted); overflow-wrap: anywhere; }}
     .selectable-row.is-disabled {{ opacity: .55; background: var(--surface-2); }}
 
+    .mobile-card-list {{
+      display: none;
+    }}
+    .missing-card {{
+      display: grid;
+      gap: 9px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--panel);
+      box-shadow: var(--shadow-sm);
+    }}
+    .missing-card.is-disabled {{
+      background: var(--surface-2);
+      opacity: .72;
+    }}
+    .missing-card-head {{
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr) auto;
+      gap: 9px;
+      align-items: start;
+    }}
+    .missing-card-head input[type="checkbox"] {{
+      width: 18px;
+      min-height: 18px;
+      margin: 2px 0 0;
+      padding: 0;
+      accent-color: var(--primary);
+    }}
+    .missing-card-title {{
+      min-width: 0;
+    }}
+    .missing-card-title strong {{
+      display: block;
+      color: var(--text);
+      font-size: 13.5px;
+      font-weight: 720;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }}
+    .missing-card-title span {{
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }}
+    .missing-card-meta {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-width: 0;
+    }}
+    .missing-card-row {{
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+      gap: 8px;
+      min-width: 0;
+    }}
+    .missing-card-field {{
+      min-width: 0;
+      padding: 8px 9px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 12.5px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }}
+    .missing-card-field > span:first-child {{
+      display: block;
+      margin-bottom: 3px;
+      color: var(--text-3);
+      font-size: 11px;
+      font-weight: 650;
+    }}
+    .missing-card-field .badge,
+    .missing-card-field .status-pill {{
+      max-width: 100%;
+      height: auto;
+      min-height: 20px;
+      align-items: flex-start;
+      white-space: normal;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }}
+    .missing-card-message {{
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }}
+
     .log {{
       min-height: 220px;
       max-height: 420px;
@@ -4878,6 +5912,9 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     /* ── Tables ─────────────────────────── */
     .table-wrap {{ overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }}
+    .table-wrap.is-compact {{
+      max-height: min(560px, calc(100vh - 250px));
+    }}
     table {{ width: 100%; border-collapse: collapse; min-width: 760px; font-size: 13px; }}
     th, td {{ padding: 11px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }}
     th {{
@@ -4888,6 +5925,28 @@ def _render_shell(status: dict[str, Any]) -> str:
       text-transform: uppercase;
       letter-spacing: 0;
       white-space: nowrap;
+    }}
+    .compact-table th {{
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }}
+    .compact-table th,
+    .compact-table td {{
+      padding: 9px 11px;
+    }}
+    .compact-table td {{
+      font-size: 12.5px;
+      line-height: 1.42;
+    }}
+    .compact-table .inline-actions {{
+      gap: 5px;
+      flex-wrap: nowrap;
+    }}
+    .compact-table .inline-actions button {{
+      min-height: 30px;
+      padding: 0 9px;
+      font-size: 12px;
     }}
     tbody tr:hover {{ background: var(--surface-2); }}
     tr:last-child td {{ border-bottom: 0; }}
@@ -4919,7 +5978,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     .badge.warn {{ color: var(--accent); background: var(--accent-soft); border-color: transparent; }}
     .badge.error {{ color: var(--danger); background: var(--danger-soft); border-color: transparent; }}
     .status-pill.pending {{ color: var(--accent); background: var(--accent-soft); }}
-    .status-pill.dry_run {{ color: var(--info); background: var(--info-soft); }}
+    .status-pill.dry_run, .status-pill.info {{ color: var(--info); background: var(--info-soft); }}
     .status-pill.sent, .status-pill.ok {{ color: var(--ok); background: var(--ok-soft); }}
     .status-pill.failed, .status-pill.missing {{ color: var(--danger); background: var(--danger-soft); }}
     .status-pill.warn {{ color: var(--accent); background: var(--accent-soft); }}
@@ -4941,14 +6000,452 @@ def _render_shell(status: dict[str, Any]) -> str:
     .diagnostic-count.ok strong {{ color: var(--ok); }}
     .diagnostic-count.warn strong {{ color: var(--accent); }}
     .diagnostic-count.failed strong, .diagnostic-count.missing strong {{ color: var(--danger); }}
+    .diagnostic-card-list {{ display: none; }}
+    .diagnostic-card {{
+      display: grid;
+      gap: 8px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--panel);
+    }}
+    .diagnostic-card-head {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: start;
+    }}
+    .diagnostic-card strong {{
+      display: block;
+      min-width: 0;
+      font-size: 13.3px;
+      font-weight: 740;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }}
+    .diagnostic-card span:not(.status-pill) {{
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }}
+    .diagnostic-next {{
+      padding: 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text-3);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }}
     .schedule-summary {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }}
     .schedule-summary .diagnostic-count strong {{ color: var(--text); }}
+    .report-review-panel .schedule-summary {{
+      grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+      gap: 7px;
+      margin: 10px 0;
+    }}
+    .report-review-panel .diagnostic-count {{
+      min-height: 52px;
+      padding: 9px 10px;
+    }}
+    .report-review-panel .diagnostic-count strong {{
+      margin-top: 3px;
+      font-size: 17px;
+    }}
+    #tab-reports.active {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+    }}
+    #tab-reports > .action-command {{
+      grid-column: 1 / -1;
+      margin-bottom: 0;
+      padding: 10px 12px;
+    }}
+    #tab-reports > .report-command,
+    #tab-reports > .exam-command {{
+      gap: 10px;
+    }}
+    #tab-reports > .action-command .command-label {{
+      margin-bottom: 4px;
+    }}
+    #tab-reports > .action-command strong {{
+      font-size: 15px;
+      line-height: 1.2;
+    }}
+    #tab-reports > .action-command-main > p {{
+      display: -webkit-box;
+      margin-top: 3px;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
+      line-height: 1.32;
+    }}
+    #tab-reports > .action-command .command-meta {{
+      gap: 4px;
+      margin-top: 8px;
+    }}
+    #tab-reports > .action-command .action-command-actions {{
+      gap: 6px;
+      margin-top: 7px;
+    }}
+    #tab-reports > .action-command .action-command-actions button {{
+      min-height: 30px;
+      padding-inline: 10px;
+      font-size: 12px;
+    }}
+    #tab-reports > .action-command .command-gate {{
+      margin-top: 7px;
+      padding-top: 7px;
+      gap: 6px;
+    }}
+    #tab-reports > .action-command .command-gate p {{
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
+      line-height: 1.35;
+    }}
+    #tab-reports > .exam-command {{
+      grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr);
+    }}
+    #tab-reports > .exam-command .command-meta,
+    #tab-reports > .exam-command .action-command-actions {{
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }}
+    #tab-reports > .exam-command .command-meta::-webkit-scrollbar,
+    #tab-reports > .exam-command .action-command-actions::-webkit-scrollbar {{
+      display: none;
+    }}
+    #tab-reports > .exam-command .command-meta .badge,
+    #tab-reports > .exam-command .action-command-actions button {{
+      flex: 0 0 auto;
+    }}
+    #tab-reports > .exam-command .workflow-step {{
+      padding: 6px 7px;
+    }}
+    #tab-reports > .report-command .workflow-step p,
+    #tab-reports > .exam-command .workflow-step p {{
+      -webkit-line-clamp: 1;
+    }}
+    #tab-reports > .exam-command .workflow-step span {{
+      width: 18px;
+      height: 18px;
+      margin-bottom: 3px;
+    }}
+    #tab-reports > .panel {{
+      margin-top: 0;
+    }}
+    #tab-reports .report-review-strip {{
+      display: contents;
+    }}
+    #tab-reports .exam-form-strip {{
+      display: contents;
+    }}
+    .report-overview-panel,
+    .student-report-panel {{
+      --pad: 16px;
+    }}
+    .report-overview-panel .inline-actions,
+    .student-report-panel .inline-actions,
+    .weekly-draft-panel .inline-actions {{
+      gap: 8px;
+    }}
+    #tab-reports .report-overview-panel .inline-actions {{
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }}
+    #tab-reports .report-overview-panel .inline-actions::-webkit-scrollbar {{
+      display: none;
+    }}
+    #tab-reports .report-overview-panel .inline-actions button {{
+      flex: 0 0 auto;
+    }}
+    .report-overview-panel label {{
+      min-width: 136px;
+    }}
+    .student-report-panel .action-preview {{
+      min-height: 120px;
+      max-height: 220px;
+      overflow: auto;
+    }}
+    .schedule-panel .schedule-summary {{
+      grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+      gap: 7px;
+      margin: 10px 0;
+    }}
+    .schedule-panel .diagnostic-count {{
+      min-height: 52px;
+      padding: 9px 10px;
+    }}
+    .schedule-panel .diagnostic-count strong {{
+      margin-top: 3px;
+      font-size: 17px;
+    }}
+    .neis-exam-panel {{
+      --pad: 16px;
+    }}
+    .neis-exam-panel .panel-head p {{
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }}
+    .neis-exam-meta {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 10px 0;
+    }}
+    .neis-exam-table {{
+      min-width: 980px;
+      font-size: 12.5px;
+    }}
+    .neis-exam-table th {{
+      text-transform: none;
+      font-size: 11.5px;
+    }}
+    .neis-exam-table td {{
+      line-height: 1.48;
+    }}
+    .neis-exam-table strong {{
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13.5px;
+      line-height: 1.2;
+    }}
+    .neis-exam-table .school-address {{
+      display: block;
+      color: var(--muted);
+      font-size: 11.5px;
+      line-height: 1.35;
+    }}
+    .exam-lines {{
+      display: grid;
+      gap: 5px;
+    }}
+    .exam-line {{
+      display: flex;
+      gap: 7px;
+      align-items: center;
+      min-width: 0;
+    }}
+    .exam-label {{
+      flex: 0 0 auto;
+      min-width: 66px;
+      padding: 3px 7px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--text-3);
+      font-size: 11px;
+      font-weight: 750;
+      text-align: center;
+    }}
+    .exam-label.warn {{
+      background: rgba(245, 158, 11, .12);
+      border-color: rgba(245, 158, 11, .28);
+      color: var(--accent);
+    }}
+    .exam-label.danger {{
+      background: rgba(239, 68, 68, .1);
+      border-color: rgba(239, 68, 68, .25);
+      color: var(--danger);
+    }}
+    .exam-label.info {{
+      background: rgba(14, 116, 144, .1);
+      border-color: rgba(14, 116, 144, .22);
+      color: var(--info);
+    }}
+    .exam-date {{
+      font-weight: 720;
+      color: var(--text);
+      white-space: nowrap;
+    }}
+    .exam-form-panel .stack {{
+      gap: 8px;
+    }}
+    .exam-form-panel {{
+      --pad: 16px;
+    }}
+    .exam-form-panel .panel-head {{
+      margin-bottom: 10px;
+    }}
+    .exam-form-panel label,
+    .exam-form-panel input,
+    .exam-form-panel textarea {{
+      min-width: 0;
+    }}
+    .exam-form-panel label {{
+      gap: 5px;
+      margin: 0;
+      font-size: 12px;
+    }}
+    .exam-form-panel input {{
+      min-height: 32px;
+      padding: 7px 10px;
+      font-size: 12.5px;
+    }}
+    .exam-form-panel input[type="file"] {{
+      min-height: 32px;
+      padding: 6px 10px;
+      font-size: 12px;
+    }}
+    .exam-form-panel .checkbox-field {{
+      min-height: 34px;
+      padding: 7px 9px;
+      font-size: 12px;
+    }}
+    .exam-form-panel .checkbox-field input[type="checkbox"] {{
+      width: 17px;
+      min-height: 17px;
+    }}
+    .exam-form-panel textarea.large {{
+      min-height: 96px;
+      max-height: 188px;
+      line-height: 1.45;
+    }}
+    .exam-form-panel .action-preview {{
+      min-height: 52px;
+      max-height: 124px;
+      overflow: auto;
+      line-height: 1.5;
+    }}
+    .exam-form-panel .inline-actions {{
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }}
+    .exam-form-panel .inline-actions::-webkit-scrollbar {{
+      display: none;
+    }}
+    .exam-form-panel .inline-actions button {{
+      flex: 0 0 auto;
+      min-height: 32px;
+      padding-inline: 10px;
+      font-size: 12px;
+    }}
+    .exam-date-grid,
+    .exam-toggle-grid {{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+    .exam-csv-input {{
+      gap: 5px;
+    }}
+    .badge-strip {{
+      display: flex;
+      gap: 4px;
+      flex-wrap: nowrap;
+      max-width: 360px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }}
+    .badge-strip::-webkit-scrollbar {{ display: none; }}
+    .badge-strip .badge {{
+      flex: 0 0 auto;
+      max-width: 230px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .settings-panel .schedule-summary {{
+      grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+      gap: 7px;
+      margin: 9px 0;
+    }}
+    .settings-panel .diagnostic-count {{
+      min-height: 52px;
+      padding: 9px 10px;
+    }}
+    .settings-panel .diagnostic-count strong {{
+      margin-top: 3px;
+      font-size: 17px;
+    }}
     .student-list {{ max-width: 280px; color: var(--muted); line-height: 1.55; }}
     .hub-focus {{
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 14px;
+    }}
+    .ops-command {{
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(230px, .75fr);
+      gap: 12px;
+      margin-bottom: 14px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--primary);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+    }}
+    .ops-command.danger {{ border-left-color: var(--danger); }}
+    .ops-command.warn {{ border-left-color: var(--accent); }}
+    .ops-command.ok {{ border-left-color: var(--ok); }}
+    .ops-command-main,
+    .ops-command-side {{
+      min-width: 0;
+    }}
+    .command-label {{
+      display: block;
+      margin-bottom: 5px;
+      color: var(--text-3);
+      font-size: 11.5px;
+      font-weight: 700;
+    }}
+    .ops-command strong {{
+      display: block;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 780;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }}
+    .ops-command p {{
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }}
+    .command-meta {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 10px;
+    }}
+    .command-action {{
+      margin-top: 10px;
+      width: 100%;
+    }}
+    .command-gate {{
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      padding-top: 11px;
+      border-top: 1px solid var(--line);
+    }}
+    .command-gate span {{
+      color: var(--text-3);
+      font-size: 11.5px;
+      font-weight: 700;
+      white-space: nowrap;
+    }}
+    .command-gate p {{
+      margin: 0;
+      font-size: 12px;
     }}
     .focus-card, .lane-card, .queue-row, .brief-row {{
       border: 1px solid var(--line);
@@ -5002,8 +6499,155 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-size: 12px;
       font-weight: 650;
     }}
-    .queue-list {{ display: grid; gap: 8px; }}
+    .dashboard-hub-panel .ops-command {{
+      gap: 10px;
+      margin-bottom: 10px;
+      padding: 12px;
+    }}
+    .dashboard-hub-panel .hub-focus {{
+      display: flex;
+      gap: 7px;
+      margin: 0 -2px 9px;
+      overflow-x: auto;
+      padding: 0 2px 2px;
+      scroll-snap-type: x proximity;
+      scrollbar-width: none;
+    }}
+    .dashboard-hub-panel .hub-focus::-webkit-scrollbar {{
+      display: none;
+    }}
+    .dashboard-hub-panel .focus-card {{
+      flex: 0 0 116px;
+      min-height: 60px;
+      padding: 9px 10px;
+      gap: 3px;
+      scroll-snap-align: start;
+    }}
+    .dashboard-hub-panel .focus-card strong {{
+      font-size: 20px;
+    }}
+    .dashboard-hub-panel .focus-card span {{
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    .dashboard-hub-panel .hub-lanes {{
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }}
+    .dashboard-hub-panel .lane-card {{
+      min-height: 118px;
+      padding: 10px;
+      gap: 6px;
+    }}
+    .dashboard-hub-panel .lane-card h3,
+    .dashboard-hub-panel .lane-card p {{
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+    }}
+    .dashboard-hub-panel .lane-card h3 {{
+      font-size: 12.8px;
+      -webkit-line-clamp: 2;
+    }}
+    .dashboard-hub-panel .lane-card p {{
+      -webkit-line-clamp: 2;
+    }}
+    .dashboard-hub-panel .lane-card .lane-foot {{
+      display: grid;
+      gap: 3px;
+      font-size: 11.5px;
+    }}
+    .dashboard-hub-panel .lane-card .lane-foot span {{
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    .dashboard-work-strip {{
+      display: contents;
+    }}
+    .queue-panel {{
+      display: flex;
+      flex-direction: column;
+      max-height: min(760px, calc(100vh - 150px));
+      overflow: hidden;
+    }}
+    .queue-panel .panel-head,
+    .queue-panel .queue-filter {{
+      flex-shrink: 0;
+    }}
+    .queue-list {{
+      display: grid;
+      gap: 8px;
+      min-height: 0;
+      overflow-y: auto;
+      padding-right: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line-strong) transparent;
+    }}
+    .queue-list::-webkit-scrollbar {{ width: 6px; }}
+    .queue-list::-webkit-scrollbar-thumb {{
+      background: var(--line-strong);
+      border-radius: 999px;
+    }}
+    .queue-card-strip {{
+      display: grid;
+      gap: 8px;
+    }}
+    .dashboard-queue-panel .queue-card-strip {{
+      gap: 6px;
+    }}
+    .dashboard-queue-panel .queue-row {{
+      gap: 8px;
+      padding: 8px 9px;
+    }}
+    .dashboard-queue-panel .queue-row strong,
+    .dashboard-queue-panel .queue-row > div:first-child > span:not(.status-pill) {{
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+    }}
+    .dashboard-queue-panel .queue-row strong {{
+      -webkit-line-clamp: 1;
+    }}
+    .dashboard-queue-panel .queue-row > div:first-child > span:not(.status-pill) {{
+      -webkit-line-clamp: 1;
+    }}
+    .dashboard-queue-panel .queue-details {{
+      display: none;
+    }}
+    .dashboard-queue-panel .queue-badges {{
+      margin-top: 5px;
+    }}
+    .dashboard-queue-panel .queue-actions {{
+      gap: 5px;
+    }}
+    .dashboard-queue-panel .queue-actions button {{
+      min-height: 29px;
+      padding-inline: 9px;
+      font-size: 11.8px;
+    }}
+    .dashboard-queue-panel .queue-action {{
+      min-width: 72px;
+      max-width: 104px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
     .brief-list {{ display: grid; gap: 8px; }}
+    .dashboard-brief-panel .brief-list {{
+      display: flex;
+      gap: 8px;
+      margin: 0 -2px;
+      overflow-x: auto;
+      padding: 0 2px 2px;
+      scroll-snap-type: x proximity;
+      scrollbar-width: none;
+    }}
+    .dashboard-brief-panel .brief-list::-webkit-scrollbar {{
+      display: none;
+    }}
     .brief-row {{
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -5013,6 +6657,15 @@ def _render_shell(status: dict[str, Any]) -> str:
       padding: 12px 13px;
       background: var(--panel);
       cursor: pointer;
+    }}
+    .dashboard-brief-panel .brief-row {{
+      flex: 0 0 188px;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      align-content: start;
+      min-height: 158px;
+      padding: 10px;
+      scroll-snap-align: start;
     }}
     .brief-row:hover {{ border-color: var(--primary); background: var(--surface-2); }}
     .brief-row strong {{
@@ -5024,12 +6677,27 @@ def _render_shell(status: dict[str, Any]) -> str:
       line-height: 1.3;
       overflow-wrap: anywhere;
     }}
+    .dashboard-brief-panel .brief-row strong {{
+      display: -webkit-box;
+      margin: 5px 0 3px;
+      overflow: hidden;
+      font-size: 13px;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }}
     .brief-row span:not(.status-pill) {{
       display: block;
       color: var(--muted);
       font-size: 12px;
       line-height: 1.35;
       overflow-wrap: anywhere;
+    }}
+    .dashboard-brief-panel .brief-row span:not(.status-pill) {{
+      display: -webkit-box;
+      overflow: hidden;
+      font-size: 11.5px;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
     }}
     .brief-row .status-pill {{
       display: inline-flex;
@@ -5043,37 +6711,90 @@ def _render_shell(status: dict[str, Any]) -> str:
       text-align: right;
       white-space: nowrap;
     }}
+    .dashboard-brief-panel .brief-row .brief-action {{
+      align-self: end;
+      justify-self: start;
+      max-width: 100%;
+      padding: 4px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--primary-soft);
+      font-size: 11.5px;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
     .queue-row {{
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
-      gap: 10px;
-      align-items: center;
-      padding: 12px 13px;
+      gap: 9px;
+      align-items: start;
+      padding: 10px 11px;
       background: var(--panel);
+    }}
+    .queue-row > div {{
+      min-width: 0;
     }}
     .queue-row strong {{
       display: block;
       min-width: 0;
-      font-size: 13.5px;
+      font-size: 13.2px;
       font-weight: 730;
       line-height: 1.3;
       overflow-wrap: anywhere;
     }}
     .queue-row span {{
       display: block;
-      margin-top: 3px;
+      margin-top: 2px;
       color: var(--muted);
       font-size: 12px;
-      line-height: 1.35;
+      line-height: 1.32;
       overflow-wrap: anywhere;
+    }}
+    .queue-row .status-pill {{
+      display: inline-flex;
+      width: fit-content;
+      max-width: 100%;
+      margin-top: 0;
     }}
     .queue-badges {{
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       gap: 4px;
-      margin-top: 7px;
+      margin-top: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
     }}
-    .queue-badges .badge {{ display: inline-flex; margin-top: 0; }}
+    .queue-badges::-webkit-scrollbar {{ display: none; }}
+    .queue-badges .badge {{
+      display: inline-block;
+      flex: 0 0 auto;
+      max-width: min(240px, 100%);
+      margin-top: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    .queue-details {{
+      margin-top: 6px;
+      color: var(--text-3);
+      font-size: 12px;
+    }}
+    .queue-details summary {{
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--primary);
+      font-weight: 700;
+      cursor: pointer;
+      list-style: none;
+    }}
+    .queue-details summary::-webkit-details-marker {{ display: none; }}
+    .queue-details summary::after {{
+      content: "+";
+      font-weight: 800;
+    }}
+    .queue-details[open] summary::after {{ content: "-"; }}
     .queue-note {{
       margin-top: 5px !important;
       color: var(--text-3) !important;
@@ -5084,6 +6805,35 @@ def _render_shell(status: dict[str, Any]) -> str:
       font-size: 12.5px;
       font-weight: 700;
       text-align: right;
+      white-space: nowrap;
+    }}
+    .queue-actions {{
+      display: grid;
+      justify-items: end;
+      gap: 7px;
+    }}
+    .queue-actions button {{
+      min-height: 32px;
+      padding: 0 10px;
+      font-size: 12px;
+    }}
+    .queue-filter,
+    .missing-filter {{
+      display: flex;
+      max-width: 100%;
+      min-width: 0;
+      overflow-x: auto;
+      margin: 0 0 12px;
+      scrollbar-width: none;
+    }}
+    .queue-filter::-webkit-scrollbar,
+    .missing-filter::-webkit-scrollbar {{ display: none; }}
+    .queue-filter button,
+    .missing-filter button {{
+      flex: 0 0 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }}
 
@@ -5153,20 +6903,64 @@ def _render_shell(status: dict[str, Any]) -> str:
     /* ── Responsive ─────────────────────────── */
     @media (max-width: 920px) {{
       .app-shell {{ display: block; }}
-      .sidebar {{ position: sticky; z-index: 10; height: auto; }}
-      .brand {{ height: auto; padding: 14px 16px; }}
+      .sidebar {{
+        position: sticky;
+        z-index: 10;
+        height: 56px;
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr);
+        align-items: stretch;
+        overflow: hidden;
+      }}
+      .brand {{
+        height: 56px;
+        justify-content: center;
+        padding: 0;
+        border-right: 1px solid var(--line);
+        border-bottom: 0;
+        gap: 0;
+      }}
+      .brand-mark {{
+        width: 28px;
+        height: 28px;
+      }}
+      .brand > div:not(.brand-mark) {{
+        display: none;
+      }}
       .sidebar .tabs {{
         flex-direction: row;
         flex-wrap: nowrap;
         gap: 6px;
-        padding: 10px 12px;
+        align-items: center;
+        height: 56px;
+        padding: 8px 10px;
         overflow-x: auto;
+        overflow-y: hidden;
         scrollbar-width: none;
       }}
       .sidebar .tabs::-webkit-scrollbar {{ display: none; }}
       .sidebar .tab-button {{
         width: auto;
         flex: 0 0 auto;
+        grid-template-columns: 16px auto;
+        column-gap: 7px;
+        min-height: 36px;
+        padding: 0 8px;
+        font-size: 12.5px;
+      }}
+      .sidebar .tab-button .ic {{
+        width: 16px;
+        height: 16px;
+      }}
+      .sidebar .tab-button .label {{
+        font-size: 0;
+      }}
+      .sidebar .tab-button .label::after {{
+        content: attr(data-short);
+        font-size: 12.5px;
+      }}
+      .sidebar .tab-button.active {{
+        box-shadow: inset 0 -3px 0 var(--primary);
       }}
       .nav-sep {{ display: none; }}
       .sidebar-footer {{ display: none; }}
@@ -5174,7 +6968,8 @@ def _render_shell(status: dict[str, Any]) -> str:
         height: auto;
         flex-wrap: wrap;
         align-items: flex-start;
-        padding: 12px 14px;
+        gap: 9px;
+        padding: 10px 14px;
       }}
       .topbar-title {{
         width: 100%;
@@ -5196,22 +6991,1431 @@ def _render_shell(status: dict[str, Any]) -> str:
       .topbar .status-pill,
       .topbar button {{
         flex: 0 0 auto;
+        min-height: 34px;
+        padding-inline: 12px;
+        font-size: 12.5px;
       }}
       .topbar-user {{
         display: none;
       }}
-      .status-strip {{ flex-wrap: nowrap; }}
+      .status-strip {{
+        flex-wrap: nowrap;
+        height: 54px;
+        scrollbar-width: none;
+      }}
+      .status-strip::-webkit-scrollbar {{ display: none; }}
+      .metric {{
+        min-width: 98px;
+        padding: 0 14px;
+      }}
+      .metric strong {{
+        font-size: 18px;
+      }}
       .grid, .actions, .actions.compact, .action-layout, .action-controls, .mini-grid,
-      .diagnostic-summary, .schedule-summary, .core-grid, .hub-focus, .hub-lanes, .sso-fields {{ grid-template-columns: 1fr; }}
+      .diagnostic-summary, .schedule-summary, .hub-lanes, .sso-fields {{ grid-template-columns: 1fr; }}
+      #tab-reports.active {{
+        display: block;
+      }}
+      #tab-reports > .action-command {{
+        margin-bottom: 12px;
+      }}
+      #tab-reports > .exam-command {{
+        grid-template-columns: 1fr;
+      }}
+      #tab-reports > .panel + .panel {{
+        margin-top: 12px;
+      }}
+      #tab-reports > .action-command {{
+        gap: 7px;
+        padding: 10px;
+      }}
+      #tab-reports > .action-command .action-command-main > p {{
+        -webkit-line-clamp: 1;
+      }}
+      #tab-reports > .action-command .command-meta,
+      #tab-reports > .action-command .action-command-actions {{
+        margin-top: 6px;
+      }}
+      #tab-reports > .action-command .command-gate {{
+        margin-top: 6px;
+        padding: 6px 7px;
+      }}
+      #tab-reports > .action-command .workflow-step {{
+        flex-basis: min(112px, 46vw);
+        min-height: 48px;
+        padding: 6px 7px;
+      }}
+      #tab-reports > .action-command .workflow-step p {{
+        display: none;
+      }}
+      #tab-reports .report-overview-panel,
+      #tab-reports .report-review-panel,
+      #tab-reports .student-report-panel,
+      #tab-reports .exam-form-panel {{
+        --pad: 14px;
+      }}
+      #tab-reports .student-report-panel .action-preview {{
+        min-height: 84px;
+        max-height: 120px;
+      }}
+      #tab-reports .report-review-strip {{
+        display: flex;
+        gap: 8px;
+        margin: 0 0 12px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 2px 3px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      #tab-reports .report-review-strip::-webkit-scrollbar {{
+        display: none;
+      }}
+      #tab-reports .report-review-strip > .panel {{
+        flex: 0 0 min(286px, 82vw);
+        max-height: 238px;
+        margin-top: 0;
+        overflow: auto;
+        scroll-snap-align: start;
+      }}
+      #tab-reports .report-review-strip > .report-overview-panel {{
+        flex-basis: min(300px, 84vw);
+      }}
+      #tab-reports .report-review-strip > .student-report-panel {{
+        flex-basis: min(268px, 78vw);
+      }}
+      #tab-reports .report-review-strip .panel-head {{
+        gap: 8px;
+        margin-bottom: 8px;
+      }}
+      #tab-reports .report-review-strip .panel-head h2 {{
+        font-size: 15px;
+      }}
+      #tab-reports .report-review-strip .inline-actions {{
+        width: 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }}
+      #tab-reports .report-review-strip .inline-actions::-webkit-scrollbar {{
+        display: none;
+      }}
+      #tab-reports .report-review-strip .inline-actions > * {{
+        flex: 0 0 auto;
+      }}
+      #tab-reports .report-review-strip .inline-actions button,
+      #tab-reports .report-review-strip .inline-actions label {{
+        min-height: 30px;
+        font-size: 12px;
+      }}
+      #tab-reports .report-review-strip .empty {{
+        padding: 16px 12px;
+        font-size: 12px;
+      }}
+      #tab-reports .exam-form-panel textarea.large {{
+        min-height: 68px;
+        max-height: 88px;
+      }}
+      #tab-reports .exam-form-panel .action-preview {{
+        min-height: 42px;
+        max-height: 58px;
+      }}
+      #tab-reports .exam-form-panel {{
+        --pad: 12px;
+      }}
+      #tab-reports .exam-form-strip {{
+        display: flex;
+        gap: 8px;
+        margin: 0 -2px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 2px 3px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      #tab-reports .exam-form-strip::-webkit-scrollbar {{
+        display: none;
+      }}
+      #tab-reports .exam-form-strip > .exam-form-panel {{
+        flex: 0 0 min(326px, 88vw);
+        max-height: 456px;
+        margin-top: 0;
+        overflow: auto;
+        scroll-snap-align: start;
+      }}
+      #tab-reports .exam-form-panel .panel-head {{
+        margin-bottom: 8px;
+      }}
+      #tab-reports .exam-form-panel .stack {{
+        gap: 7px;
+      }}
+      #tab-reports .exam-form-panel label {{
+        gap: 4px;
+        font-size: 11.5px;
+      }}
+      #tab-reports .exam-form-panel input {{
+        min-height: 30px;
+        padding: 6px 8px;
+      }}
+      #tab-reports .exam-form-panel input[type="file"] {{
+        min-height: 30px;
+        padding: 5px 8px;
+      }}
+      #tab-reports .exam-form-panel .checkbox-field {{
+        min-height: 32px;
+        padding: 6px 8px;
+      }}
+      #tab-settings.active {{
+        display: block;
+      }}
+      #tab-settings > .action-command {{
+        gap: 7px;
+        margin-bottom: 12px;
+        padding: 10px;
+      }}
+      #tab-settings > .action-command .action-command-main > p {{
+        -webkit-line-clamp: 1;
+      }}
+      #tab-settings > .action-command .command-meta,
+      #tab-settings > .action-command .action-command-actions {{
+        margin-top: 6px;
+      }}
+      #tab-settings > .action-command .command-gate {{
+        margin-top: 6px;
+        padding: 6px 7px;
+      }}
+      #tab-settings > .action-command .workflow-step {{
+        flex-basis: min(112px, 46vw);
+        min-height: 48px;
+        padding: 6px 7px;
+      }}
+      #tab-settings > .action-command .workflow-step p {{
+        display: none;
+      }}
+      #tab-settings > .settings-panel + .settings-panel {{
+        margin-top: 12px;
+      }}
+      #tab-settings > .settings-panel {{
+        padding: 14px;
+      }}
+      #tab-settings .settings-panel-strip {{
+        display: flex;
+        gap: 8px;
+        margin: 0 -2px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 2px 3px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      #tab-settings .settings-panel-strip::-webkit-scrollbar {{
+        display: none;
+      }}
+      #tab-settings .settings-panel-strip > .settings-panel {{
+        flex: 0 0 min(320px, 86vw);
+        max-height: 504px;
+        margin-top: 0;
+        overflow: auto;
+        padding: 14px;
+        scroll-snap-align: start;
+      }}
+      #tab-settings .settings-panel .panel-head {{
+        gap: 8px;
+        margin-bottom: 8px;
+      }}
+      #tab-settings .settings-panel .inline-actions {{
+        width: 100%;
+      }}
+      #tab-settings .settings-panel .inline-actions button {{
+        min-height: 30px;
+        padding-inline: 9px;
+        font-size: 12px;
+      }}
+      #tab-settings .settings-panel .inline-actions label {{
+        min-width: 132px;
+      }}
+      #tab-settings #readinessSummary,
+      #tab-settings #pilotBriefSummary,
+      #tab-settings #notionSchemaSummary {{
+        display: flex;
+        gap: 7px;
+        margin: 8px -2px 8px;
+        overflow-x: auto;
+        padding: 0 2px 2px;
+        scrollbar-width: none;
+      }}
+      #tab-settings #readinessSummary::-webkit-scrollbar,
+      #tab-settings #pilotBriefSummary::-webkit-scrollbar,
+      #tab-settings #notionSchemaSummary::-webkit-scrollbar {{
+        display: none;
+      }}
+      #tab-settings #readinessSummary .diagnostic-count,
+      #tab-settings #pilotBriefSummary .diagnostic-count,
+      #tab-settings #notionSchemaSummary .diagnostic-count {{
+        flex: 0 0 96px;
+        min-height: 48px;
+        padding: 8px 9px;
+      }}
+      #tab-settings #readinessList {{
+        max-height: 210px;
+      }}
+      #tab-settings #notionSchemaList,
+      #tab-settings #pilotBriefList,
+      #tab-settings #settings {{
+        max-height: 176px;
+      }}
+      #tab-settings .schema-command.is-collapsed {{
+        min-height: 60px;
+        max-height: 64px !important;
+      }}
+      #tab-data.active {{
+        display: block;
+      }}
+      #tab-data > .action-command {{
+        margin-bottom: 12px;
+      }}
+      #tab-data > .panel + .panel {{
+        margin-top: 12px;
+      }}
+      #tab-data .data-panel-strip {{
+        display: flex;
+        gap: 8px;
+        margin: 0 -2px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 2px 3px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      #tab-data .data-panel-strip::-webkit-scrollbar {{
+        display: none;
+      }}
+      #tab-data .data-panel-strip > .panel {{
+        flex: 0 0 min(326px, 88vw);
+        max-height: 620px;
+        margin-top: 0;
+        overflow: auto;
+        scroll-snap-align: start;
+      }}
+      #tab-missing > .action-command {{
+        gap: 7px;
+        padding: 10px;
+      }}
+      #tab-missing > .action-command .action-command-main > p {{
+        -webkit-line-clamp: 1;
+      }}
+      #tab-missing > .action-command .command-meta,
+      #tab-missing > .action-command .action-command-actions {{
+        margin-top: 6px;
+      }}
+      #tab-missing > .action-command .command-gate {{
+        margin-top: 6px;
+        padding: 6px 7px;
+      }}
+      #tab-missing > .action-command .workflow-step {{
+        flex-basis: min(112px, 46vw);
+        min-height: 48px;
+        padding: 6px 7px;
+      }}
+      #tab-missing > .action-command .workflow-step p {{
+        display: none;
+      }}
+      .action-command {{
+        gap: 9px;
+        margin-bottom: 12px;
+        padding: 12px;
+      }}
+      .action-command strong {{
+        font-size: 15px;
+      }}
+      .action-command p {{
+        display: -webkit-box;
+        margin-top: 4px;
+        overflow: hidden;
+        font-size: 12px;
+        line-height: 1.35;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }}
+      .action-command-actions {{
+        flex-wrap: nowrap;
+        gap: 6px;
+        margin-top: 9px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }}
+      .action-command-actions::-webkit-scrollbar {{
+        display: none;
+      }}
+      .action-command-actions button {{
+        flex: 0 0 auto;
+        min-height: 30px;
+        padding-inline: 10px;
+        font-size: 12px;
+      }}
+      .action-command .command-gate {{
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 6px;
+        align-items: start;
+        margin-top: 7px;
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--surface-2);
+      }}
+      .action-command .command-gate span {{
+        font-size: 11px;
+        white-space: nowrap;
+      }}
+      .action-command .command-gate p {{
+        margin: 0;
+        font-size: 11.5px;
+        -webkit-line-clamp: 1;
+      }}
+      .action-command-side {{
+        overflow-x: hidden;
+        padding-top: 6px;
+        border-top: 1px solid var(--line);
+      }}
+      .action-command-side .workflow-steps {{
+        display: flex;
+        gap: 7px;
+        margin: 0;
+        overflow-x: auto;
+        padding: 0 0 2px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      .action-command-side .workflow-steps::-webkit-scrollbar {{
+        display: none;
+      }}
+      .action-command-side .workflow-step {{
+        flex: 0 0 min(138px, 60vw);
+        min-height: 70px;
+        padding: 7px 8px;
+        scroll-snap-align: start;
+      }}
+      .action-command-side .workflow-step span {{
+        width: 18px;
+        height: 18px;
+        margin-bottom: 4px;
+      }}
+      .action-command-side .workflow-step strong {{
+        font-size: 12px;
+      }}
+      .action-command-side .workflow-step p {{
+        display: -webkit-box;
+        margin-top: 2px;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        min-height: 0;
+        font-size: 11px;
+        line-height: 1.25;
+      }}
+      #tab-reports > .action-command .action-command-side {{
+        overflow-x: hidden;
+      }}
+      #tab-reports > .action-command .workflow-steps {{
+        margin-inline: 0;
+        padding-inline: 0;
+      }}
+      .schedule-panel .schedule-summary {{
+        display: flex;
+        gap: 7px;
+        margin: 8px -2px 8px;
+        overflow-x: auto;
+        padding: 0 2px 2px;
+        scrollbar-width: none;
+      }}
+      .schedule-panel .schedule-summary::-webkit-scrollbar {{
+        display: none;
+      }}
+      .schedule-panel .schedule-summary .diagnostic-count {{
+        flex: 0 0 104px;
+      }}
+      .exam-form-panel .actions.compact {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }}
+      .exam-form-panel .actions.compact.exam-date-grid,
+      .exam-form-panel .actions.compact.exam-toggle-grid {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
+      .exam-form-panel input[type="datetime-local"] {{
+        padding-inline: 8px;
+        font-size: 12px;
+      }}
+      .exam-form-panel textarea.large {{
+        min-height: 96px;
+      }}
+      .dashboard-hub-panel {{
+        padding: 14px;
+      }}
+      .dashboard-hub-panel .panel-head {{
+        gap: 9px;
+        margin-bottom: 10px;
+      }}
+      .dashboard-hub-panel .ops-command {{
+        gap: 7px;
+        margin-bottom: 10px;
+        padding: 10px;
+      }}
+      .dashboard-hub-panel .ops-command strong {{
+        font-size: 15px;
+      }}
+      .dashboard-hub-panel .ops-command p {{
+        display: -webkit-box;
+        margin-top: 4px;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }}
+      .dashboard-hub-panel .ops-command-main p {{
+        -webkit-line-clamp: 1;
+      }}
+      .dashboard-hub-panel .command-meta {{
+        flex-wrap: nowrap;
+        gap: 4px;
+        margin-top: 7px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }}
+      .dashboard-hub-panel .command-meta::-webkit-scrollbar {{
+        display: none;
+      }}
+      .dashboard-hub-panel .command-meta > * {{
+        flex: 0 0 auto;
+      }}
+      .dashboard-hub-panel .ops-command-side {{
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 3px 8px;
+        align-items: end;
+        padding: 7px 8px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--panel);
+      }}
+      .dashboard-hub-panel .ops-command-side .command-label {{
+        display: none;
+      }}
+      .dashboard-hub-panel .ops-command-side strong,
+      .dashboard-hub-panel .ops-command-side p {{
+        grid-column: 1;
+      }}
+      .dashboard-hub-panel .ops-command-side strong {{
+        font-size: 13px;
+      }}
+      .dashboard-hub-panel .ops-command-side p {{
+        -webkit-line-clamp: 1;
+      }}
+      .dashboard-hub-panel .ops-command-side .command-action {{
+        grid-column: 2;
+        grid-row: 1 / 3;
+        width: auto;
+        min-height: 30px;
+        margin: 0;
+        padding-inline: 9px;
+        font-size: 11.5px;
+      }}
+      .dashboard-hub-panel .command-gate {{
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 6px;
+        align-items: center;
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--panel);
+      }}
+      .dashboard-hub-panel .command-gate span {{
+        font-size: 11px;
+      }}
+      .dashboard-hub-panel .command-gate p {{
+        font-size: 11.5px;
+        -webkit-line-clamp: 1;
+      }}
+      .dashboard-hub-panel .hub-focus {{
+        gap: 7px;
+        margin: 0 -2px 9px;
+        padding: 0 2px 2px;
+      }}
+      .dashboard-hub-panel .focus-card {{
+        flex: 0 0 136px;
+        min-height: 66px;
+        padding: 10px 11px;
+        gap: 4px;
+      }}
+      .dashboard-hub-panel .focus-card strong {{
+        font-size: 20px;
+      }}
+      .dashboard-hub-panel .focus-card span {{
+        font-size: 11px;
+      }}
+      .dashboard-hub-panel .hub-lanes {{
+        display: flex;
+        gap: 8px;
+        margin: 0 -2px;
+        overflow-x: auto;
+        padding: 0 2px 2px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      .dashboard-hub-panel .hub-lanes::-webkit-scrollbar {{
+        display: none;
+      }}
+      .dashboard-hub-panel .lane-card {{
+        flex: 0 0 min(178px, 70vw);
+        min-height: 118px;
+        padding: 10px;
+        gap: 6px;
+        scroll-snap-align: start;
+      }}
+      .dashboard-hub-panel .lane-card h3 {{
+        font-size: 12.8px;
+      }}
+      .dashboard-hub-panel .lane-card p {{
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }}
+      .dashboard-hub-panel .lane-card .lane-foot {{
+        display: grid;
+        gap: 3px;
+        font-size: 11.5px;
+      }}
+      .dashboard-brief-panel {{
+        padding: 14px;
+      }}
+      .dashboard-brief-panel .panel-head {{
+        gap: 8px;
+        margin-bottom: 10px;
+      }}
+      .dashboard-brief-panel .panel-head .inline-actions {{
+        width: 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }}
+      .dashboard-brief-panel .panel-head .inline-actions::-webkit-scrollbar {{
+        display: none;
+      }}
+      .dashboard-brief-panel .panel-head .inline-actions > * {{
+        flex: 0 0 auto;
+      }}
+      .dashboard-brief-panel .panel-head .inline-actions button {{
+        min-height: 32px;
+        padding-inline: 10px;
+        font-size: 12px;
+      }}
+      .dashboard-brief-panel .brief-list {{
+        display: flex;
+        gap: 8px;
+        margin: 0 -2px;
+        overflow-x: auto;
+        padding: 0 2px 2px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      .dashboard-brief-panel .brief-list::-webkit-scrollbar {{
+        display: none;
+      }}
+      .dashboard-brief-panel .brief-row {{
+        flex: 0 0 min(216px, 78vw);
+        grid-template-columns: 1fr;
+        gap: 8px;
+        align-content: start;
+        min-height: 164px;
+        padding: 10px;
+        scroll-snap-align: start;
+      }}
+      .dashboard-brief-panel .brief-row strong {{
+        display: -webkit-box;
+        margin: 5px 0 3px;
+        overflow: hidden;
+        font-size: 13px;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }}
+      .dashboard-brief-panel .brief-row span:not(.status-pill) {{
+        display: -webkit-box;
+        overflow: hidden;
+        font-size: 11.5px;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }}
+      .dashboard-brief-panel .brief-row .brief-action {{
+        align-self: end;
+        justify-self: start;
+        padding: 4px 7px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--primary-soft);
+        font-size: 11.5px;
+        text-align: left;
+      }}
+      #tab-dashboard .dashboard-work-strip,
+      #tab-dashboard .dashboard-side {{
+        display: flex;
+        gap: 8px;
+        margin: 0 -2px 10px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 2px 3px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      #tab-dashboard .dashboard-work-strip::-webkit-scrollbar,
+      #tab-dashboard .dashboard-side::-webkit-scrollbar {{
+        display: none;
+      }}
+      #tab-dashboard .dashboard-work-strip > .panel,
+      #tab-dashboard .dashboard-side > .panel {{
+        flex: 0 0 min(292px, 82vw);
+        max-height: 288px;
+        margin-top: 0;
+        overflow: auto;
+        scroll-snap-align: start;
+      }}
+      #tab-dashboard .dashboard-work-strip > .dashboard-brief-panel,
+      #tab-dashboard .dashboard-side > .dashboard-queue-panel {{
+        flex-basis: min(320px, 86vw);
+      }}
+      #tab-dashboard .dashboard-work-strip .panel-head,
+      #tab-dashboard .dashboard-side .panel-head {{
+        gap: 8px;
+        margin-bottom: 8px;
+      }}
+      .dashboard-playbook-panel,
+      .dashboard-report-panel,
+      .dashboard-log-panel {{
+        padding: 14px;
+      }}
+      .dashboard-playbook-panel .panel-head,
+      .dashboard-report-panel .panel-head {{
+        gap: 8px;
+        margin-bottom: 8px;
+      }}
+      .dashboard-playbook-panel .panel-head .inline-actions,
+      .dashboard-report-panel .panel-head .inline-actions {{
+        width: 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }}
+      .dashboard-playbook-panel .panel-head .inline-actions::-webkit-scrollbar,
+      .dashboard-report-panel .panel-head .inline-actions::-webkit-scrollbar {{
+        display: none;
+      }}
+      .dashboard-playbook-panel .panel-head .inline-actions button,
+      .dashboard-report-panel .panel-head .inline-actions button {{
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding-inline: 10px;
+        font-size: 12px;
+      }}
+      .dashboard-playbook-panel .ops-report-preview.is-collapsed,
+      .dashboard-report-panel .ops-report-preview.is-collapsed {{
+        max-height: 72px !important;
+      }}
+      .dashboard-report-panel .handoff-list {{
+        max-height: 72px;
+        margin-top: 8px;
+        overflow: auto;
+      }}
+      .dashboard-log-panel .log {{
+        min-height: 130px;
+        max-height: 150px;
+      }}
+      .diagnostics-panel {{
+        padding: 14px;
+      }}
+      .diagnostics-panel .panel-head {{
+        gap: 9px;
+        margin-bottom: 8px;
+      }}
+      .diagnostics-panel .panel-head .inline-actions {{
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }}
+      .diagnostics-panel .panel-head .inline-actions::-webkit-scrollbar {{
+        display: none;
+      }}
+      .diagnostics-panel .panel-head .inline-actions button {{
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding-inline: 10px;
+        font-size: 12px;
+      }}
+      .diagnostics-panel .diagnostic-summary {{
+        display: flex;
+        gap: 7px;
+        margin: 8px -2px 8px;
+        overflow-x: auto;
+        padding: 0 2px 2px;
+        scrollbar-width: none;
+      }}
+      .diagnostics-panel .diagnostic-summary::-webkit-scrollbar {{
+        display: none;
+      }}
+      .diagnostics-panel .diagnostic-count {{
+        flex: 0 0 94px;
+        min-height: 52px;
+        padding: 9px 10px;
+      }}
+      .diagnostics-panel .diagnostic-count strong {{
+        margin-top: 3px;
+        font-size: 17px;
+      }}
+      .diagnostics-panel .table-wrap {{
+        display: none;
+      }}
+      .diagnostics-panel .diagnostic-card-list {{
+        display: grid;
+        gap: 8px;
+      }}
+      .diagnostics-panel .diagnostic-card {{
+        padding: 10px;
+      }}
+      .diagnostics-panel .diagnostic-card span:not(.status-pill),
+      .diagnostics-panel .diagnostic-next {{
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }}
+      .missing-panel {{
+        padding: 14px;
+      }}
+      .missing-panel .panel-head {{
+        gap: 9px;
+        margin-bottom: 10px;
+      }}
+      .missing-panel .panel-head .inline-actions {{
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }}
+      .missing-panel .panel-head .inline-actions::-webkit-scrollbar {{
+        display: none;
+      }}
+      .missing-panel .panel-head .inline-actions button {{
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding-inline: 10px;
+        font-size: 12px;
+      }}
+      .missing-panel .missing-filter {{
+        margin-bottom: 8px;
+      }}
+      .missing-panel .table-wrap {{
+        display: none;
+      }}
+      .missing-panel .pager {{
+        justify-content: flex-start;
+      }}
+      .missing-panel .mobile-card-list {{
+        display: flex;
+        gap: 8px;
+        margin: 0 -2px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 2px 3px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      .missing-panel .mobile-card-list::-webkit-scrollbar {{
+        display: none;
+      }}
+      .missing-card {{
+        flex: 0 0 min(252px, 78vw);
+        max-height: 214px;
+        overflow: hidden;
+        padding: 10px;
+        scroll-snap-align: start;
+      }}
+      .notification-card-list .missing-card {{
+        flex-basis: min(262px, 80vw);
+        max-height: 222px;
+      }}
+      .missing-card-head {{
+        grid-template-columns: 22px minmax(0, 1fr) auto;
+      }}
+      .missing-card-head > .status-pill,
+      .missing-card-head > .badge {{
+        justify-self: start;
+      }}
+      .missing-card-meta {{
+        grid-column: 2 / 4;
+      }}
+      .missing-card-row {{
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }}
+      .missing-card-list .missing-card-row {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
+      .missing-card-message,
+      .missing-card-field,
+      .missing-card-title span {{
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }}
+      .missing-card-field {{
+        padding: 7px 8px;
+      }}
+      .settings-panel .schedule-summary {{
+        display: flex;
+        gap: 7px;
+        margin: 8px -2px 8px;
+        overflow-x: auto;
+        padding: 0 2px 2px;
+        scrollbar-width: none;
+      }}
+      .settings-panel .schedule-summary::-webkit-scrollbar {{
+        display: none;
+      }}
+      .settings-panel .schedule-summary .diagnostic-count {{
+        flex: 0 0 104px;
+      }}
+      .report-review-panel .schedule-summary {{
+        display: flex;
+        gap: 7px;
+        margin: 8px -2px 8px;
+        overflow-x: auto;
+        padding: 0 2px 2px;
+        scrollbar-width: none;
+      }}
+      .report-review-panel .schedule-summary::-webkit-scrollbar {{
+        display: none;
+      }}
+      .report-review-panel .schedule-summary .diagnostic-count {{
+        flex: 0 0 104px;
+      }}
+      .table-wrap.is-compact {{
+        max-height: none;
+      }}
+      .compact-table .inline-actions {{
+        flex-wrap: wrap;
+      }}
+      .badge-strip {{
+        max-width: 220px;
+      }}
+      .core-panel {{
+        padding: 14px;
+      }}
+      .core-panel .panel-head {{
+        margin-bottom: 10px;
+      }}
+      .core-grid {{
+        display: flex;
+        gap: 8px;
+        margin: 0 -14px;
+        padding: 0 14px 2px;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      .core-grid::-webkit-scrollbar {{ display: none; }}
+      .core-button {{
+        flex: 0 0 min(260px, 78vw);
+        min-height: 86px;
+        padding: 12px;
+        scroll-snap-align: start;
+      }}
+      .core-button .core-number {{
+        width: 34px;
+        height: 34px;
+      }}
+      .missing-action-panel {{
+        grid-column: auto;
+        padding: 14px;
+      }}
+      .missing-action-panel .stack {{
+        grid-template-columns: 1fr;
+      }}
+      .missing-action-panel .inline-actions,
+      .missing-action-panel .missing-filter,
+      .missing-action-panel .selection-summary,
+      .missing-action-panel .missing-action-list,
+      .missing-action-panel .action-preview {{
+        grid-column: auto;
+      }}
+      .missing-action-panel .missing-filter {{
+        display: flex;
+      }}
+      .missing-action-panel .selection-summary {{
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 3px;
+      }}
+      .missing-action-panel .selection-summary span {{
+        text-align: left;
+      }}
+      .missing-action-panel .missing-action-list {{
+        display: flex;
+        gap: 8px;
+        max-height: none;
+        margin: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 0 3px;
+        border: 0;
+        background: transparent;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      .missing-action-panel .missing-action-list::-webkit-scrollbar {{
+        display: none;
+      }}
+      .missing-action-panel .missing-action-list .selectable-row {{
+        flex: 0 0 min(262px, 78vw);
+        min-height: 136px;
+        scroll-snap-align: start;
+      }}
+      .missing-action-panel .missing-action-list .empty,
+      .missing-action-panel .missing-action-list .pager {{
+        flex: 0 0 min(262px, 78vw);
+      }}
+      .missing-action-panel .missing-action-list .pager {{
+        position: static;
+        margin: 0;
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--surface-2);
+        justify-content: flex-start;
+      }}
+      .missing-action-panel .action-preview {{
+        height: auto;
+        max-height: 138px;
+      }}
+      .report-action-panel {{
+        grid-column: auto;
+      }}
+      .report-action-panel .stack {{
+        grid-template-columns: 1fr;
+      }}
+      .report-action-panel .mini-grid,
+      .report-action-panel .inline-actions,
+      .report-action-panel .selection-summary,
+      .report-action-panel #reportTargetList,
+      .report-action-panel #reportPreview {{
+        grid-column: auto;
+      }}
+      .report-action-panel #reportTargetList {{
+        max-height: none;
+        overflow: visible;
+      }}
+      .report-action-panel #reportPreview {{
+        height: auto;
+        max-height: none;
+      }}
+      #tab-actions .action-layout {{
+        gap: 10px;
+      }}
+      #tab-actions .core-panel,
+      #tab-actions .missing-action-panel,
+      #tab-actions .schedule-action-panel,
+      #tab-actions .sso-action-panel,
+      #tab-actions .report-action-panel {{
+        padding: 12px;
+      }}
+      #tab-actions .core-panel .panel-head {{
+        margin-bottom: 8px;
+      }}
+      #tab-actions .core-grid {{
+        margin: 0 -12px;
+        padding: 0 12px 2px;
+      }}
+      #tab-actions .core-button {{
+        grid-template-columns: 30px minmax(0, 1fr);
+        flex-basis: min(224px, 70vw);
+        min-height: 72px;
+        padding: 10px;
+      }}
+      #tab-actions .core-button .core-number {{
+        width: 30px;
+        height: 30px;
+        font-size: 13px;
+      }}
+      #tab-actions .core-button span:not(.core-number) {{
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 1;
+      }}
+      #tab-actions #actionCommand {{
+        gap: 7px;
+        padding: 10px;
+      }}
+      #tab-actions #actionCommand .action-command-main > p {{
+        -webkit-line-clamp: 1;
+      }}
+      #tab-actions #actionCommand .command-meta,
+      #tab-actions #actionCommand .action-command-actions {{
+        margin-top: 6px;
+      }}
+      #tab-actions #actionCommand .command-gate {{
+        margin-top: 6px;
+        padding: 6px 7px;
+      }}
+      #tab-actions #actionCommand .action-command-side .workflow-step {{
+        flex-basis: min(112px, 46vw);
+        min-height: 48px;
+        padding: 6px 7px;
+      }}
+      #tab-actions #actionCommand .action-command-side .workflow-step p {{
+        display: none;
+      }}
+      #tab-actions .action-controls,
+      #tab-actions .missing-action-panel .stack,
+      #tab-actions .schedule-action-panel .stack,
+      #tab-actions .sso-action-panel .stack,
+      #tab-actions .report-action-panel .stack {{
+        gap: 8px;
+      }}
+      #tab-actions .action-controls {{
+        display: flex;
+        margin: 0 -2px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 2px 3px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      #tab-actions .action-controls::-webkit-scrollbar {{
+        display: none;
+      }}
+      #tab-actions .action-controls > .panel {{
+        flex: 0 0 min(310px, 82vw);
+        max-height: 636px;
+        margin-top: 0;
+        overflow: auto;
+        scroll-snap-align: start;
+      }}
+      #tab-actions .action-controls > .missing-action-panel {{
+        flex-basis: min(326px, 88vw);
+      }}
+      #tab-actions .action-controls > .report-action-panel {{
+        flex-basis: min(318px, 84vw);
+      }}
+      #tab-actions .window-range-readonly-field {{
+        display: none;
+      }}
+      #tab-actions .missing-action-panel .selection-summary,
+      #tab-actions .report-action-panel .selection-summary {{
+        min-height: 32px;
+        padding: 7px 9px;
+      }}
+      #tab-actions .missing-action-panel .missing-action-list .selectable-row {{
+        flex-basis: min(232px, 72vw);
+        min-height: 112px;
+        padding: 8px;
+      }}
+      #tab-actions .missing-action-panel .missing-action-list .empty,
+      #tab-actions .missing-action-panel .missing-action-list .pager {{
+        flex-basis: min(232px, 72vw);
+      }}
+      #tab-actions .missing-action-panel .action-preview {{
+        max-height: 96px;
+        padding: 8px 9px;
+      }}
+      #tab-actions .schedule-action-panel textarea.large {{
+        min-height: 104px;
+      }}
+      #tab-actions .schedule-action-panel .action-preview,
+      #tab-actions .sso-action-panel .action-preview {{
+        min-height: 54px;
+        max-height: 64px;
+        padding: 8px 9px;
+      }}
+      #tab-actions .sso-action-panel .sso-fields,
+      #tab-actions .report-action-panel .mini-grid {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }}
+      #tab-actions .report-action-panel #reportTargetList {{
+        max-height: 96px;
+        overflow: auto;
+        padding: 6px;
+      }}
+      #tab-actions .report-action-panel #reportPreview {{
+        min-height: 56px;
+        max-height: 72px;
+        padding: 8px 9px;
+      }}
+      .ops-command {{
+        grid-template-columns: 1fr;
+      }}
+      .action-command {{
+        grid-template-columns: 1fr;
+      }}
+      .workflow-steps {{
+        grid-template-columns: 1fr;
+      }}
+      #tab-memo .memo-grid {{
+        display: flex;
+        gap: 8px;
+        margin: 0 -2px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 2px 3px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      #tab-memo .memo-grid::-webkit-scrollbar {{
+        display: none;
+      }}
+      #tab-memo .memo-grid > .panel {{
+        flex: 0 0 min(326px, 88vw);
+        max-height: 600px;
+        margin-top: 0;
+        overflow: auto;
+        scroll-snap-align: start;
+      }}
+      #tab-memo .memo-grid .panel-head {{
+        gap: 8px;
+        margin-bottom: 8px;
+      }}
+      #tab-reports .report-review-strip,
+      #tab-reports .exam-form-strip,
+      #tab-actions .action-controls,
+      #tab-dashboard .dashboard-work-strip,
+      #tab-dashboard .dashboard-side,
+      #tab-settings .settings-panel-strip,
+      #tab-data .data-panel-strip,
+      #tab-memo .memo-grid,
+      .core-grid,
+      .dashboard-hub-panel .hub-focus,
+      .dashboard-hub-panel .hub-lanes,
+      .dashboard-brief-panel .brief-list,
+      .dashboard-queue-panel .queue-card-strip,
+      .missing-panel .mobile-card-list,
+      .missing-action-panel .missing-action-list {{
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-inline: contain;
+        scroll-padding-inline: 2px;
+      }}
+      #tab-reports .report-review-strip > *,
+      #tab-reports .exam-form-strip > *,
+      #tab-actions .action-controls > *,
+      #tab-dashboard .dashboard-work-strip > *,
+      #tab-dashboard .dashboard-side > *,
+      #tab-settings .settings-panel-strip > *,
+      #tab-data .data-panel-strip > *,
+      #tab-memo .memo-grid > *,
+      .core-grid > *,
+      .dashboard-hub-panel .hub-focus > *,
+      .dashboard-hub-panel .hub-lanes > *,
+      .dashboard-brief-panel .brief-list > *,
+      .dashboard-queue-panel .queue-card-strip > *,
+      .missing-panel .mobile-card-list > *,
+      .missing-action-panel .missing-action-list > * {{
+        scroll-snap-stop: always;
+      }}
+      .student-brief-grid {{
+        grid-template-columns: 1fr;
+      }}
+      .queue-row {{
+        grid-template-columns: 1fr;
+      }}
+      .queue-panel {{
+        max-height: none;
+        overflow: visible;
+      }}
+      .queue-list {{
+        overflow: visible;
+        padding-right: 0;
+      }}
+      .dashboard-queue-panel {{
+        padding: 14px;
+      }}
+      .dashboard-queue-panel .panel-head {{
+        gap: 9px;
+        margin-bottom: 8px;
+      }}
+      .dashboard-queue-panel .panel-head .inline-actions {{
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }}
+      .dashboard-queue-panel .panel-head .inline-actions::-webkit-scrollbar {{
+        display: none;
+      }}
+      .dashboard-queue-panel .panel-head .inline-actions button {{
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding-inline: 10px;
+        font-size: 12px;
+      }}
+      .dashboard-queue-panel .queue-filter {{
+        margin-bottom: 8px;
+      }}
+      .dashboard-queue-panel .queue-list {{
+        display: grid;
+        gap: 8px;
+        overflow: visible;
+        padding-right: 0;
+      }}
+      .dashboard-queue-panel .queue-card-strip {{
+        display: flex;
+        gap: 8px;
+        margin: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 0 3px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+      }}
+      .dashboard-queue-panel .queue-card-strip::-webkit-scrollbar {{
+        display: none;
+      }}
+      .dashboard-queue-panel .queue-row {{
+        flex: 0 0 min(252px, 78vw);
+        min-height: 166px;
+        padding: 10px;
+        scroll-snap-align: start;
+      }}
+      .dashboard-queue-panel .queue-row strong {{
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }}
+      .dashboard-queue-panel .queue-row > div:first-child > span:not(.status-pill) {{
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }}
+      .dashboard-queue-panel .queue-details {{
+        display: none;
+      }}
+      .dashboard-queue-panel .queue-badges {{
+        margin-top: 6px;
+        padding-bottom: 2px;
+      }}
+      .dashboard-queue-panel .queue-badges .badge {{
+        max-width: 178px;
+      }}
+      .dashboard-queue-panel .queue-actions {{
+        align-items: flex-end;
+        gap: 6px;
+        margin-top: 6px;
+      }}
+      .dashboard-queue-panel .queue-actions button {{
+        min-height: 30px;
+        padding-inline: 9px;
+        font-size: 11.5px;
+      }}
+      .dashboard-queue-panel .queue-action {{
+        min-width: 0;
+        max-width: 132px;
+        padding: 4px 7px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--primary-soft);
+        font-size: 11.5px;
+        text-align: left;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }}
+      .dashboard-queue-panel .pager {{
+        justify-content: flex-start;
+      }}
+      .queue-actions {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }}
+      .queue-actions button {{
+        width: auto;
+      }}
+      .queue-action {{
+        text-align: right;
+      }}
+      .missing-command .workflow-steps,
+      .schedule-command .workflow-steps,
+      .report-command .workflow-steps,
+      .data-command .workflow-steps,
+      .agent-command .workflow-steps,
+      .settings-command .workflow-steps,
+      .exam-command .workflow-steps {{
+        grid-template-columns: 1fr;
+      }}
+      .agent-prompt-grid {{
+        grid-template-columns: 1fr;
+      }}
+      .hub-focus {{
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }}
+      .hub-focus::-webkit-scrollbar {{ display: none; }}
+      .focus-card {{
+        flex: 0 0 172px;
+      }}
       .workspace main {{ padding: 16px; }}
       .status-strip {{ margin: -16px -16px 16px; }}
       dl {{ grid-template-columns: 1fr; gap: 3px; }}
     }}
     @media (max-width: 1200px) and (min-width: 921px) {{
       .action-controls {{ grid-template-columns: 1fr; }}
+      .missing-action-panel {{ grid-column: auto; }}
+      .report-action-panel {{ grid-column: auto; }}
+      .report-action-panel .stack {{ grid-template-columns: 1fr; }}
       .actions.compact {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
     }}
     @media (max-width: 560px) {{
+      .quick-run-overlay {{
+        padding: 16px;
+      }}
+      .student-brief-panel {{
+        width: 100vw;
+      }}
+      .student-brief-head {{
+        padding: 14px;
+      }}
+      .student-brief-body {{
+        padding: 12px 14px 16px;
+      }}
+      .quick-run-panel {{
+        max-height: calc(100vh - 32px);
+      }}
+      .quick-run-head {{
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+      }}
+      .quick-run-head h2 {{
+        grid-column: 1 / -1;
+      }}
+      .quick-run-list {{
+        max-height: calc(100vh - 170px);
+      }}
       .panel-head {{
         align-items: flex-start;
         flex-direction: column;
@@ -5236,6 +8440,19 @@ def _render_shell(status: dict[str, Any]) -> str:
         width: 100%;
         overflow-x: auto;
       }}
+      .dashboard-hub-panel .panel-head {{
+        flex-direction: row;
+        align-items: center;
+      }}
+      .dashboard-hub-panel .panel-head .inline-actions {{
+        width: auto;
+      }}
+      .dashboard-hub-panel .panel-head .inline-actions button {{
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding-inline: 10px;
+        font-size: 12px;
+      }}
     }}
   </style>
 </head>
@@ -5251,16 +8468,16 @@ def _render_shell(status: dict[str, Any]) -> str:
       </div>
       <nav class="tabs" aria-label="운영 메뉴">
         <div class="nav-sep">운영</div>
-        <button class="tab-button active" data-tab="dashboard" aria-current="page"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span class="label">대시보드</span></button>
-        <button class="tab-button" data-tab="actions"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg><span class="label">액션</span></button>
-        <button class="tab-button" data-tab="data"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="label">데이터</span></button>
+        <button class="tab-button active" data-tab="dashboard" aria-current="page"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span class="label" data-short="홈">대시보드</span></button>
+        <button class="tab-button" data-tab="actions"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg><span class="label" data-short="액션">액션</span></button>
+        <button class="tab-button" data-tab="data"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span class="label" data-short="데이터">데이터</span></button>
         <div class="nav-sep">학생</div>
-        <button class="tab-button" data-tab="missing"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.3 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span class="label">미제출</span></button>
-        <button class="tab-button" data-tab="schedule"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg><span class="label">스케줄</span></button>
-        <button class="tab-button" data-tab="reports"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h6M8 17h8"/></svg><span class="label">리포트</span></button>
+        <button class="tab-button" data-tab="missing"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.3 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span class="label" data-short="미제출">미제출</span></button>
+        <button class="tab-button" data-tab="schedule"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg><span class="label" data-short="일정">스케줄</span></button>
+        <button class="tab-button" data-tab="reports"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h6M8 17h8"/></svg><span class="label" data-short="리포트">리포트</span></button>
         <div class="nav-sep">도구</div>
-        <button class="tab-button" data-tab="memo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="label">메모·AI</span></button>
-        <button class="tab-button" data-tab="settings"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span class="label">설정</span></button>
+        <button class="tab-button" data-tab="memo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="label" data-short="메모">메모·AI</span></button>
+        <button class="tab-button" data-tab="settings"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span class="label" data-short="설정">설정</span></button>
       </nav>
       <div class="sidebar-footer">
         <span id="configBadge" class="badge">config</span>
@@ -5277,21 +8494,19 @@ def _render_shell(status: dict[str, Any]) -> str:
           <span id="viewMeta">{today}</span>
         </div>
         <div class="inline-actions">
+          <button data-action="openQuickRun" class="secondary quick-run-button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><span>빠른 실행</span></button>
           <span id="notifyModePill" class="status-pill {notify_mode_class}" title="현재 notify 출력 모드"><span class="dot" style="background:currentColor"></span>{notify_mode} 모드</span>
-          <button class="icon-btn" title="다크 모드" aria-label="다크 모드 전환" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
+          <button class="icon-btn" title="다크 모드" aria-label="다크 모드 전환" data-action="toggleTheme"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
           <button data-action="refreshStatus" class="secondary">상태 새로고침</button>
           <div class="topbar-user">
             <span class="avatar">{brand_initial}</span>
-            <div>
-              <div class="nm">{title}</div>
-              <div class="rl">운영자</div>
-            </div>
+            <span class="rl">운영자</span>
           </div>
         </div>
       </header>
       <main>
     <section class="status-strip">
-      <div class="metric"><span>Webhook 원본</span><strong id="incomingCount">0</strong></div>
+      <div class="metric"><span>수신 원본</span><strong id="incomingCount">0</strong></div>
       <div class="metric warn"><span>숙제 미제출</span><strong id="missingCount">0</strong></div>
       <div class="metric danger"><span>연락처 없음</span><strong id="noPhoneCount">0</strong></div>
       <div class="metric info"><span>문구 생성</span><strong id="dryRunCount">0</strong></div>
@@ -5301,61 +8516,66 @@ def _render_shell(status: dict[str, Any]) -> str:
     <section id="tab-dashboard" class="tab-panel active">
       <section class="grid">
         <div>
-          <div class="panel">
+          <div class="panel dashboard-hub-panel">
             <div class="panel-head">
-              <h2>Academy Ops Hub</h2>
+              <h2>오늘의 운영 허브</h2>
               <div class="inline-actions">
                 <button data-action="refreshOpsHub" class="secondary">허브 새로고침</button>
               </div>
             </div>
+            <div id="opsCommand" class="ops-command"></div>
             <div id="opsFocus" class="hub-focus"></div>
             <div id="opsLanes" class="hub-lanes"></div>
           </div>
 
-          <div class="panel">
-            <div class="panel-head">
-              <h2>오늘의 운영 브리핑</h2>
-              <div class="inline-actions">
-                <span class="badge">AI 운영 순서</span>
-                <button data-action="generateOpsReport" class="secondary">운영 리포트 만들기</button>
-                <button data-action="generateOpsPlaybook" class="secondary">실행계획 만들기</button>
+          <div class="dashboard-work-strip">
+            <div class="panel dashboard-brief-panel">
+              <div class="panel-head">
+                <h2>오늘의 운영 브리핑</h2>
+                <div class="inline-actions">
+                  <span class="badge">AI 운영 순서</span>
+                  <button data-action="generateOpsReport" class="secondary">운영 리포트 만들기</button>
+                  <button data-action="generateOpsPlaybook" class="secondary">실행계획 만들기</button>
+                </div>
+              </div>
+              <div id="opsBrief" class="brief-list"></div>
+            </div>
+
+            <div class="panel dashboard-playbook-panel">
+              <div class="panel-head">
+                <h2>오늘의 자동화 실행계획</h2>
+                <div class="inline-actions">
+                  <button data-action="generateOpsPlaybook" class="secondary">다시 만들기</button>
+                  <button data-action="copyOpsPlaybook" class="secondary">복사</button>
+                  <button data-toggle-preview="#opsPlaybookPreview" class="secondary">펼치기</button>
+                </div>
+              </div>
+              <div id="opsPlaybookSummary" class="schedule-summary"></div>
+              <div id="opsPlaybookSteps" class="playbook-list"></div>
+              <div id="opsPlaybookPreview" class="action-preview ops-report-preview is-collapsed">실행계획을 만들면 설정 점검, 데이터 확인, 미제출 알림, 리포트 보강, 마감 리포트 순서가 정리됩니다.</div>
+            </div>
+
+            <div class="panel dashboard-report-panel">
+              <div class="panel-head">
+                <h2>오늘의 운영 리포트</h2>
+                <div class="inline-actions">
+                  <button data-action="generateOpsReport" class="secondary">다시 만들기</button>
+                  <button data-action="saveOpsHandoff" class="secondary">저장</button>
+                  <button data-action="refreshOpsHandoffs" class="secondary">최근 기록</button>
+                  <button data-action="copyOpsReport" class="secondary">복사</button>
+                  <button data-toggle-preview="#opsReportPreview" class="secondary">펼치기</button>
+                </div>
+              </div>
+              <div id="opsReportPreview" class="action-preview ops-report-preview is-collapsed">운영 리포트를 만들면 숙제 알림, ClassIn 데이터, 학원 데이터 융합, 리포트 품질 상태가 Markdown으로 정리됩니다.</div>
+              <div id="opsHandoffList" class="handoff-list">
+                <div class="empty compact">최근 저장한 운영 기록이 없습니다.</div>
               </div>
             </div>
-            <div id="opsBrief" class="brief-list"></div>
           </div>
 
-          <div class="panel">
-            <div class="panel-head">
-              <h2>오늘의 자동화 실행계획</h2>
-              <div class="inline-actions">
-                <button data-action="generateOpsPlaybook" class="secondary">다시 만들기</button>
-                <button data-action="copyOpsPlaybook" class="secondary">복사</button>
-                <button data-toggle-preview="#opsPlaybookPreview" class="secondary">펼치기</button>
-              </div>
-            </div>
-            <div id="opsPlaybookSummary" class="schedule-summary"></div>
-            <div id="opsPlaybookSteps" class="playbook-list"></div>
-            <div id="opsPlaybookPreview" class="action-preview ops-report-preview is-collapsed">실행계획을 만들면 설정 점검, 데이터 확인, 미제출 알림, 리포트 보강, 마감 리포트 순서가 정리됩니다.</div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <h2>오늘의 운영 리포트</h2>
-              <div class="inline-actions">
-                <button data-action="generateOpsReport" class="secondary">다시 만들기</button>
-                <button data-action="saveOpsHandoff" class="secondary">저장</button>
-                <button data-action="refreshOpsHandoffs" class="secondary">최근 기록</button>
-                <button data-action="copyOpsReport" class="secondary">복사</button>
-                <button data-toggle-preview="#opsReportPreview" class="secondary">펼치기</button>
-              </div>
-            </div>
-            <div id="opsReportPreview" class="action-preview ops-report-preview is-collapsed">운영 리포트를 만들면 숙제 알림, ClassIn 데이터, 학원 데이터 융합, 리포트 품질 상태가 Markdown으로 정리됩니다.</div>
-            <div id="opsHandoffList" class="handoff-list">
-              <div class="empty compact">최근 저장한 운영 기록이 없습니다.</div>
-            </div>
-          </div>
-
-          <div class="panel">
+        </div>
+        <aside class="dashboard-side">
+          <div class="panel queue-panel dashboard-queue-panel">
             <div class="panel-head">
               <h2>오늘 처리할 학생</h2>
               <div class="inline-actions">
@@ -5363,10 +8583,11 @@ def _render_shell(status: dict[str, Any]) -> str:
                 <button data-action="focusReportCore" class="secondary">리포트 생성</button>
               </div>
             </div>
+            <div id="opsQueueFilters" class="segmented queue-filter" aria-label="학생 큐 필터"></div>
             <div id="opsQueue" class="queue-list"></div>
           </div>
 
-          <div class="panel">
+          <div class="panel diagnostics-panel">
             <div class="panel-head">
               <h2>API 연결 점검</h2>
               <div class="inline-actions">
@@ -5377,9 +8598,8 @@ def _render_shell(status: dict[str, Any]) -> str:
             <div id="diagnosticSummary" class="diagnostic-summary"></div>
             <div id="diagnosticTable"></div>
           </div>
-        </div>
-        <aside>
-          <div class="panel">
+
+          <div class="panel dashboard-log-panel">
             <h2>실행 로그</h2>
             <div id="log" class="log"></div>
           </div>
@@ -5395,17 +8615,17 @@ def _render_shell(status: dict[str, Any]) -> str:
             <span class="badge">기본 3개</span>
           </div>
           <div class="core-grid">
-            <button data-action="focusMissingCore" class="core-button">
+            <button data-action="focusMissingCore" data-flow="missing" class="core-button active">
               <span class="core-number">1</span>
               <strong>숙제 미제출 문자 발송</strong>
               <span>조회 후 선택한 학부모에게 발송</span>
             </button>
-            <button data-action="focusScheduleCore" class="core-button">
+            <button data-action="focusScheduleCore" data-flow="schedule" class="core-button">
               <span class="core-number">2</span>
               <strong>스케줄표로 수업·숙제 생성</strong>
               <span>CSV/표 붙여넣기, 검토 후 ClassIn 생성</span>
             </button>
-            <button data-action="focusReportCore" class="core-button">
+            <button data-action="focusReportCore" data-flow="report" class="core-button">
               <span class="core-number">3</span>
               <strong>반별 리포트 생성</strong>
               <span>시험 점수, 숙제, 출결을 모아 초안 생성</span>
@@ -5413,8 +8633,10 @@ def _render_shell(status: dict[str, Any]) -> str:
           </div>
         </div>
 
+        <div id="actionCommand" class="action-command"></div>
+
         <div class="action-controls">
-          <div class="panel">
+          <div class="panel missing-action-panel">
             <div class="panel-head">
               <h2>숙제 미제출 문자</h2>
               <span id="actionModeBadge" class="badge">대기</span>
@@ -5432,24 +8654,25 @@ def _render_shell(status: dict[str, Any]) -> str:
               </div>
               <div class="mini-grid">
                 <label>특정 수업만 보기<input id="lessonId" type="text"></label>
-                <label>현재 기준<input id="windowRangeReadonly" type="text" value="오늘 0시 이후" readonly></label>
+                <label class="window-range-readonly-field">현재 기준<input id="windowRangeReadonly" type="text" value="오늘 0시 이후" readonly></label>
               </div>
               <div class="inline-actions">
                 <button data-action="refreshMissing" class="secondary">미제출 조회</button>
                 <button data-action="selectAllMissing" class="secondary">전체 선택</button>
                 <button data-action="clearMissingSelection" class="secondary">선택 해제</button>
-                <button data-action="previewMissingHomeworkSms" class="secondary">문구 미리보기</button>
-                <button data-action="sendMissingHomeworkSms">선택 문자 발송</button>
-              </div>
-              <div id="missingSelectionSummary" class="selection-summary">조회 후 발송 대상을 선택하세요.</div>
-              <div id="missingSelectionList" class="selectable-list">
-                <div class="empty">미제출 조회를 누르면 선택 목록이 표시됩니다.</div>
+	                <button data-action="previewMissingHomeworkSms" class="secondary">문구 미리보기</button>
+	                <button data-action="sendMissingHomeworkSms">선택 문자 발송</button>
+	              </div>
+	              <div class="segmented missing-filter" aria-label="미제출 상태 필터"></div>
+	              <div id="missingSelectionSummary" class="selection-summary">조회 후 발송 대상을 선택하세요.</div>
+	              <div id="missingSelectionList" class="selectable-list missing-action-list">
+	                <div class="empty">미제출 조회를 누르면 선택 목록이 표시됩니다.</div>
               </div>
               <div id="actionPreview" class="action-preview">미제출 학생을 조회하면 발송 대상과 현재 발송 모드가 정리됩니다.</div>
             </div>
           </div>
 
-          <div class="panel">
+          <div class="panel schedule-action-panel">
             <div class="panel-head">
               <h2>스케줄표 입력</h2>
               <span class="badge">수업·숙제</span>
@@ -5467,16 +8690,16 @@ def _render_shell(status: dict[str, Any]) -> str:
             </div>
           </div>
 
-          <div class="panel">
+          <div class="panel sso-action-panel">
             <div class="panel-head">
-              <h2>ClassIn 접속 링크</h2>
-              <span class="badge">SSO</span>
+          <h2>ClassIn 앱 접속 링크</h2>
+          <span class="badge">앱 링크</span>
             </div>
             <div class="stack">
               <div class="sso-fields">
-                <label>UID<input id="ssoUid" type="text" autocomplete="off"></label>
-                <label>Course ID<input id="ssoCourseId" type="text" autocomplete="off"></label>
-                <label>Class ID<input id="ssoClassId" type="text" autocomplete="off"></label>
+                <label>사용자 식별번호<input id="ssoUid" type="text" autocomplete="off" placeholder="예: 10001"></label>
+                <label>강좌 ID<input id="ssoCourseId" type="text" autocomplete="off" placeholder="ClassIn 강좌 번호"></label>
+                <label>수업 ID<input id="ssoClassId" type="text" autocomplete="off" placeholder="ClassIn 수업 번호"></label>
                 <label>전화번호<input id="ssoTelephone" type="tel" autocomplete="off"></label>
               </div>
               <div class="sso-fields">
@@ -5491,11 +8714,11 @@ def _render_shell(status: dict[str, Any]) -> str:
                 <button data-action="createSsoLink">접속 링크 생성</button>
                 <button data-action="copySsoLink" class="secondary">링크 복사</button>
               </div>
-              <div id="ssoPreview" class="action-preview">UID, Course ID, Class ID, 전화번호를 입력한 뒤 접속 링크를 생성하세요.</div>
+              <div id="ssoPreview" class="action-preview">사용자 식별번호, 강좌 ID, 수업 ID, 전화번호를 입력한 뒤 접속 링크를 생성하세요.</div>
             </div>
           </div>
 
-          <div class="panel">
+          <div class="panel report-action-panel">
             <div class="panel-head">
               <h2>반별 리포트</h2>
               <span class="badge">시험·숙제·출결</span>
@@ -5525,39 +8748,157 @@ def _render_shell(status: dict[str, Any]) -> str:
     </section>
 
     <section id="tab-data" class="tab-panel">
-      <div class="panel">
-        <div class="panel-head">
-          <h2>ClassIn Data Subscription</h2>
-          <div class="inline-actions">
-            <label>표시 개수<input id="webhookLimit" type="number" min="1" max="100" step="1" value="30"></label>
-            <button data-action="refreshWebhookInbox" class="secondary">수신함 새로고침</button>
-          </div>
-        </div>
-        <div id="webhookInboxSummary" class="schedule-summary"></div>
-        <div id="webhookCmdSummary" class="selection-summary"></div>
-        <div id="webhookInboxTable">
-          <div class="empty">수신함을 새로고침하면 ClassIn 이벤트가 표시됩니다.</div>
-        </div>
-      </div>
+      <div id="dataCommand" class="action-command data-command"></div>
 
-      <div class="panel">
-        <div class="panel-head">
-          <h2>학원 데이터 융합</h2>
-          <div class="inline-actions">
-            <label>반 선택<select id="contextClassName"><option value="">전체 반</option></select></label>
-            <button data-action="refreshAcademyContexts" class="secondary">융합 맥락 새로고침</button>
+      <div class="data-panel-strip">
+        <div class="panel data-inbox-panel">
+          <div class="panel-head">
+            <h2>ClassIn 수신 데이터</h2>
+            <div class="inline-actions">
+              <label>표시 개수<input id="webhookLimit" type="number" min="1" max="100" step="1" value="30"></label>
+              <button data-action="refreshWebhookInbox" class="secondary">수신함 새로고침</button>
+            </div>
+          </div>
+          <div id="webhookInboxSummary" class="schedule-summary"></div>
+          <div id="webhookCmdSummary" class="selection-summary"></div>
+          <div id="webhookInboxTable">
+            <div class="empty">수신함을 새로고침하면 ClassIn 이벤트가 표시됩니다.</div>
           </div>
         </div>
-        <div id="academyContextSummary" class="schedule-summary"></div>
-        <div id="academyContextReview" class="selection-summary"></div>
-        <div id="academyContextTable">
-          <div class="empty">융합 맥락을 새로고침하면 학생별 자체 데이터 연결 상태가 표시됩니다.</div>
+
+        <div class="panel data-context-panel">
+          <div class="panel-head">
+            <h2>학원 데이터 융합</h2>
+            <div class="inline-actions">
+              <label>반 선택<select id="contextClassName"><option value="">전체 반</option></select></label>
+              <button data-action="refreshAcademyContexts" class="secondary">융합 맥락 새로고침</button>
+            </div>
+          </div>
+          <div id="academyContextSummary" class="schedule-summary"></div>
+          <div id="academyContextReview" class="selection-summary"></div>
+          <div id="academyContextTable">
+            <div class="empty">융합 맥락을 새로고침하면 학생별 자체 데이터 연결 상태가 표시됩니다.</div>
+          </div>
         </div>
       </div>
     </section>
 
     <section id="tab-schedule" class="tab-panel">
-      <div class="panel">
+      <div id="scheduleCommand" class="action-command schedule-command"></div>
+
+      <div class="panel neis-exam-panel">
+        <div class="panel-head">
+          <div>
+            <h2>NEIS 학교별 시험일정 예시</h2>
+            <p>학교명으로 NEIS schoolInfo 코드를 찾고 SchoolSchedule 학사일정에서 시험·고사 일정을 뽑아 ClassIn 운영 일정에 붙이는 예시입니다.</p>
+          </div>
+          <span class="badge">세종 5개교 · 2026-06-26 기준</span>
+        </div>
+        <div class="neis-exam-meta">
+          <span class="badge">교육청 I10</span>
+          <span class="badge">범위 2026-03-01~2027-02-28</span>
+          <span class="badge">정기고사 키워드 필터</span>
+        </div>
+        <div class="table-wrap">
+          <table class="neis-exam-table">
+            <thead>
+              <tr>
+                <th>학교</th>
+                <th>NEIS 코드</th>
+                <th>1학기 주요 시험</th>
+                <th>2학기 주요 시험</th>
+                <th>ClassIn 연결 예시</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>종촌고등학교</strong><span class="school-address">달빛1로 60</span></td>
+                <td><span class="badge">9300180</span></td>
+                <td>
+                  <div class="exam-lines">
+                    <div class="exam-line"><span class="exam-label danger">1회고사</span><span class="exam-date">4/22~4/28</span></div>
+                    <div class="exam-line"><span class="exam-label warn">2회고사</span><span class="exam-date">6/24~6/30</span></div>
+                  </div>
+                </td>
+                <td>
+                  <div class="exam-lines">
+                    <div class="exam-line"><span class="exam-label danger">2학기 1회</span><span class="exam-date">10/1~10/8</span></div>
+                    <div class="exam-line"><span class="exam-label warn">2학기 2회</span><span class="exam-date">12/7~12/11</span></div>
+                  </div>
+                </td>
+                <td>시험 3주 전 대비반 시작, 시험 후 결과 CSV import</td>
+              </tr>
+              <tr>
+                <td><strong>세종대성고등학교</strong><span class="school-address">다솜로 22</span></td>
+                <td><span class="badge">9300278</span></td>
+                <td>
+                  <div class="exam-lines">
+                    <div class="exam-line"><span class="exam-label danger">1회 정기</span><span class="exam-date">4/27~4/30</span></div>
+                    <div class="exam-line"><span class="exam-label warn">2회 정기</span><span class="exam-date">6/26~7/2</span></div>
+                  </div>
+                </td>
+                <td>
+                  <div class="exam-lines">
+                    <div class="exam-line"><span class="exam-label danger">1회 정기</span><span class="exam-date">10/2~10/8</span></div>
+                    <div class="exam-line"><span class="exam-label warn">2회 정기</span><span class="exam-date">12/8~12/11</span></div>
+                  </div>
+                </td>
+                <td>학교별 일정에 맞춰 단원 숙제·오답 리마인드 자동 생성</td>
+              </tr>
+              <tr>
+                <td><strong>다정고등학교</strong><span class="school-address">다정남로 15</span></td>
+                <td><span class="badge">9300235</span></td>
+                <td>
+                  <div class="exam-lines">
+                    <div class="exam-line"><span class="exam-label danger">1회고사</span><span class="exam-date">4/23~4/28</span></div>
+                    <div class="exam-line"><span class="exam-label warn">2회고사</span><span class="exam-date">6/30~7/3</span></div>
+                  </div>
+                </td>
+                <td>
+                  <div class="exam-lines">
+                    <div class="exam-line"><span class="exam-label danger">1회고사</span><span class="exam-date">10/1~10/7</span></div>
+                    <div class="exam-line"><span class="exam-label warn">2회고사</span><span class="exam-date">12/8~12/11</span></div>
+                  </div>
+                </td>
+                <td>학교 일정 차이를 반별 캘린더와 리포트 타임라인에 반영</td>
+              </tr>
+              <tr>
+                <td><strong>새롬고등학교</strong><span class="school-address">새롬서로 68</span></td>
+                <td><span class="badge">9300219</span></td>
+                <td>
+                  <div class="exam-lines">
+                    <div class="exam-line"><span class="exam-label danger">1회고사</span><span class="exam-date">4/27~4/30</span></div>
+                    <div class="exam-line"><span class="exam-label warn">2회고사</span><span class="exam-date">6/22~6/26</span></div>
+                  </div>
+                </td>
+                <td>
+                  <div class="exam-line"><span class="exam-label info">미적재</span><span>조회 시점 기준 NEIS에 2학기 정기고사 미표시</span></div>
+                </td>
+                <td>미적재 일정은 수동 검수 큐에 올리고 추후 재조회</td>
+              </tr>
+              <tr>
+                <td><strong>한솔고등학교</strong><span class="school-address">누리로 34</span></td>
+                <td><span class="badge">9300058</span></td>
+                <td>
+                  <div class="exam-lines">
+                    <div class="exam-line"><span class="exam-label danger">1회고사</span><span class="exam-date">4/20~4/24</span></div>
+                    <div class="exam-line"><span class="exam-label warn">2회고사</span><span class="exam-date">6/22~6/26</span></div>
+                  </div>
+                </td>
+                <td>
+                  <div class="exam-lines">
+                    <div class="exam-line"><span class="exam-label danger">1회고사</span><span class="exam-date">10/1~10/8</span></div>
+                    <div class="exam-line"><span class="exam-label warn">2회고사</span><span class="exam-date">12/7~12/11</span></div>
+                  </div>
+                </td>
+                <td>같은 시험 주간의 학교별 선후행 차이를 과제 마감에 반영</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel schedule-panel">
         <div class="panel-head">
           <h2>스케줄 표</h2>
           <div class="inline-actions">
@@ -5577,21 +8918,24 @@ def _render_shell(status: dict[str, Any]) -> str:
     </section>
 
     <section id="tab-missing" class="tab-panel">
+      <div id="missingCommand" class="action-command missing-command"></div>
+
       <div class="stack">
         <div>
-          <div class="panel">
+          <div class="panel missing-panel missing-list-panel">
             <div class="panel-head">
               <h2>미제출 목록</h2>
               <div class="inline-actions">
                 <button data-action="focusMissingCore" class="secondary">문자 발송으로 이동</button>
                 <button data-action="refreshMissing" class="secondary">미제출 조회</button>
-                <button data-action="exportMissingCsv" class="secondary">CSV 내보내기</button>
-              </div>
-            </div>
-            <div id="missingTable" style="margin-top:12px"></div>
-          </div>
+	                <button data-action="exportMissingCsv" class="secondary">CSV 내보내기</button>
+	              </div>
+	            </div>
+	            <div class="segmented missing-filter" aria-label="미제출 상태 필터"></div>
+	            <div id="missingTable" style="margin-top:12px"></div>
+	          </div>
 
-          <div class="panel">
+          <div class="panel missing-panel notification-panel">
             <h2>알림 발송 현황</h2>
             <div id="notificationTable"></div>
           </div>
@@ -5600,188 +8944,249 @@ def _render_shell(status: dict[str, Any]) -> str:
     </section>
 
     <section id="tab-reports" class="tab-panel">
-      <div class="panel">
-        <div class="panel-head">
-          <h2>리포트</h2>
-          <button data-action="focusReportCore" class="secondary">반별 리포트로 이동</button>
+      <div id="reportCommand" class="action-command report-command"></div>
+
+      <div class="report-review-strip">
+        <div class="panel report-overview-panel">
+          <div class="panel-head">
+            <h2>리포트</h2>
+            <button data-action="focusReportCore" class="secondary">반별 리포트로 이동</button>
+          </div>
+          <div class="inline-actions">
+            <label>일자<input id="dailyDate" type="date" value="{today}"></label>
+            <button data-action="renderDaily">일일 현황 생성</button>
+            <button data-action="generateWeekly" class="secondary">전체 주간 드래프트</button>
+            <button data-action="focusReportCore" class="secondary">반별 리포트 선택</button>
+            <button data-action="focusExamImport" class="secondary">시험 가져오기</button>
+            <button data-action="focusAnswerSheet" class="secondary">OMR 생성</button>
+          </div>
         </div>
-        <div class="inline-actions">
-          <label>일자<input id="dailyDate" type="date" value="{today}"></label>
-          <button data-action="renderDaily">일일 현황 생성</button>
-          <button data-action="generateWeekly" class="secondary">전체 주간 드래프트</button>
-          <button data-action="focusReportCore" class="secondary">반별 리포트 선택</button>
+
+        <div class="panel report-review-panel report-composition-panel">
+          <div class="panel-head">
+            <h2>개별 리포트 구성</h2>
+            <div class="inline-actions">
+              <button data-action="refreshReportCompositions" class="secondary">구성 새로고침</button>
+              <button data-action="focusReportCore" class="secondary">대상 선택</button>
+            </div>
+          </div>
+          <div id="reportCompositionSummary" class="schedule-summary"></div>
+          <div id="reportCompositionTable">
+            <div class="empty">아직 조회된 리포트 구성이 없습니다.</div>
+          </div>
+        </div>
+
+        <div class="panel student-report-panel">
+          <div class="panel-head">
+            <h2>개별 리포트 초안</h2>
+            <div class="inline-actions">
+              <button data-action="generateStudentReportPack" class="secondary">첫 학생 초안</button>
+              <button data-action="copyStudentReportPack" class="secondary">복사</button>
+              <button data-toggle-preview="#studentReportPreview" class="secondary">펼치기</button>
+            </div>
+          </div>
+          <div id="studentReportPreview" class="action-preview student-report-preview is-collapsed">개별 리포트 구성에서 학생별 초안을 만들 수 있습니다.</div>
+        </div>
+
+        <div class="panel report-review-panel weekly-draft-panel">
+          <div class="panel-head">
+            <h2>주간 드래프트 검토</h2>
+            <div class="inline-actions">
+              <label class="checkbox-field">차단 포함<input id="forceBlockedQuality" type="checkbox"></label>
+              <button data-action="refreshWeeklyDrafts" class="secondary">드래프트 새로고침</button>
+              <button data-action="approveWeekly" class="secondary">승인</button>
+            </div>
+          </div>
+          <div id="weeklyDraftSummary" class="schedule-summary"></div>
+          <div id="weeklyDraftTable">
+            <div class="empty">드래프트를 생성하거나 새로고침하면 품질 큐가 표시됩니다.</div>
+          </div>
         </div>
       </div>
 
-      <div class="panel">
-        <div class="panel-head">
-          <h2>개별 리포트 구성</h2>
-          <div class="inline-actions">
-            <button data-action="refreshReportCompositions" class="secondary">구성 새로고침</button>
-            <button data-action="focusReportCore" class="secondary">대상 선택</button>
-          </div>
-        </div>
-        <div id="reportCompositionSummary" class="schedule-summary"></div>
-        <div id="reportCompositionTable">
-          <div class="empty">아직 조회된 리포트 구성이 없습니다.</div>
-        </div>
-      </div>
+      <div id="examCommand" class="action-command exam-command"></div>
 
-      <div class="panel">
-        <div class="panel-head">
-          <h2>개별 리포트 초안</h2>
-          <div class="inline-actions">
-            <button data-action="generateStudentReportPack" class="secondary">첫 학생 초안</button>
-            <button data-action="copyStudentReportPack" class="secondary">복사</button>
-            <button data-toggle-preview="#studentReportPreview" class="secondary">펼치기</button>
+      <div class="exam-form-strip">
+        <div id="answerSheetPanel" class="panel exam-form-panel">
+          <div class="panel-head">
+            <h2>OMR 답안지 생성</h2>
+            <span class="badge">생성 전 검토</span>
+          </div>
+          <div class="stack">
+            <div class="actions compact">
+              <label>강좌 ID<input id="answerSheetCourseId" type="text" placeholder="ClassIn 강좌 번호"></label>
+              <label>단원 ID<input id="answerSheetUnitId" type="text" placeholder="ClassIn 단원 번호"></label>
+              <label>활동명<input id="answerSheetName" type="text" value="OMR 답안지"></label>
+              <label>교사 식별번호<input id="answerSheetTeacherUid" type="text" placeholder="ClassIn 교사 번호"></label>
+            </div>
+            <div class="actions compact exam-date-grid">
+              <label>시작<input id="answerSheetStart" type="datetime-local"></label>
+              <label>종료<input id="answerSheetEnd" type="datetime-local"></label>
+            </div>
+            <div class="actions compact exam-toggle-grid">
+              <label class="checkbox-field">검토 모드<input id="answerSheetDryRun" type="checkbox" checked></label>
+              <label class="checkbox-field">게시<input id="answerSheetRelease" type="checkbox"></label>
+            </div>
+            <div class="inline-actions">
+              <button data-action="createAnswerSheet">OMR 답안지 생성</button>
+            </div>
+            <div id="answerSheetPreview" class="action-preview">강좌 ID와 단원 ID를 입력하고 검토 모드로 먼저 생성 내용을 확인하세요.</div>
           </div>
         </div>
-        <div id="studentReportPreview" class="action-preview student-report-preview is-collapsed">개별 리포트 구성에서 학생별 초안을 만들 수 있습니다.</div>
-      </div>
 
-      <div class="panel">
-        <div class="panel-head">
-          <h2>주간 드래프트 검토</h2>
-          <div class="inline-actions">
-            <label class="checkbox-field">blocked 포함<input id="forceBlockedQuality" type="checkbox"></label>
-            <button data-action="refreshWeeklyDrafts" class="secondary">드래프트 새로고침</button>
-            <button data-action="approveWeekly" class="secondary">승인</button>
+        <div id="examImportPanel" class="panel exam-form-panel">
+          <div class="panel-head">
+            <h2>시험 결과 가져오기</h2>
+            <span class="badge">CSV</span>
           </div>
-        </div>
-        <div id="weeklyDraftSummary" class="schedule-summary"></div>
-        <div id="weeklyDraftTable">
-          <div class="empty">드래프트를 생성하거나 새로고침하면 품질 큐가 표시됩니다.</div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h2>OMR 답안지 생성</h2>
-          <span class="badge">Answer Sheet</span>
-        </div>
-        <div class="stack">
-          <div class="actions compact">
-            <label>Course ID<input id="answerSheetCourseId" type="text"></label>
-            <label>Unit ID<input id="answerSheetUnitId" type="text"></label>
-            <label>활동명<input id="answerSheetName" type="text" value="OMR 답안지"></label>
-            <label>Teacher UID<input id="answerSheetTeacherUid" type="text"></label>
+          <div class="stack">
+            <div class="actions compact">
+              <label>시험명<input id="examName" type="text"></label>
+              <label>시험일<input id="examDate" type="date" value="{today}"></label>
+              <label>반<input id="examClassName" type="text"></label>
+              <label class="checkbox-field">검토 모드<input id="examDryRun" type="checkbox" checked></label>
+            </div>
+            <input id="examFile" type="file" accept=".csv,.tsv,.txt">
+            <label class="exam-csv-input">시험 CSV<textarea id="examCsvText" class="large"></textarea></label>
+            <div class="inline-actions">
+              <button data-action="readExamFile" class="secondary">파일 읽기</button>
+              <button data-action="downloadExamTemplate" class="secondary">시험 템플릿</button>
+              <button data-action="importExamResults">시험 결과 가져오기</button>
+            </div>
+            <div id="examPreview" class="action-preview">시험 CSV를 붙여넣고 먼저 검토 모드로 학생 매칭을 확인하세요.</div>
           </div>
-          <div class="actions compact">
-            <label>시작<input id="answerSheetStart" type="datetime-local"></label>
-            <label>종료<input id="answerSheetEnd" type="datetime-local"></label>
-            <label class="checkbox-field">Dry-run<input id="answerSheetDryRun" type="checkbox" checked></label>
-            <label class="checkbox-field">게시<input id="answerSheetRelease" type="checkbox"></label>
-          </div>
-          <div class="inline-actions">
-            <button data-action="createAnswerSheet">OMR 답안지 생성</button>
-          </div>
-          <div id="answerSheetPreview" class="action-preview">ClassIn Course ID와 Unit ID를 입력하고 dry-run으로 먼저 payload를 확인하세요.</div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h2>시험 결과 가져오기</h2>
-          <span class="badge">CSV</span>
-        </div>
-        <div class="stack">
-          <div class="actions compact">
-            <label>시험명<input id="examName" type="text"></label>
-            <label>시험일<input id="examDate" type="date" value="{today}"></label>
-            <label>반<input id="examClassName" type="text"></label>
-            <label class="checkbox-field">Dry-run<input id="examDryRun" type="checkbox" checked></label>
-          </div>
-          <input id="examFile" type="file" accept=".csv,.tsv,.txt">
-          <label>시험 CSV<textarea id="examCsvText" class="large"></textarea></label>
-          <div class="inline-actions">
-            <button data-action="readExamFile" class="secondary">파일 읽기</button>
-            <button data-action="downloadExamTemplate" class="secondary">시험 템플릿</button>
-            <button data-action="importExamResults">시험 결과 가져오기</button>
-          </div>
-          <div id="examPreview" class="action-preview">시험 CSV를 붙여넣고 먼저 dry-run으로 학생 매칭을 확인하세요.</div>
         </div>
       </div>
     </section>
 
     <section id="tab-memo" class="tab-panel">
-      <div class="grid">
-        <div>
-          <div class="panel">
-            <h2>메모</h2>
-            <div class="stack">
-              <div class="actions">
-                <label>ClassIn ID<input id="memoClassinId" type="text"></label>
-                <label>태그<input id="memoTag" type="text"></label>
-              </div>
-              <label>내용<textarea id="memoText"></textarea></label>
-              <button data-action="writeMemo">메모 저장</button>
-            </div>
-          </div>
-
-          <div class="panel">
+      <div id="agentCommand" class="action-command agent-command"></div>
+      <div class="grid memo-grid">
+        <div class="panel">
+          <div class="panel-head">
             <h2>AI 질문</h2>
-            <div class="stack">
-              <label>질문<textarea id="agentQuestion"></textarea></label>
-              <button data-action="askAgent">질문 보내기</button>
+            <span class="badge">수동 오더</span>
+          </div>
+          <div class="stack">
+            <div class="agent-prompt-grid">
+              <button type="button" class="secondary" data-agent-prompt="이번 주 숙제 미제출 학생을 우선순위로 정리해줘">미제출 우선순위</button>
+              <button type="button" class="secondary" data-agent-prompt="리포트 blocked 학생과 보강할 근거를 알려줘">리포트 보강</button>
+              <button type="button" class="secondary" data-agent-prompt="학원 데이터 매칭 확인이 필요한 학생을 요약해줘">데이터 매칭</button>
             </div>
+            <label>질문<textarea id="agentQuestion" class="large" placeholder="예: 이번 주 숙제 미제출 학생을 우선순위로 정리해줘"></textarea></label>
+            <div class="inline-actions">
+              <button data-action="askAgent">질문 보내기</button>
+              <button data-action="focusMemoTarget" class="secondary">학생 메모</button>
+            </div>
+            <div id="agentAnswerPreview" class="action-preview">AI 답변이 여기에 표시됩니다.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>학생 메모</h2>
+            <span class="badge">Notion</span>
+          </div>
+          <div class="stack">
+            <div class="actions">
+              <label>ClassIn ID<input id="memoClassinId" type="text" placeholder="10001"></label>
+              <label>태그<input id="memoTag" type="text" placeholder="상담"></label>
+            </div>
+            <label>내용<textarea id="memoText" class="large" placeholder="상담 내용, 다음 액션, 보호자 연락 맥락을 남기세요."></textarea></label>
+            <div class="inline-actions">
+              <button data-action="writeMemo">메모 저장</button>
+              <button data-action="focusMemoText" class="secondary">내용 입력</button>
+              <button data-action="focusAgentQuestion" class="secondary">AI 질문</button>
+            </div>
+            <div id="memoPreview" class="action-preview">저장 후 대상 학생과 태그가 여기에 정리됩니다.</div>
           </div>
         </div>
       </div>
     </section>
 
     <section id="tab-settings" class="tab-panel">
-      <div class="panel">
-        <div class="panel-head">
-          <h2>운영 전환 체크리스트</h2>
-          <div class="inline-actions">
-            <button data-action="setReadinessMode" data-readiness-mode="local-demo" class="secondary active">데모</button>
-            <button data-action="setReadinessMode" data-readiness-mode="classin-live" class="secondary">ClassIn live</button>
-            <button data-action="setReadinessMode" data-readiness-mode="kakao-live" class="secondary">카톡 live</button>
-            <button data-action="refreshReadiness" class="secondary">다시 점검</button>
+      <div id="readinessCommand" class="action-command settings-command"></div>
+      <div class="settings-panel-strip">
+        <div class="panel settings-panel">
+          <div class="panel-head">
+            <h2>운영 전환 체크리스트</h2>
+            <div class="inline-actions">
+              <button data-action="setReadinessMode" data-readiness-mode="local-demo" class="secondary active">데모</button>
+              <button data-action="setReadinessMode" data-readiness-mode="classin-live" class="secondary">ClassIn 실연동</button>
+              <button data-action="setReadinessMode" data-readiness-mode="kakao-live" class="secondary">카톡 실발송</button>
+              <button data-action="refreshReadiness" class="secondary">다시 점검</button>
+            </div>
+          </div>
+          <div id="readinessSummary" class="schedule-summary"></div>
+          <div id="readinessList" class="readiness-list">
+            <div class="empty compact">운영 전환 단계를 선택해 준비 상태를 확인하세요.</div>
           </div>
         </div>
-        <div id="readinessSummary" class="schedule-summary"></div>
-        <div id="readinessList" class="readiness-list">
-          <div class="empty compact">운영 전환 단계를 선택해 준비 상태를 확인하세요.</div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h2>Notion DB 설계 미리보기</h2>
-          <div class="inline-actions">
-            <label>Prefix<input id="notionSchemaPrefix" type="text" value="{title}"></label>
-            <button data-action="loadNotionSchema" class="secondary">미리보기</button>
-            <button data-action="copyNotionSchema" class="secondary">복사</button>
+
+        <div class="panel settings-panel">
+          <div class="panel-head">
+            <h2>Notion DB 설계 미리보기</h2>
+            <div class="inline-actions">
+              <label>Prefix<input id="notionSchemaPrefix" type="text" value="{title}"></label>
+              <button data-action="loadNotionSchema" class="secondary">미리보기</button>
+              <button data-action="copyNotionSchema" class="secondary">복사</button>
+            </div>
           </div>
-        </div>
-        <div id="notionSchemaSummary" class="schedule-summary"></div>
-        <div id="notionSchemaList" class="schema-list">
-          <div class="empty compact">미리보기를 누르면 생성될 학생·수업·리포트·메모·시험 DB 속성이 표시됩니다.</div>
-        </div>
-        <div id="notionSchemaCommand" class="action-preview schema-command is-collapsed">setup-notion dry-run 명령과 config.yaml 조각이 여기에 표시됩니다.</div>
-      </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h2>파일럿 브링업</h2>
-          <div class="inline-actions">
-            <button data-action="loadPilotBrief" class="secondary">브리프 갱신</button>
-            <button data-action="copyPilotBrief" class="secondary">복사</button>
-            <button data-toggle-preview="#pilotBriefPreview" class="secondary">펼치기</button>
+          <div id="notionSchemaSummary" class="schedule-summary"></div>
+          <div id="notionSchemaList" class="schema-list">
+            <div class="empty compact">미리보기를 누르면 생성될 학생·수업·리포트·메모·시험 DB 속성이 표시됩니다.</div>
           </div>
+          <div id="notionSchemaCommand" class="action-preview schema-command is-collapsed">DB 생성 전 검토 명령과 config.yaml 조각이 여기에 표시됩니다.</div>
         </div>
-        <div id="pilotBriefSummary" class="schedule-summary"></div>
-        <div id="pilotBriefList" class="readiness-list">
-          <div class="empty compact">브리프를 갱신하면 Cloudflare, DataSub, Windows 상시 구동 체크리스트가 표시됩니다.</div>
+
+        <div class="panel settings-panel">
+          <div class="panel-head">
+            <h2>파일럿 브링업</h2>
+            <div class="inline-actions">
+              <button data-action="loadPilotBrief" class="secondary">브리프 갱신</button>
+              <button data-action="copyPilotBrief" class="secondary">복사</button>
+              <button data-toggle-preview="#pilotBriefPreview" class="secondary">펼치기</button>
+            </div>
+          </div>
+          <div id="pilotBriefSummary" class="schedule-summary"></div>
+          <div id="pilotBriefList" class="readiness-list">
+            <div class="empty compact">브리프를 갱신하면 Cloudflare, DataSub, Windows 상시 구동 체크리스트가 표시됩니다.</div>
+          </div>
+          <div id="pilotBriefPreview" class="action-preview schema-command is-collapsed">DataSub 신청 메일과 실행 명령이 여기에 표시됩니다.</div>
         </div>
-        <div id="pilotBriefPreview" class="action-preview schema-command is-collapsed">DataSub 신청 메일과 실행 명령이 여기에 표시됩니다.</div>
-      </div>
-      <div class="panel">
-        <h2>설정</h2>
-        <dl id="settings"></dl>
+
+        <div class="panel settings-panel">
+          <h2>설정</h2>
+          <dl id="settings"></dl>
+        </div>
       </div>
     </section>
       </main>
     </div>
+  </div>
+
+  <div id="quickRunOverlay" class="quick-run-overlay" hidden>
+    <div class="quick-run-panel" role="dialog" aria-modal="true" aria-labelledby="quickRunTitle">
+      <div class="quick-run-head">
+        <h2 id="quickRunTitle">빠른 실행</h2>
+        <input id="quickRunSearch" class="quick-run-search" type="search" placeholder="업무 검색" autocomplete="off">
+        <button data-action="closeQuickRun" class="icon-btn" aria-label="닫기"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div id="quickRunList" class="quick-run-list"></div>
+    </div>
+  </div>
+
+  <div id="studentBriefOverlay" class="student-brief-overlay" hidden>
+    <aside id="studentBriefPanel" class="student-brief-panel" role="dialog" aria-modal="true" aria-labelledby="studentBriefTitle">
+      <div class="student-brief-head">
+        <div>
+          <h2 id="studentBriefTitle">학생 360</h2>
+          <span id="studentBriefSubtitle">숙제·시험·리포트 근거를 한곳에서 확인합니다.</span>
+        </div>
+        <button data-action="closeStudentBrief" class="icon-btn" aria-label="닫기"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div id="studentBriefBody" class="student-brief-body"></div>
+    </aside>
   </div>
 
   <div id="toastWrap" class="toast-wrap" aria-live="polite"></div>
@@ -5808,8 +9213,10 @@ def _render_shell(status: dict[str, Any]) -> str:
       reportCompositions: 5,
       weeklyDrafts: 6,
       readiness: 8,
+      pilotBrief: 4,
     }};
     let opsQueuePage = 1;
+    let opsQueueFilter = "all";
     let opsPlaybookPage = 1;
     let webhookInboxPage = 1;
     let academyContextPage = 1;
@@ -5820,8 +9227,14 @@ def _render_shell(status: dict[str, Any]) -> str:
     let reportCompositionPage = 1;
     let weeklyDraftPage = 1;
     let readinessPage = 1;
+    let pilotBriefPage = 1;
     let currentSchedule = [];
+    let currentScheduleSummary = {{}};
+    let currentScheduleBlocked = false;
     let currentMissing = [];
+    let missingFilter = "all";
+    let currentMissingSummary = {{}};
+    let currentMissingBlocked = false;
     let selectedMissingKeys = new Set();
     let lastMissingPreview = null;
     let currentReportTargets = [];
@@ -5831,8 +9244,14 @@ def _render_shell(status: dict[str, Any]) -> str:
     let currentWeeklyDraftsExists = false;
     let currentReportCompositions = [];
     let currentWebhookEvents = [];
+    let currentWebhookSummary = {{}};
     let currentAcademyContexts = [];
+    let currentAcademyContextSummary = {{}};
+    let currentAcademyReviewItems = [];
     let currentReadinessItems = [];
+    let currentReadinessSummary = {{}};
+    let currentReadinessReady = false;
+    let currentReadinessDemo = false;
     let currentReadinessMode = "local-demo";
     let currentNotionSchema = null;
     let lastNotionSchemaText = "";
@@ -5847,10 +9266,59 @@ def _render_shell(status: dict[str, Any]) -> str:
     let lastOpsPlaybookMarkdown = "";
     let lastStudentReportMarkdown = "";
     let lastStudentReportId = "";
+    let currentStudentBrief = null;
+    let currentExamFlow = "exam";
+    let lastExamImportResult = null;
+    let lastAnswerSheetResult = null;
+
+    function logLabel(key) {{
+      return ({{
+        total_lessons: "수업",
+        total_student_rows: "학생 기록",
+        late: "지각",
+        absent: "결석",
+        homework_missing: "미제출",
+        total_missing: "미제출",
+        needs_message: "연락 필요",
+        needs_retry: "재시도",
+        needs_phone: "연락처 보완",
+        students_with_context: "학생 맥락",
+        data_needs_review: "데이터 확인",
+        report_blocked: "리포트 차단",
+        report_review: "리포트 확인",
+        report_ready: "승인 가능",
+        count: "건수",
+        rows: "행",
+        chars: "글자",
+      }})[key] || key.replaceAll("_", " ");
+    }}
+
+    function compactLogDetail(data) {{
+      if (!data) return "";
+      if (typeof data !== "object") return String(data);
+      const source = data.summary && typeof data.summary === "object" ? data.summary : data;
+      const parts = Object.entries(source)
+        .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value))
+        .slice(0, 6)
+        .map(([key, value]) => `${{logLabel(key)}}: ${{value}}`);
+      return parts.join(" · ");
+    }}
+
+    function evidenceLabel(value) {{
+      const text = String(value || "").trim();
+      if (!text) return "-";
+      if (text.startsWith("demo://weekly") || text.includes("/weekly/")) return "리포트 초안";
+      if (text.startsWith("demo://ops")) return "운영 기록";
+      if (text.startsWith("demo://")) return "데모 자료";
+      if (/\\.html?$/i.test(text)) return "리포트 파일";
+      if (/^https?:\\/\\//i.test(text)) return "외부 링크";
+      return text;
+    }}
 
     function writeLog(message, data) {{
       const now = new Date().toLocaleTimeString();
-      const detail = data ? "\\n" + JSON.stringify(data, null, 2) : "";
+      const detailText = compactLogDetail(data);
+      const detail = detailText ? "\\n" + detailText : "";
       log.textContent = `[${{now}}] ${{message}}${{detail}}\\n\\n` + log.textContent;
     }}
 
@@ -5882,7 +9350,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       const notifyPill = document.querySelector("#notifyModePill");
       const notify = output.notify_mode || "-";
       notifyPill.className = `status-pill ${{notify === "live" ? "sent" : notify === "dry_run" ? "dry_run" : "warn"}}`;
-      notifyPill.innerHTML = `<span class="dot" style="background:currentColor"></span>${{escapeHtml(notify)}} 모드`;
+      notifyPill.innerHTML = `<span class="dot" style="background:currentColor"></span>${{escapeHtml(notifyModeLabel(notify))}}`;
       const webhook = status.webhook || {{}};
       const rows = [
         ["config", status.config_path || ""],
@@ -5914,16 +9382,17 @@ def _render_shell(status: dict[str, Any]) -> str:
     function statusLabel(status) {{
       const labels = {{
         pending: "대기",
-        dry_run: "문구 생성",
+        dry_run: "외부 발송 없음",
         sent: "발송 완료",
         failed: "실패",
         ok: "정상",
         warn: "확인",
+        info: "정보",
         missing: "누락",
         skipped: "건너뜀",
-        ready: "ready",
-        review: "review",
-        blocked: "blocked",
+        ready: "준비됨",
+        review: "확인 필요",
+        blocked: "차단",
         approved: "승인됨",
       }};
       return labels[status] || status || "-";
@@ -5932,6 +9401,24 @@ def _render_shell(status: dict[str, Any]) -> str:
     function statusPill(status) {{
       const safe = escapeHtml(status || "pending");
       return `<span class="status-pill ${{safe}}">${{escapeHtml(statusLabel(status))}}</span>`;
+    }}
+
+    function qualityLabel(status) {{
+      const labels = {{
+        ready: "통과",
+        review: "확인 필요",
+        blocked: "발송 제외",
+      }};
+      return labels[status] || statusLabel(status);
+    }}
+
+    function qualityPill(status) {{
+      const safe = escapeHtml(status || "review");
+      return `<span class="status-pill ${{safe}}">${{escapeHtml(qualityLabel(status))}}</span>`;
+    }}
+
+    function qualitySummaryText(ready, review, blocked) {{
+      return `통과 ${{escapeHtml(ready || 0)}} · 확인 ${{escapeHtml(review || 0)}} · 제외 ${{escapeHtml(blocked || 0)}}`;
     }}
 
     function paged(items, page, size) {{
@@ -6022,6 +9509,9 @@ def _render_shell(status: dict[str, Any]) -> str:
       }} else if (kind === "readiness") {{
         readinessPage = page;
         renderReadinessList();
+      }} else if (kind === "pilotBrief") {{
+        pilotBriefPage = page;
+        renderPilotBriefList();
       }}
     }}
 
@@ -6060,6 +9550,7 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     function renderOpsHub(data) {{
       opsHub = data;
+      renderOpsCommand(data);
       const focus = data.focus || [];
       document.querySelector("#opsFocus").innerHTML = focus.map((item) => `
         <div class="focus-card ${{escapeHtml(item.tone || "info")}}" data-hub-tab="${{escapeHtml(item.tab || "dashboard")}}" role="button" tabindex="0">
@@ -6093,7 +9584,7 @@ def _render_shell(status: dict[str, Any]) -> str:
               <div>${{statusPill(toneToStatus(item.tone))}}</div>
               <strong>${{escapeHtml(item.title || "-")}}</strong>
               <span>${{escapeHtml(item.detail || "")}}</span>
-              <span>${{escapeHtml(item.lane || "Academy Ops")}} · ${{escapeHtml(item.evidence || "")}}</span>
+              <span>${{escapeHtml(item.lane || "운영 허브")}} · 근거 ${{escapeHtml(evidenceLabel(item.evidence))}}</span>
             </div>
             <div class="brief-action">${{escapeHtml(item.action_label || "확인")}}</div>
           </div>
@@ -6103,31 +9594,390 @@ def _render_shell(status: dict[str, Any]) -> str:
       renderOpsQueue(data.work_queue || []);
     }}
 
+    function renderOpsCommand(data) {{
+      const target = document.querySelector("#opsCommand");
+      if (!target) return;
+      const brief = (data.ops_brief || [])[0] || null;
+      const queue = (data.work_queue || [])[0] || null;
+      const readyQueue = (data.work_queue || [])
+        .filter((item) => item.execution_state === "ready").length;
+      const reviewQueue = Math.max(0, (data.work_queue || []).length - readyQueue);
+      if (!brief && !queue) {{
+        target.className = "ops-command ok";
+        target.innerHTML = `
+          <div class="ops-command-main">
+            <span class="command-label">오늘 먼저 볼 것</span>
+            <strong>긴급 처리 항목 없음</strong>
+            <p>현재 데모 기준으로 바로 막힌 운영 항목은 없습니다. 데이터 수신과 리포트 품질만 주기적으로 확인하세요.</p>
+            <div class="command-meta">
+              <span class="badge ok">안정</span>
+              <span class="badge">학생 큐 0명</span>
+            </div>
+          </div>
+          <div class="ops-command-side">
+            <span class="command-label">다음 액션</span>
+            <strong>운영 리포트 확인</strong>
+            <p>마감 기록을 남기면 다음 교대자가 같은 상태에서 이어받을 수 있습니다.</p>
+            <button class="secondary command-action" data-hub-tab="dashboard">리포트 만들기</button>
+          </div>
+          <div class="command-gate"><span>안전 게이트</span><p>실제 발송이나 ClassIn 쓰기 작업 전에는 설정 점검과 검토 결과를 확인하세요.</p></div>
+        `;
+        return;
+      }}
+      const tone = brief?.tone || queue?.tone || "info";
+      const title = brief?.title || queue?.reason || "운영 항목 확인";
+      const detail = brief?.detail || queue?.reason || "오늘 처리할 운영 항목을 확인하세요.";
+      const actionLabel = brief?.action_label || queue?.action_label || queue?.next_action || "확인";
+      const actionTab = brief?.tab || queue?.tab || "dashboard";
+      const studentName = queue?.student_name || "학생 큐 없음";
+      const studentDetail = queue
+        ? `${{queue.class_name || "-"}} · ${{queue.reason || queue.next_action || "확인 필요"}}`
+        : "현재 바로 처리할 학생 큐가 없습니다.";
+      const safetyGate = queue?.safety_gate || "실행 전 설정·연락처·품질 상태를 확인하세요.";
+      target.className = `ops-command ${{escapeHtml(tone)}}`;
+      target.innerHTML = `
+        <div class="ops-command-main">
+          <span class="command-label">오늘 먼저 볼 것</span>
+          <strong>${{escapeHtml(title)}}</strong>
+          <p>${{escapeHtml(detail)}}</p>
+          <div class="command-meta">
+            ${{statusPill(toneToStatus(tone))}}
+            <span class="badge">근거 ${{escapeHtml(evidenceLabel(brief?.evidence || queue?.evidence))}}</span>
+            <span class="badge ok">처리 가능 ${{escapeHtml(readyQueue)}}</span>
+            <span class="badge ${{reviewQueue ? "warn" : ""}}">검토 필요 ${{escapeHtml(reviewQueue)}}</span>
+          </div>
+        </div>
+        <div class="ops-command-side">
+          <span class="command-label">다음 학생</span>
+          <strong>${{escapeHtml(studentName)}}</strong>
+          <p>${{escapeHtml(studentDetail)}}</p>
+          <button class="secondary command-action" data-hub-tab="${{escapeHtml(actionTab)}}">${{escapeHtml(actionLabel)}}</button>
+        </div>
+        <div class="command-gate"><span>안전 게이트</span><p>${{escapeHtml(safetyGate)}}</p></div>
+      `;
+    }}
+
     function renderOpsQueue(queue) {{
       const target = document.querySelector("#opsQueue");
+      renderOpsQueueFilters(queue);
       if (!queue.length) {{
         target.innerHTML = `<div class="empty">오늘 바로 처리할 학생 큐가 없습니다.</div>`;
         return;
       }}
-      const page = paged(queue, opsQueuePage, PAGE_SIZE.opsQueue);
+      const filtered = queueFilterItems(queue);
+      if (!filtered.length) {{
+        target.innerHTML = `<div class="empty">${{escapeHtml(queueFilterEmptyText())}}</div>`;
+        return;
+      }}
+      const page = paged(filtered, opsQueuePage, PAGE_SIZE.opsQueue);
       opsQueuePage = page.page;
-      target.innerHTML = page.items.map((item) => `
+      const rowsHtml = page.items.map((item) => `
         <div class="queue-row ${{escapeHtml(item.tone || "info")}}" data-hub-tab="${{escapeHtml(item.tab || "missing")}}" role="button" tabindex="0">
           <div>
             <div>${{statusPill(toneToStatus(item.tone))}}</div>
             <strong>${{escapeHtml(item.student_name || "미등록")}} · ${{escapeHtml(item.class_name || "-")}}</strong>
             <span>${{escapeHtml(item.reason || "")}}</span>
-            <span>${{escapeHtml(item.lane || "Academy Ops")}} · ${{escapeHtml(item.evidence || "")}}</span>
-            <span class="queue-note">게이트: ${{escapeHtml(item.safety_gate || "담당자 확인 후 진행")}}</span>
-            <span class="queue-note">완료: ${{escapeHtml(item.completion_check || "운영 리포트에 처리 결과 기록")}}</span>
-            <div class="queue-badges">
-              <span class="badge ${{item.execution_state === "ready" ? "ok" : "warn"}}">${{escapeHtml(item.operator_note || (item.can_execute ? "바로 실행 가능" : "검토 필요"))}}</span>
-              ${{(item.badges || []).map((badge) => `<span class="badge">${{escapeHtml(badge)}}</span>`).join("")}}
+            <span>${{escapeHtml(item.lane || "운영 허브")}} · 근거 ${{escapeHtml(evidenceLabel(item.evidence))}}</span>
+            <details class="queue-details">
+              <summary>게이트·완료 기준</summary>
+              <span class="queue-note">게이트: ${{escapeHtml(item.safety_gate || "담당자 확인 후 진행")}}</span>
+              <span class="queue-note">완료: ${{escapeHtml(item.completion_check || "운영 리포트에 처리 결과 기록")}}</span>
+            </details>
+              <div class="queue-badges">
+                <span class="badge ${{item.execution_state === "ready" ? "ok" : "warn"}}">${{escapeHtml(item.operator_note || (item.can_execute ? "바로 실행 가능" : "검토 필요"))}}</span>
+                ${{(item.badges || []).map((badge) => `<span class="badge">${{escapeHtml(badge)}}</span>`).join("")}}
+              </div>
             </div>
+          <div class="queue-actions">
+            <button
+              type="button"
+              data-action="openStudentBrief"
+              data-student-id="${{escapeHtml(item.student_classin_id || studentIdFromQueueId(item.id) || "")}}"
+              data-student-name="${{escapeHtml(item.student_name || "")}}"
+              data-class-name="${{escapeHtml(item.class_name || "")}}"
+              class="secondary"
+            >학생 보기</button>
+            <div class="queue-action">${{escapeHtml(item.next_action || item.action_label || "확인")}}</div>
           </div>
-          <div class="queue-action">${{escapeHtml(item.next_action || item.action_label || "확인")}}</div>
         </div>
-      `).join("") + pagerHtml("opsQueue", page.page, page.totalPages, page.totalItems);
+      `).join("");
+      target.innerHTML = `<div class="queue-card-strip">${{rowsHtml}}</div>` + pagerHtml("opsQueue", page.page, page.totalPages, page.totalItems);
+    }}
+
+    function queueFilterDefinitions(queue) {{
+      const counts = queueFilterCounts(queue);
+      return [
+        ["all", "전체", counts.all],
+        ["ready", "바로 실행", counts.ready],
+        ["review", "검토 필요", counts.review],
+        ["missing", "미제출", counts.missing],
+        ["report", "리포트", counts.report],
+        ["data", "데이터", counts.data],
+      ];
+    }}
+
+    function queueFilterCounts(queue) {{
+      return (queue || []).reduce((counts, item) => {{
+        counts.all += 1;
+        if (item.execution_state === "ready") counts.ready += 1;
+        if (item.execution_state !== "ready") counts.review += 1;
+        if (item.kind === "missing_homework") counts.missing += 1;
+        if (["weekly_report", "report_composition"].includes(item.kind)) counts.report += 1;
+        if (item.kind === "data_review") counts.data += 1;
+        return counts;
+      }}, {{ all: 0, ready: 0, review: 0, missing: 0, report: 0, data: 0 }});
+    }}
+
+    function queueFilterItems(queue) {{
+      return (queue || []).filter((item) => {{
+        if (opsQueueFilter === "ready") return item.execution_state === "ready";
+        if (opsQueueFilter === "review") return item.execution_state !== "ready";
+        if (opsQueueFilter === "missing") return item.kind === "missing_homework";
+        if (opsQueueFilter === "report") return ["weekly_report", "report_composition"].includes(item.kind);
+        if (opsQueueFilter === "data") return item.kind === "data_review";
+        return true;
+      }});
+    }}
+
+    function queueFilterEmptyText() {{
+      const labels = {{
+        ready: "바로 실행 가능한 학생 큐가 없습니다.",
+        review: "검토가 필요한 학생 큐가 없습니다.",
+        missing: "미제출 처리 학생 큐가 없습니다.",
+        report: "리포트 보강 학생 큐가 없습니다.",
+        data: "데이터 확인 학생 큐가 없습니다.",
+      }};
+      return labels[opsQueueFilter] || "선택한 조건의 학생 큐가 없습니다.";
+    }}
+
+    function renderOpsQueueFilters(queue) {{
+      const target = document.querySelector("#opsQueueFilters");
+      if (!target) return;
+      const definitions = queueFilterDefinitions(queue || []);
+      if (!definitions.some(([, , count]) => count > 0)) {{
+        target.innerHTML = "";
+        return;
+      }}
+      target.innerHTML = definitions.map(([key, label, count]) => `
+        <button
+          type="button"
+          data-queue-filter="${{escapeHtml(key)}}"
+          class="${{opsQueueFilter === key ? "active" : ""}}"
+        >${{escapeHtml(label)}} ${{escapeHtml(count)}}</button>
+      `).join("");
+    }}
+
+    function studentBriefOverlay() {{
+      return document.querySelector("#studentBriefOverlay");
+    }}
+
+    function studentIdFromQueueId(value) {{
+      const text = String(value || "");
+      const match = text.match(/:(\\d+)(?:::|$)/);
+      return match ? match[1] : "";
+    }}
+
+    function studentBriefSeedFromButton(button) {{
+      return {{
+        student_classin_id: button?.dataset.studentId || "",
+        student_name: button?.dataset.studentName || "",
+        class_name: button?.dataset.className || "",
+      }};
+    }}
+
+    function studentMatches(item, seed) {{
+      if (!item || !seed) return false;
+      const seedId = String(seed.student_classin_id || "").trim();
+      const itemId = String(item.student_classin_id || studentIdFromQueueId(item.id) || "").trim();
+      if (seedId && itemId && seedId === itemId) return true;
+      const seedName = String(seed.student_name || "").trim();
+      const itemName = String(item.student_name || "").trim();
+      const seedClass = String(seed.class_name || "").trim();
+      const itemClass = String(item.class_name || item.student_class_name || "").trim();
+      if (!seedName || !itemName || seedName !== itemName) return false;
+      return !seedClass || !itemClass || seedClass === itemClass;
+    }}
+
+    function firstStudentMatch(items, seed) {{
+      return (items || []).find((item) => studentMatches(item, seed)) || null;
+    }}
+
+    function studentBriefBadges(...groups) {{
+      const seen = new Set();
+      return groups.flat().filter((badge) => {{
+        const text = String(badge || "").trim();
+        if (!text || seen.has(text)) return false;
+        seen.add(text);
+        return true;
+      }}).slice(0, 8);
+    }}
+
+    function studentBriefSourceRows(context) {{
+      const sources = (context?.sources || []).slice(0, 5);
+      if (!sources.length) {{
+        return `<li><strong>연결된 자체 데이터 없음</strong>오프라인 출결·성적·메모가 붙으면 여기에 출처가 표시됩니다.</li>`;
+      }}
+      return sources.map((source) => `
+        <li>
+          <strong>${{escapeHtml(source.kind || "source")}} · ${{escapeHtml(source.date || source.source_name || "-")}}</strong>
+          ${{escapeHtml(source.detail || source.source_name || "출처 세부 정보 없음")}}
+        </li>
+      `).join("");
+    }}
+
+    function studentBriefQueueRows(queueItems) {{
+      if (!queueItems.length) {{
+        return `<li><strong>오늘 큐 항목 없음</strong>현재 이 학생에게 바로 연결된 처리 항목은 없습니다.</li>`;
+      }}
+      return queueItems.slice(0, 4).map((item) => `
+        <li>
+          <strong>${{escapeHtml(item.next_action || item.action_label || "확인")}} · ${{escapeHtml(item.lane || "운영")}}</strong>
+          ${{escapeHtml(item.reason || item.safety_gate || "상태 확인")}}<br>
+          <span class="badge ${{item.execution_state === "ready" ? "ok" : "warn"}}">${{escapeHtml(item.operator_note || item.execution_state || "검토")}}</span>
+        </li>
+      `).join("");
+    }}
+
+    function studentBriefSectionRows(composition) {{
+      const sections = (composition?.sections || []).slice(0, 6);
+      if (!sections.length) {{
+        return `<li><strong>리포트 구성 미조회</strong>리포트 탭에서 구성 새로고침을 누르면 섹션 준비도가 연결됩니다.</li>`;
+      }}
+      return sections.map((section) => `
+        <li>
+          <strong>${{escapeHtml(section.title || "섹션")}} · ${{escapeHtml(statusLabel(section.status))}}</strong>
+          ${{escapeHtml(section.detail || section.reason || "준비도 확인")}}
+        </li>
+      `).join("");
+    }}
+
+    function openStudentBrief(button) {{
+      const seed = studentBriefSeedFromButton(button);
+      const fallback = firstStudentMatch((opsHub || {{}}).work_queue || [], seed)
+        || firstStudentMatch(currentAcademyContexts, seed)
+        || firstStudentMatch(currentReportCompositions, seed)
+        || firstStudentMatch(currentMissing, seed)
+        || seed;
+      const identity = {{
+        student_classin_id: seed.student_classin_id || fallback.student_classin_id || studentIdFromQueueId(fallback.id) || "",
+        student_name: seed.student_name || fallback.student_name || "미등록",
+        class_name: seed.class_name || fallback.class_name || fallback.student_class_name || "",
+      }};
+      if (!identity.student_classin_id && !identity.student_name) {{
+        throw new Error("학생 정보를 찾을 수 없습니다.");
+      }}
+
+      const queueItems = ((opsHub || {{}}).work_queue || []).filter((item) => studentMatches(item, identity));
+      const context = firstStudentMatch(currentAcademyContexts, identity);
+      const composition = firstStudentMatch(currentReportCompositions, identity);
+      const missingRows = currentMissing.filter((item) => studentMatches(item, identity));
+      const weeklyDraft = firstStudentMatch(currentWeeklyDrafts, identity);
+      const latestNotification = firstStudentMatch(currentNotifications, identity);
+      const primary = queueItems[0] || {{}};
+      const counts = context?.counts || {{}};
+      const compositionCounts = composition?.source_counts || {{}};
+      const examCount = (Number(compositionCounts.exam_results || 0) + Number(compositionCounts.offline_scores || counts.offline_scores || 0));
+      const memoCount = Number(compositionCounts.memos || counts.memos || 0);
+      const attendanceCount = Number(counts.offline_attendance || 0);
+      const missingCount = missingRows.reduce((max, item) => Math.max(max, Number(item.missing_count || 1)), 0);
+      const reportStatus = composition?.readiness_status || weeklyDraft?.quality_status || context?.weekly_report?.status || "-";
+      const title = identity.student_name || "학생";
+      const subtitle = [identity.class_name, identity.student_classin_id ? `ClassIn ${{identity.student_classin_id}}` : ""]
+        .filter(Boolean)
+        .join(" · ") || "학생 식별 정보 없음";
+      const badges = studentBriefBadges(
+        primary.badges || [],
+        context?.badges || [],
+        composition?.readiness_warnings || [],
+        latestNotification?.quality_warnings || []
+      );
+
+      currentStudentBrief = identity;
+      document.querySelector("#studentBriefTitle").textContent = `${{title}} 360`;
+      document.querySelector("#studentBriefSubtitle").textContent = subtitle;
+      document.querySelector("#studentBriefBody").innerHTML = `
+        <div class="student-brief-hero">
+          <strong>${{escapeHtml(primary.reason || composition?.focus || context?.summary || "학생 상태 확인")}}</strong>
+          <p>${{escapeHtml(primary.safety_gate || composition?.context_summary || context?.summary || "숙제·시험·메모·리포트 근거를 함께 확인하세요.")}}</p>
+          <div class="student-brief-meta">
+            ${{statusPill(toneToStatus(primary.tone || composition?.readiness_status || "info"))}}
+            <span class="badge">${{escapeHtml(reportStatus)}} 리포트</span>
+            <span class="badge">${{missingRows.length ? `미제출 ${{missingRows.length}}건` : "미제출 큐 없음"}}</span>
+          </div>
+          <div class="student-brief-badges">
+            ${{badges.length ? badges.map((badge) => `<span class="badge">${{escapeHtml(badge)}}</span>`).join("") : `<span class="badge">추가 경고 없음</span>`}}
+          </div>
+          <div class="student-brief-actions">
+            <button data-action="studentBriefAskAgent">AI 질문</button>
+            <button data-action="studentBriefMemo" class="secondary" ${{identity.student_classin_id ? "" : "disabled"}}>메모 남기기</button>
+            <button data-action="studentBriefReport" class="secondary" ${{identity.student_classin_id ? "" : "disabled"}}>리포트 초안</button>
+            <button data-action="studentBriefData" class="secondary">데이터 확인</button>
+          </div>
+        </div>
+        <div class="student-brief-grid">
+          <div class="student-brief-card"><span>숙제 미제출</span><strong>${{escapeHtml(missingCount ? `${{missingCount}}회` : "없음")}}</strong></div>
+          <div class="student-brief-card"><span>시험·성적</span><strong>${{escapeHtml(examCount)}}건</strong></div>
+          <div class="student-brief-card"><span>상담·메모</span><strong>${{escapeHtml(memoCount)}}건</strong></div>
+          <div class="student-brief-card"><span>오프라인 출결</span><strong>${{escapeHtml(attendanceCount)}}건</strong></div>
+        </div>
+        <div class="student-brief-section">
+          <h3>오늘 해야 할 일</h3>
+          <ul class="student-brief-list">${{studentBriefQueueRows(queueItems)}}</ul>
+        </div>
+        <div class="student-brief-section">
+          <h3>학원 데이터 출처</h3>
+          <ul class="student-brief-list">${{studentBriefSourceRows(context)}}</ul>
+        </div>
+        <div class="student-brief-section">
+          <h3>리포트 구성</h3>
+          <ul class="student-brief-list">${{studentBriefSectionRows(composition)}}</ul>
+        </div>
+      `;
+      studentBriefOverlay().hidden = false;
+      document.querySelector("#studentBriefPanel")?.focus();
+    }}
+
+    function closeStudentBrief() {{
+      const overlay = studentBriefOverlay();
+      if (overlay) overlay.hidden = true;
+      currentStudentBrief = null;
+    }}
+
+    function studentBriefAskAgent() {{
+      if (!currentStudentBrief) return;
+      const brief = currentStudentBrief;
+      closeStudentBrief();
+      activateTab("memo");
+      const target = document.querySelector("#agentQuestion");
+      target.value = `${{brief.student_name}} 학생의 이번 주 숙제, 시험, 상담 메모, 리포트 보강 포인트를 근거별로 정리해줘`;
+      target.focus();
+      setPreviewText("#agentAnswerPreview", "학생 360 기준 질문이 준비되었습니다. AI에게 묻기를 실행하세요.");
+      renderAgentCommand();
+    }}
+
+    function studentBriefMemo() {{
+      if (!currentStudentBrief?.student_classin_id) return;
+      const brief = currentStudentBrief;
+      closeStudentBrief();
+      activateTab("memo");
+      document.querySelector("#memoClassinId").value = brief.student_classin_id;
+      document.querySelector("#memoTag").value = "상담";
+      document.querySelector("#memoText").focus();
+      renderAgentCommand();
+    }}
+
+    async function studentBriefReport() {{
+      if (!currentStudentBrief?.student_classin_id) return;
+      const studentId = currentStudentBrief.student_classin_id;
+      closeStudentBrief();
+      activateTab("reports");
+      await generateStudentReportPack({{ dataset: {{ studentId }} }});
+    }}
+
+    function studentBriefData() {{
+      closeStudentBrief();
+      activateTab("data");
+      document.querySelector("#academyContextTable")?.scrollIntoView({{ block: "start", behavior: "smooth" }});
     }}
 
     async function generateOpsReport() {{
@@ -6218,10 +10068,10 @@ def _render_shell(status: dict[str, Any]) -> str:
       const summary = data.summary || {{}};
       const summaryCards = [
         ["단계", summary.total_steps || 0, ""],
-        ["ready", summary.ready || 0, "ok"],
-        ["review", summary.review || 0, "warn"],
-        ["blocked", summary.blocked || 0, "failed"],
-        ["dry-run", summary.dry_run || 0, "info"],
+        ["준비", summary.ready || 0, "ok"],
+        ["확인", summary.review || 0, "warn"],
+        ["차단", summary.blocked || 0, "failed"],
+        ["검토", summary.dry_run || 0, "info"],
         ["분", summary.estimated_minutes || 0, "info"],
       ];
       document.querySelector("#opsPlaybookSummary").innerHTML = summaryCards.map(([label, value, tone]) => `
@@ -6299,6 +10149,20 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
     }}
 
+    function setTheme(theme) {{
+      const next = theme === "dark" ? "dark" : "light";
+      document.documentElement.dataset.theme = next;
+      try {{
+        localStorage.setItem("classin-ui-theme", next);
+      }} catch (error) {{
+        // localStorage may be blocked in embedded browser contexts.
+      }}
+    }}
+
+    function toggleColorTheme() {{
+      setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+    }}
+
     async function copyOpsReport() {{
       if (!lastOpsReportMarkdown) {{
         await generateOpsReport();
@@ -6339,16 +10203,277 @@ def _render_shell(status: dict[str, Any]) -> str:
     function toneToStatus(tone) {{
       if (tone === "danger") return "failed";
       if (tone === "warn") return "warn";
-      if (tone === "info") return "dry_run";
+      if (tone === "info") return "info";
       if (tone === "ok") return "ok";
       return "skipped";
+    }}
+
+    function dataMetric(value) {{
+      const number = Number(value || 0);
+      return Number.isFinite(number) ? number : 0;
+    }}
+
+    function hasLoadedSummary(summary) {{
+      return Object.keys(summary || {{}}).length > 0;
+    }}
+
+    function dataCommandState() {{
+      const webhookSummary = currentWebhookSummary || {{}};
+      const academySummary = currentAcademyContextSummary || {{}};
+      const totalEvents = dataMetric(webhookSummary.total || currentWebhookEvents.length);
+      const parsedEvents = dataMetric(webhookSummary.parsed || currentWebhookEvents.filter((item) => item.status === "parsed").length);
+      const webhookReview = dataMetric(webhookSummary.review || currentWebhookEvents.filter((item) => item.status !== "parsed").length);
+      const studentEvents = dataMetric(
+        webhookSummary.student_events ||
+        currentWebhookEvents.reduce((sum, item) => sum + dataMetric(item.student_count), 0)
+      );
+      const totalStudents = dataMetric(academySummary.total_students || currentAcademyContexts.length);
+      const withContext = dataMetric(
+        academySummary.students_with_context ||
+        currentAcademyContexts.filter((item) => item.has_context).length
+      );
+      const withoutContext = dataMetric(
+        academySummary.students_without_context ||
+        Math.max(0, totalStudents - withContext)
+      );
+      const contextReview = dataMetric(academySummary.needs_review || currentAcademyReviewItems.length);
+      const weeklyReports = dataMetric(
+        academySummary.weekly_reports ||
+        currentAcademyContexts.filter((item) => item.weekly_report?.status).length
+      );
+      const hasWebhookData = totalEvents > 0 || hasLoadedSummary(webhookSummary);
+      const hasContextData = totalStudents > 0 || hasLoadedSummary(academySummary) || currentAcademyReviewItems.length > 0;
+      let phase = "수신 점검";
+      let detail = "ClassIn 수신 기록을 새로고침해 출결·숙제·시험 신호가 들어왔는지 확인하세요.";
+      let primaryAction = "refreshWebhookInbox";
+      let primaryLabel = "수신함 새로고침";
+      let tone = "";
+      let activeIndex = 0;
+      if (!status.ok) {{
+        phase = "설정 확인";
+        detail = "config.yaml을 읽은 뒤 ClassIn 수신함과 Notion 기반 학원 데이터 맥락을 확인할 수 있습니다.";
+        primaryAction = "refreshStatus";
+        primaryLabel = "상태 새로고침";
+        tone = "danger";
+      }} else if (webhookReview) {{
+        phase = "수신 정리 확인";
+        detail = "아직 정리되지 않은 수신 기록이 있습니다. 이벤트 종류, 수업, 학생 신호를 먼저 확인하세요.";
+        tone = "warn";
+        activeIndex = 1;
+      }} else if (!hasWebhookData) {{
+        activeIndex = 0;
+      }} else if (!hasContextData) {{
+        phase = "학생 매칭";
+        detail = "ClassIn 원본은 들어왔습니다. 학원 출결·성적·메모 맥락을 학생별로 연결하세요.";
+        primaryAction = "refreshAcademyContexts";
+        primaryLabel = "융합 맥락 새로고침";
+        activeIndex = 2;
+      }} else if (contextReview || withoutContext) {{
+        phase = "매칭 보강";
+        detail = "자동 매칭이 애매하거나 자체 데이터가 비어 있는 학생이 있습니다. 리포트 반영 전 확인하세요.";
+        primaryAction = "refreshAcademyContexts";
+        primaryLabel = "매칭 다시 보기";
+        tone = "warn";
+        activeIndex = 2;
+      }} else {{
+        phase = "리포트 반영 준비";
+        detail = "수신·파싱·학생 맥락이 연결되어 리포트와 알림 품질 근거로 사용할 수 있습니다.";
+        primaryAction = "refreshAcademyContexts";
+        primaryLabel = "맥락 다시 보기";
+        activeIndex = 3;
+      }}
+      return {{
+        phase,
+        detail,
+        primaryAction,
+        primaryLabel,
+        tone,
+        activeIndex,
+        meta: [
+          ["수신 기록", `${{totalEvents}}건`],
+          ["정리 완료", `${{parsedEvents}}건`],
+          ["학생 신호", `${{studentEvents}}건`],
+          ["확인 필요", `${{webhookReview + contextReview}}건`],
+          ["학생 맥락", totalStudents ? `${{withContext}}/${{totalStudents}}명` : "0명"],
+          ["리포트 근거", `${{weeklyReports}}건`],
+        ],
+      }};
+    }}
+
+    function renderDataCommand() {{
+      const target = document.querySelector("#dataCommand");
+      if (!target) return;
+      const state = dataCommandState();
+      target.className = `action-command data-command ${{escapeHtml(state.tone)}}`;
+      const steps = [
+        ["수신", "ClassIn 기록 도착 확인"],
+        ["정리", "수업·학생 신호 연결"],
+        ["매칭", "학생 정보와 자체 데이터 연결"],
+        ["반영", "리포트·알림 품질 근거로 사용"],
+      ];
+      target.innerHTML = `
+        <div class="action-command-main">
+          <span class="command-label">데이터 운영 상태</span>
+          <strong>${{escapeHtml(state.phase)}}</strong>
+          <p>${{escapeHtml(state.detail)}}</p>
+          <div class="command-meta">
+            ${{state.meta.map(([label, value]) => `<span class="badge">${{escapeHtml(label)}} ${{escapeHtml(value)}}</span>`).join("")}}
+          </div>
+          <div class="action-command-actions">
+            <button data-primary-action="${{escapeHtml(state.primaryAction)}}">${{escapeHtml(state.primaryLabel)}}</button>
+            <button data-primary-action="refreshWebhookInbox" class="secondary">수신함</button>
+            <button data-primary-action="refreshAcademyContexts" class="secondary">융합 맥락</button>
+            <button data-hub-tab="reports" class="secondary">리포트 반영</button>
+          </div>
+          <div class="command-gate"><span>운영 원칙</span><p>ClassIn 수신 기록은 읽기 전용으로 확인하고, 자동 매칭이 애매한 학원 데이터는 리포트 문장에 반영하기 전 교사가 확인하세요.</p></div>
+        </div>
+        <div class="action-command-side">
+          <span class="command-label">데이터 흐름</span>
+          <div class="workflow-steps">
+            ${{steps.map((step, index) => `
+              <div class="workflow-step ${{index === state.activeIndex ? "active" : ""}}">
+                <span>${{escapeHtml(index + 1)}}</span>
+                <strong>${{escapeHtml(step[0])}}</strong>
+                <p>${{escapeHtml(step[1])}}</p>
+              </div>
+            `).join("")}}
+          </div>
+        </div>
+      `;
+    }}
+
+    function agentFieldValue(selector) {{
+      return document.querySelector(selector)?.value.trim() || "";
+    }}
+
+    function agentCommandState() {{
+      const question = agentFieldValue("#agentQuestion");
+      const classinId = agentFieldValue("#memoClassinId");
+      const tag = agentFieldValue("#memoTag");
+      const memoText = agentFieldValue("#memoText");
+      const hasQuestion = Boolean(question);
+      const hasMemoTarget = Boolean(classinId);
+      const hasMemoText = Boolean(memoText);
+      let phase = "질문·메모 대기";
+      let detail = "AI에게 물어볼 운영 질문을 쓰거나 학생별 상담 메모를 준비하세요.";
+      let primaryAction = "focusAgentQuestion";
+      let primaryLabel = "질문 쓰기";
+      let tone = "warn";
+      let activeIndex = 0;
+      if (hasQuestion) {{
+        phase = "AI 질문 준비";
+        detail = "현재 질문은 읽기 중심의 수동 오더입니다. 답변을 확인한 뒤 필요한 후속 기록만 따로 저장하세요.";
+        primaryAction = "askAgent";
+        primaryLabel = "AI에게 묻기";
+        tone = "ok";
+        activeIndex = 1;
+      }} else if (hasMemoText && !hasMemoTarget) {{
+        phase = "학생 지정 필요";
+        detail = "메모 내용은 준비되어 있지만 저장할 ClassIn ID가 비어 있습니다.";
+        primaryAction = "focusMemoTarget";
+        primaryLabel = "학생 지정";
+        tone = "danger";
+        activeIndex = 2;
+      }} else if (hasMemoTarget && hasMemoText) {{
+        phase = "학생 메모 준비";
+        detail = "대상 학생과 메모 내용이 준비되었습니다. 저장 전 태그와 학생 ID를 한 번 더 확인하세요.";
+        primaryAction = "writeMemo";
+        primaryLabel = "메모 저장";
+        tone = "ok";
+        activeIndex = 2;
+      }} else if (hasMemoTarget) {{
+        phase = "메모 내용 대기";
+        detail = "대상 학생이 선택되었습니다. 상담 내용이나 다음 액션을 기록하세요.";
+        primaryAction = "focusMemoText";
+        primaryLabel = "메모 쓰기";
+        tone = "warn";
+        activeIndex = 2;
+      }}
+      return {{
+        phase,
+        detail,
+        primaryAction,
+        primaryLabel,
+        tone,
+        activeIndex,
+        meta: [
+          ["질문", hasQuestion ? `${{question.length}}자` : "대기"],
+          ["학생", classinId || "미지정"],
+          ["태그", tag || "기본"],
+          ["메모", hasMemoText ? `${{memoText.length}}자` : "대기"],
+          ["모드", status.mode || "-"],
+        ],
+      }};
+    }}
+
+    function renderAgentCommand() {{
+      const target = document.querySelector("#agentCommand");
+      if (!target) return;
+      const state = agentCommandState();
+      target.className = `action-command agent-command ${{escapeHtml(state.tone)}}`;
+      const steps = [
+        ["대상", "학생·반 맥락 확인"],
+        ["질문", "운영 질문 구체화"],
+        ["메모", "상담·후속 조치 기록"],
+        ["실행", "AI 답변 또는 메모 저장"],
+      ];
+      target.innerHTML = `
+        <div class="action-command-main">
+          <span class="command-label">메모·AI 운영 상태</span>
+          <strong>${{escapeHtml(state.phase)}}</strong>
+          <p>${{escapeHtml(state.detail)}}</p>
+          <div class="command-meta">
+            ${{state.meta.map(([label, value]) => `<span class="badge">${{escapeHtml(label)}} ${{escapeHtml(value)}}</span>`).join("")}}
+          </div>
+          <div class="action-command-actions">
+            <button data-primary-action="${{escapeHtml(state.primaryAction)}}">${{escapeHtml(state.primaryLabel)}}</button>
+            <button data-primary-action="focusAgentQuestion" class="secondary">질문</button>
+            <button data-primary-action="focusMemoTarget" class="secondary">학생 메모</button>
+            <button data-primary-action="refreshDiagnostics" class="secondary">설정 점검</button>
+          </div>
+          <div class="command-gate"><span>운영 원칙</span><p>AI 답변은 Notion/ClassIn 데이터를 조회·요약하는 수동 오더입니다. 쓰기 작업 전에는 대상 학생과 메모 내용을 확인하세요.</p></div>
+        </div>
+        <div class="action-command-side">
+          <span class="command-label">메모·AI 흐름</span>
+          <div class="workflow-steps">
+            ${{steps.map((step, index) => `
+              <div class="workflow-step ${{index === state.activeIndex ? "active" : ""}}">
+                <span>${{escapeHtml(index + 1)}}</span>
+                <strong>${{escapeHtml(step[0])}}</strong>
+                <p>${{escapeHtml(step[1])}}</p>
+              </div>
+            `).join("")}}
+          </div>
+        </div>
+      `;
+    }}
+
+    function focusAgentQuestionField() {{
+      activateTab("memo");
+      const target = document.querySelector("#agentQuestion");
+      target?.focus();
+      renderAgentCommand();
+    }}
+
+    function focusMemoTargetField() {{
+      activateTab("memo");
+      const target = document.querySelector("#memoClassinId");
+      target?.focus();
+      renderAgentCommand();
+    }}
+
+    function focusMemoTextField() {{
+      activateTab("memo");
+      const target = document.querySelector("#memoText");
+      target?.focus();
+      renderAgentCommand();
     }}
 
     async function loadWebhookInbox(logResult) {{
       if (!status.ok) {{
         renderWebhookInbox({{ summary: {{}}, items: [] }});
         document.querySelector("#webhookInboxTable").innerHTML =
-          `<div class="empty">config.yaml을 읽은 뒤 Webhook 수신함을 볼 수 있습니다.</div>`;
+          `<div class="empty">config.yaml을 읽은 뒤 ClassIn 수신 기록을 볼 수 있습니다.</div>`;
         return {{ summary: {{}}, items: [] }};
       }}
       const params = new URLSearchParams();
@@ -6360,21 +10485,55 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
       renderWebhookInbox(data);
       if (logResult) {{
-        writeLog("Webhook 수신함을 갱신했습니다.", data.summary);
+        writeLog("ClassIn 수신 기록을 갱신했습니다.", data.summary);
       }}
       return data;
     }}
 
+    function webhookEventLabel(cmd) {{
+      const labels = {{
+        Attendance: "출결 기록",
+        End: "수업 종료",
+        HomeworkSubmit: "숙제 제출",
+        HomeworkScore: "숙제 점수",
+        AnswerSheetScore: "OMR 점수",
+        unreadable: "읽을 수 없음",
+        unknown: "알 수 없는 이벤트",
+      }};
+      return labels[cmd] || cmd || "알 수 없는 이벤트";
+    }}
+
+    function webhookEventSummary(summary) {{
+      const source = summary.by_event_label || Object.entries(summary.by_cmd || {{}}).reduce((acc, [cmd, count]) => {{
+        const label = webhookEventLabel(cmd);
+        acc[label] = (acc[label] || 0) + Number(count || 0);
+        return acc;
+      }}, {{}});
+      return Object.entries(source)
+        .map(([label, count]) => `${{label}} ${{count}}`)
+        .join(" · ") || "-";
+    }}
+
+    function webhookCourseLabel(item) {{
+      if (item.course_label) return item.course_label;
+      if (item.class_name) return item.class_name;
+      const courseId = item.course_id || "";
+      const classId = item.class_id || "";
+      if (courseId && classId) return `수업 ${{courseId}} · ${{classId}}`;
+      if (courseId) return `강좌 ${{courseId}}`;
+      if (classId) return `수업 ${{classId}}`;
+      return "수업 정보 없음";
+    }}
+
     function renderWebhookInbox(data) {{
       currentWebhookEvents = data.items || [];
+      currentWebhookSummary = data.summary || {{}};
       webhookInboxPage = 1;
-      const summary = data.summary || {{}};
-      const cmdText = Object.entries(summary.by_cmd || {{}})
-        .map(([cmd, count]) => `${{cmd}} ${{count}}`)
-        .join(" · ") || "-";
+      const summary = currentWebhookSummary;
+      const eventText = webhookEventSummary(summary);
       const summaryRows = [
-        ["원본 이벤트", summary.total || 0],
-        ["파싱됨", summary.parsed || 0],
+        ["수신 기록", summary.total || 0],
+        ["정리 완료", summary.parsed || 0],
         ["확인 필요", summary.review || 0],
         ["학생 신호", summary.student_events || 0],
       ];
@@ -6385,40 +10544,41 @@ def _render_shell(status: dict[str, Any]) -> str:
         </div>
       `).join("");
       document.querySelector("#webhookCmdSummary").innerHTML =
-        `<strong>Cmd</strong><span>${{escapeHtml(cmdText)}}</span>`;
+        `<strong>이벤트 종류</strong><span>${{escapeHtml(eventText)}}</span>`;
+      renderDataCommand();
       renderWebhookInboxTable();
     }}
 
     function renderWebhookInboxTable() {{
       const target = document.querySelector("#webhookInboxTable");
       if (!currentWebhookEvents.length) {{
-        target.innerHTML = `<div class="empty">아직 수신된 Webhook JSON이 없습니다.</div>`;
+        target.innerHTML = `<div class="empty">아직 수신된 ClassIn 기록이 없습니다.</div>`;
         return;
       }}
       const page = paged(currentWebhookEvents, webhookInboxPage, PAGE_SIZE.webhookInbox);
       webhookInboxPage = page.page;
       target.innerHTML = `
-        <div class="table-wrap">
-          <table>
+        <div class="table-wrap is-compact">
+          <table class="compact-table">
             <thead>
               <tr>
                 <th>상태</th>
-                <th>Cmd</th>
+                <th>이벤트</th>
                 <th>수업·활동</th>
                 <th>학생</th>
                 <th>수신</th>
-                <th>파일</th>
+                <th>보관</th>
               </tr>
             </thead>
             <tbody>
               ${{page.items.map((item) => `
                 <tr>
-                  <td>${{statusPill(item.status === "parsed" ? "ok" : "warn")}}</td>
-                  <td><strong>${{escapeHtml(item.cmd || "-")}}</strong><br><span class="badge">${{escapeHtml(item.course_id || "-")}} / ${{escapeHtml(item.class_id || "-")}}</span></td>
+                  <td>${{statusPill(item.status === "parsed" ? "ok" : "warn")}}<br><span class="badge">${{escapeHtml(item.status_label || (item.status === "parsed" ? "정리 완료" : "확인 필요"))}}</span></td>
+                  <td><strong>${{escapeHtml(item.event_label || webhookEventLabel(item.cmd))}}</strong><br><span class="badge">${{escapeHtml(webhookCourseLabel(item))}}</span></td>
                   <td>${{escapeHtml(item.activity || item.class_name || "-")}}<br><span class="badge">${{escapeHtml(item.class_name || "-")}}</span></td>
                   <td>${{escapeHtml(item.student_count || 0)}}명<br><span class="badge">${{escapeHtml((item.students || []).join(", ") || "-")}}</span></td>
                   <td>${{escapeHtml(formatDate(item.received_at))}}<br><span class="badge">${{escapeHtml(formatDate(item.action_at))}}</span></td>
-                  <td><span class="badge">${{escapeHtml(item.file_name || "-")}}</span></td>
+                  <td><span class="badge">${{escapeHtml(item.source_label || (item.status === "parsed" ? "보관됨" : "확인 필요"))}}</span></td>
                 </tr>
               `).join("")}}
             </tbody>
@@ -6450,10 +10610,13 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     function renderBlockedAcademyContexts(message) {{
       currentAcademyContexts = [];
+      currentAcademyContextSummary = {{}};
+      currentAcademyReviewItems = [];
       document.querySelector("#academyContextSummary").innerHTML = "";
       document.querySelector("#academyContextReview").innerHTML = "";
       document.querySelector("#academyContextTable").innerHTML =
         `<div class="empty">${{escapeHtml(message)}}</div>`;
+      renderDataCommand();
     }}
 
     function updateContextClassOptions(classes, selected) {{
@@ -6469,9 +10632,11 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     function renderAcademyContexts(data) {{
       currentAcademyContexts = data.items || [];
+      currentAcademyContextSummary = data.summary || {{}};
+      currentAcademyReviewItems = data.needs_review_items || [];
       academyContextPage = 1;
       updateContextClassOptions(data.classes || [], data.class_name || "");
-      const summary = data.summary || {{}};
+      const summary = currentAcademyContextSummary;
       const summaryRows = [
         ["학생", summary.total_students || 0],
         ["맥락 있음", summary.students_with_context || 0],
@@ -6498,6 +10663,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         document.querySelector("#academyContextReview").innerHTML =
           `<strong>확인 필요 0건</strong><span>자동 매칭 대기 항목이 없습니다.</span>`;
       }}
+      renderDataCommand();
       renderAcademyContextTable();
     }}
 
@@ -6510,8 +10676,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       const page = paged(currentAcademyContexts, academyContextPage, PAGE_SIZE.academyContexts);
       academyContextPage = page.page;
       target.innerHTML = `
-        <div class="table-wrap">
-          <table>
+        <div class="table-wrap is-compact">
+          <table class="compact-table">
             <thead>
               <tr>
                 <th>상태</th>
@@ -6519,6 +10685,7 @@ def _render_shell(status: dict[str, Any]) -> str:
                 <th>융합 맥락</th>
                 <th>출처</th>
                 <th>리포트</th>
+                <th>상세</th>
               </tr>
             </thead>
             <tbody>
@@ -6533,6 +10700,15 @@ def _render_shell(status: dict[str, Any]) -> str:
                     ? (item.sources || []).map((source) => `<span class="badge">${{escapeHtml(source.kind || "-")}} · ${{escapeHtml(source.detail || source.source_name || "-")}}</span>`).join("<br>")
                     : `<span class="badge">-</span>`}}</td>
                   <td>${{escapeHtml(item.weekly_report?.status || "-")}}<br><span class="badge">${{item.weekly_report?.approved ? "승인됨" : "미승인"}}</span></td>
+                  <td>
+                    <button
+                      data-action="openStudentBrief"
+                      data-student-id="${{escapeHtml(item.student_classin_id || "")}}"
+                      data-student-name="${{escapeHtml(item.student_name || "")}}"
+                      data-class-name="${{escapeHtml(item.class_name || "")}}"
+                      class="secondary"
+                    >학생 보기</button>
+                  </td>
                 </tr>
               `).join("")}}
             </tbody>
@@ -6611,6 +10787,135 @@ def _render_shell(status: dict[str, Any]) -> str:
       }});
     }}
 
+    function readinessModeLabel(mode) {{
+      return ({{
+        "local-demo": "데모",
+        "classin-live": "ClassIn 실연동",
+        "kakao-live": "카톡 실발송",
+      }})[mode] || mode || "-";
+    }}
+
+    function readinessStageLabel(stage) {{
+      return ({{
+        "local-demo": "데모",
+        "classin-live": "ClassIn 실연동",
+        "kakao-live": "카톡 실발송",
+        config: "설정 파일",
+      }})[stage] || stage || "-";
+    }}
+
+    function readinessCommandState() {{
+      const summary = currentReadinessSummary || {{}};
+      const blockers = Number(summary.blockers || 0);
+      const warnings = Number(summary.warnings || 0);
+      const firstBlocker = currentReadinessItems.find((item) => ["missing", "blocked", "failed"].includes(item.status));
+      const firstWarning = currentReadinessItems.find((item) => item.status === "warn");
+      const modeLabel = readinessModeLabel(currentReadinessMode);
+      let phase = `${{modeLabel}} 점검 대기`;
+      let detail = "운영 전환 단계를 선택하고 설정 상태를 점검하세요.";
+      let primaryAction = "refreshReadiness";
+      let primaryLabel = "준비 상태 점검";
+      let tone = "warn";
+      let activeIndex = currentReadinessMode === "kakao-live" ? 3 : currentReadinessMode === "classin-live" ? 1 : 0;
+
+      if (currentReadinessItems.length) {{
+        if (blockers) {{
+          phase = `${{modeLabel}} 전환 차단`;
+          detail = firstBlocker
+            ? `${{firstBlocker.label || "설정 항목"}}: ${{firstBlocker.fix || firstBlocker.detail || "수정 후 다시 점검하세요."}}`
+            : "막힌 항목을 해결한 뒤 다시 점검하세요.";
+          tone = "danger";
+          if (currentReadinessMode === "local-demo") {{
+            primaryAction = "loadNotionSchema";
+            primaryLabel = "Notion 설계 보기";
+          }} else if (currentReadinessMode === "classin-live") {{
+            primaryAction = "loadPilotBrief";
+            primaryLabel = "파일럿 브리프";
+          }} else {{
+            primaryAction = "refreshReadiness";
+            primaryLabel = "카톡 설정 재점검";
+          }}
+        }} else if (warnings) {{
+          phase = `${{modeLabel}} 확인 필요`;
+          detail = firstWarning
+            ? `${{firstWarning.label || "경고 항목"}}: ${{firstWarning.fix || firstWarning.detail || "운영 전 확인하세요."}}`
+            : "경고 항목을 확인한 뒤 실제 전환하세요.";
+          primaryAction = "refreshReadiness";
+          primaryLabel = "경고 다시 보기";
+          tone = "warn";
+        }} else if (currentReadinessReady) {{
+          phase = `${{modeLabel}} 준비 완료`;
+          detail = currentReadinessMode === "local-demo"
+            ? "데모와 외부 발송 없는 검토 기준 준비가 끝났습니다. 다음은 ClassIn 실연동 준비 상태 확인입니다."
+            : "오프라인 준비 점검은 통과했습니다. 실제 전환 전 비파괴 API 점검을 실행하세요.";
+          primaryAction = currentReadinessMode === "local-demo" ? "loadPilotBrief" : "runLiveDiagnostics";
+          primaryLabel = currentReadinessMode === "local-demo" ? "파일럿 브리프" : "실 API 점검";
+          tone = "ok";
+          activeIndex = currentReadinessMode === "local-demo" ? 0 : currentReadinessMode === "classin-live" ? 2 : 3;
+        }}
+      }}
+
+      return {{
+        phase,
+        detail,
+        primaryAction,
+        primaryLabel,
+        tone,
+        activeIndex,
+        meta: [
+          ["모드", modeLabel],
+          ["막힘", `${{blockers}}`],
+          ["경고", `${{warnings}}`],
+          ["정상", `${{summary.ok || 0}}`],
+          ["항목", `${{summary.total || currentReadinessItems.length}}`],
+          ["데모", currentReadinessDemo ? "예" : "아니오"],
+        ],
+      }};
+    }}
+
+    function renderReadinessCommand() {{
+      const target = document.querySelector("#readinessCommand");
+      if (!target) return;
+      const state = readinessCommandState();
+      target.className = `action-command settings-command ${{escapeHtml(state.tone)}}`;
+      const steps = [
+        ["데모", "Notion·Claude·외부 발송 없음 확인"],
+        ["ClassIn", "SID/secret·Webhook 공개 URL"],
+        ["DataSub", "고정 URL 등록·수신 확인"],
+        ["카톡", "승인 템플릿과 실발송 게이트"],
+      ];
+      target.innerHTML = `
+        <div class="action-command-main">
+          <span class="command-label">운영 전환 상태</span>
+          <strong>${{escapeHtml(state.phase)}}</strong>
+          <p>${{escapeHtml(state.detail)}}</p>
+          <div class="command-meta">
+            ${{state.meta.map(([label, value]) => `<span class="badge">${{escapeHtml(label)}} ${{escapeHtml(value)}}</span>`).join("")}}
+          </div>
+          <div class="action-command-actions">
+            <button data-primary-action="${{escapeHtml(state.primaryAction)}}">${{escapeHtml(state.primaryLabel)}}</button>
+            <button data-action="setReadinessMode" data-readiness-mode="local-demo" class="secondary">데모</button>
+            <button data-action="setReadinessMode" data-readiness-mode="classin-live" class="secondary">ClassIn 실연동</button>
+            <button data-action="setReadinessMode" data-readiness-mode="kakao-live" class="secondary">카톡 실발송</button>
+            <button data-primary-action="runLiveDiagnostics" class="secondary">실 API 점검</button>
+          </div>
+          <div class="command-gate"><span>전환 원칙</span><p>실연동 전에는 준비 점검과 비파괴 API 진단을 통과해야 합니다. 카톡은 승인 템플릿과 외부 발송 없는 검토가 끝나기 전까지 실제 발송하지 마세요.</p></div>
+        </div>
+        <div class="action-command-side">
+          <span class="command-label">전환 흐름</span>
+          <div class="workflow-steps">
+            ${{steps.map((step, index) => `
+              <div class="workflow-step ${{index === state.activeIndex ? "active" : ""}}">
+                <span>${{escapeHtml(index + 1)}}</span>
+                <strong>${{escapeHtml(step[0])}}</strong>
+                <p>${{escapeHtml(step[1])}}</p>
+              </div>
+            `).join("")}}
+          </div>
+        </div>
+      `;
+    }}
+
     async function loadReadiness(logResult) {{
       if (!status.ok) {{
         const blocked = {{
@@ -6645,11 +10950,14 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     function renderReadiness(data) {{
       currentReadinessItems = data.items || [];
+      currentReadinessSummary = data.summary || {{}};
+      currentReadinessReady = Boolean(data.ready);
+      currentReadinessDemo = Boolean(data.demo);
       readinessPage = 1;
       setReadinessMode(data.mode || currentReadinessMode);
-      const summary = data.summary || {{}};
+      const summary = currentReadinessSummary;
       const summaryRows = [
-        ["상태", data.ready ? "ready" : "확인"],
+        ["상태", data.ready ? "준비 완료" : "확인 필요"],
         ["막힘", summary.blockers || 0],
         ["경고", summary.warnings || 0],
         ["정상", summary.ok || 0],
@@ -6662,6 +10970,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         </div>
       `).join("");
       renderReadinessList();
+      renderReadinessCommand();
     }}
 
     function renderReadinessList() {{
@@ -6676,7 +10985,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         <div class="readiness-row">
           <div>
             ${{statusPill(item.status)}}
-            <strong>${{escapeHtml(item.stage || "-")}} · ${{escapeHtml(item.label || "-")}}</strong>
+            <strong>${{escapeHtml(readinessStageLabel(item.stage))}} · ${{escapeHtml(item.label || "-")}}</strong>
             <span>${{escapeHtml(item.detail || "")}}</span>
           </div>
           <div class="readiness-fix">${{escapeHtml(item.fix || "-")}}</div>
@@ -6774,12 +11083,13 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     function renderPilotBrief(data) {{
       currentPilotBrief = data;
+      pilotBriefPage = 1;
       const summary = data.summary || {{}};
       const summaryRows = [
-        ["ok", summary.ok || 0, "ok"],
-        ["review", summary.review || 0, "warn"],
-        ["warn", summary.warn || 0, "warn"],
-        ["missing", summary.missing || 0, "failed"],
+        ["정상", summary.ok || 0, "ok"],
+        ["보강", summary.review || 0, "warn"],
+        ["확인", summary.warn || 0, "warn"],
+        ["누락", summary.missing || 0, "failed"],
         ["총 항목", summary.total || 0, ""],
       ];
       document.querySelector("#pilotBriefSummary").innerHTML = summaryRows.map(([label, value, tone]) => `
@@ -6788,21 +11098,31 @@ def _render_shell(status: dict[str, Any]) -> str:
           <strong>${{escapeHtml(value)}}</strong>
         </div>
       `).join("");
-      const checklist = data.checklist || [];
-      document.querySelector("#pilotBriefList").innerHTML = checklist.length
-        ? checklist.map((item, index) => `
+      renderPilotBriefList();
+      lastPilotBriefText = data.markdown || "";
+      setPreviewText("#pilotBriefPreview", lastPilotBriefText || "브링업 브리프 내용이 없습니다.");
+    }}
+
+    function renderPilotBriefList() {{
+      const checklist = currentPilotBrief?.checklist || [];
+      const target = document.querySelector("#pilotBriefList");
+      if (!target) return;
+      if (!checklist.length) {{
+        target.innerHTML = `<div class="empty compact">브링업 체크리스트가 없습니다.</div>`;
+        return;
+      }}
+      const page = paged(checklist, pilotBriefPage, PAGE_SIZE.pilotBrief);
+      pilotBriefPage = page.page;
+      target.innerHTML = page.items.map((item, index) => `
           <div class="readiness-row">
             <div>
               ${{statusPill(item.status)}}
-              <strong>${{escapeHtml(index + 1)}}. ${{escapeHtml(item.title || "-")}}</strong>
+              <strong>${{escapeHtml((page.page - 1) * PAGE_SIZE.pilotBrief + index + 1)}}. ${{escapeHtml(item.title || "-")}}</strong>
               <span>${{escapeHtml(item.detail || "")}}</span>
             </div>
             <div class="readiness-fix">${{escapeHtml(item.fix || "-")}}</div>
           </div>
-        `).join("")
-        : `<div class="empty compact">브링업 체크리스트가 없습니다.</div>`;
-      lastPilotBriefText = data.markdown || "";
-      setPreviewText("#pilotBriefPreview", lastPilotBriefText || "브링업 브리프 내용이 없습니다.");
+        `).join("") + pagerHtml("pilotBrief", page.page, page.totalPages, page.totalItems);
     }}
 
     async function copyPilotBrief() {{
@@ -6821,6 +11141,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       currentMissing = [];
       selectedMissingKeys = new Set();
       renderMissing({{ summary: {{}}, items: [] }});
+      currentMissingBlocked = true;
+      renderMissingCommand();
       document.querySelector("#missingTable").innerHTML =
         `<div class="empty">Notion 설정을 먼저 채워야 조회할 수 있습니다.</div>`;
       document.querySelector("#missingSelectionList").innerHTML =
@@ -6830,9 +11152,129 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     function renderBlockedSchedule() {{
       currentSchedule = [];
+      currentScheduleSummary = {{}};
+      currentScheduleBlocked = true;
       document.querySelector("#scheduleSummary").innerHTML = "";
       document.querySelector("#scheduleTable").innerHTML =
         `<div class="empty">Notion 설정을 먼저 채워야 스케줄을 조회할 수 있습니다.</div>`;
+      renderScheduleCommand();
+    }}
+
+    function scheduleRangeLabel() {{
+      const start = document.querySelector("#scheduleStart")?.value || "-";
+      const days = dataMetric(document.querySelector("#scheduleDays")?.value || 0);
+      if (!days) return start;
+      return `${{start}} · ${{days}}일`;
+    }}
+
+    function scheduleCommandState() {{
+      const summary = currentScheduleSummary || {{}};
+      const lessons = dataMetric(summary.total_lessons || currentSchedule.length);
+      const studentRows = dataMetric(summary.total_student_rows);
+      const late = dataMetric(summary.late);
+      const absent = dataMetric(summary.absent);
+      const homeworkMissing = dataMetric(summary.homework_missing);
+      const homeworkUnknown = currentSchedule.reduce((sum, item) => sum + dataMetric(item.homework_unknown), 0);
+      const classCount = new Set(
+        currentSchedule.flatMap((item) => item.class_names || []).filter(Boolean)
+      ).size;
+      const followUps = late + absent + homeworkMissing + homeworkUnknown;
+      let phase = "스케줄 조회";
+      let detail = "조회 범위를 고른 뒤 이번 주 수업·출결·숙제 상태를 확인하세요.";
+      let primaryAction = "refreshSchedule";
+      let primaryLabel = "스케줄 새로고침";
+      let tone = "";
+      let activeIndex = 0;
+      if (currentScheduleBlocked || !status.ok) {{
+        phase = "설정 확인";
+        detail = "Notion 설정을 확인한 뒤 수업 기록과 학생별 후속 처리를 조회할 수 있습니다.";
+        primaryAction = "refreshStatus";
+        primaryLabel = "상태 새로고침";
+        tone = "danger";
+      }} else if (!lessons && hasLoadedSummary(summary)) {{
+        phase = "수업 없음";
+        detail = "현재 범위에는 조회된 수업 기록이 없습니다. 날짜 범위를 바꾸거나 스케줄 입력 화면에서 생성하세요.";
+        primaryAction = "focusScheduleCore";
+        primaryLabel = "스케줄 생성";
+      }} else if (!lessons) {{
+        phase = "조회 대기";
+      }} else if (homeworkMissing) {{
+        phase = "미제출 후속 처리";
+        detail = "수업 기록에서 숙제 미제출 학생이 확인됐습니다. 문자 문구와 연락처 게이트를 확인하세요.";
+        primaryAction = "focusMissingCore";
+        primaryLabel = "미제출 처리";
+        tone = "warn";
+        activeIndex = 3;
+      }} else if (absent || late || homeworkUnknown) {{
+        phase = "출결·숙제 확인";
+        detail = "지각·결석 또는 숙제 미기록 항목이 있습니다. 수업 기록이 정확히 들어왔는지 확인하세요.";
+        tone = "warn";
+        activeIndex = 2;
+      }} else {{
+        phase = "운영 정상";
+        detail = "조회 범위의 수업 기록과 숙제 상태가 정리되어 있습니다.";
+        tone = "ok";
+        activeIndex = 3;
+      }}
+      return {{
+        phase,
+        detail,
+        primaryAction,
+        primaryLabel,
+        tone,
+        activeIndex,
+        meta: [
+          ["범위", scheduleRangeLabel()],
+          ["수업", `${{lessons}}개`],
+          ["반", `${{classCount}}개`],
+          ["학생 기록", `${{studentRows}}건`],
+          ["지각/결석", `${{late}}/${{absent}}`],
+          ["미제출", `${{homeworkMissing}}건`],
+        ],
+      }};
+    }}
+
+    function renderScheduleCommand() {{
+      const target = document.querySelector("#scheduleCommand");
+      if (!target) return;
+      const state = scheduleCommandState();
+      target.className = `action-command schedule-command ${{escapeHtml(state.tone)}}`;
+      const steps = [
+        ["범위", "주간·일간 조회 기간 선택"],
+        ["수업", "ClassIn 수업 기록 확인"],
+        ["출결", "지각·결석·미기록 점검"],
+        ["후속", "미제출 알림·리포트 근거 반영"],
+      ];
+      target.innerHTML = `
+        <div class="action-command-main">
+          <span class="command-label">스케줄 운영 상태</span>
+          <strong>${{escapeHtml(state.phase)}}</strong>
+          <p>${{escapeHtml(state.detail)}}</p>
+          <div class="command-meta">
+            ${{state.meta.map(([label, value]) => `<span class="badge">${{escapeHtml(label)}} ${{escapeHtml(value)}}</span>`).join("")}}
+          </div>
+          <div class="action-command-actions">
+            <button data-primary-action="${{escapeHtml(state.primaryAction)}}">${{escapeHtml(state.primaryLabel)}}</button>
+            <button data-primary-action="loadThisWeekSchedule" class="secondary">이번 주</button>
+            <button data-primary-action="loadTodaySchedule" class="secondary">오늘</button>
+            <button data-primary-action="focusScheduleCore" class="secondary">스케줄 입력</button>
+            <button data-primary-action="exportScheduleCsv" class="secondary">CSV</button>
+          </div>
+          <div class="command-gate"><span>운영 원칙</span><p>ClassIn 대시보드와 API 생성을 동시에 조작하지 말고, 수업·숙제 생성은 액션 탭에서 생성 전 검토를 마친 뒤 진행하세요.</p></div>
+        </div>
+        <div class="action-command-side">
+          <span class="command-label">스케줄 흐름</span>
+          <div class="workflow-steps">
+            ${{steps.map((step, index) => `
+              <div class="workflow-step ${{index === state.activeIndex ? "active" : ""}}">
+                <span>${{escapeHtml(index + 1)}}</span>
+                <strong>${{escapeHtml(step[0])}}</strong>
+                <p>${{escapeHtml(step[1])}}</p>
+              </div>
+            `).join("")}}
+          </div>
+        </div>
+      `;
     }}
 
     async function loadSchedule() {{
@@ -6857,6 +11299,8 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     function renderSchedule(data) {{
       const summary = data.summary || {{}};
+      currentScheduleSummary = summary;
+      currentScheduleBlocked = false;
       const summaryRows = [
         ["수업", summary.total_lessons || 0],
         ["학생 기록", summary.total_student_rows || 0],
@@ -6876,6 +11320,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       const items = data.items || [];
       currentSchedule = items;
       schedulePage = 1;
+      renderScheduleCommand();
       renderScheduleTable();
     }}
 
@@ -6965,7 +11410,30 @@ def _render_shell(status: dict[str, Any]) -> str:
         target.innerHTML = `<div class="empty">점검 결과가 없습니다.</div>`;
         return;
       }}
+      const rowsHtml = items.map((item) => `
+        <tr>
+          <td>${{escapeHtml(item.service)}}</td>
+          <td>${{escapeHtml(item.check)}}</td>
+          <td>${{statusPill(item.status)}}</td>
+          <td>${{escapeHtml(item.detail || "-")}}</td>
+          <td>${{escapeHtml(item.next_step || "-")}}</td>
+        </tr>
+      `).join("");
+      const cardsHtml = items.map((item) => `
+        <div class="diagnostic-card">
+          <div class="diagnostic-card-head">
+            <div>
+              <strong>${{escapeHtml(item.service || "-")}}</strong>
+              <span>${{escapeHtml(item.check || "-")}}</span>
+              <span>${{escapeHtml(item.detail || "-")}}</span>
+            </div>
+            ${{statusPill(item.status)}}
+          </div>
+          <div class="diagnostic-next">${{escapeHtml(item.next_step || "-")}}</div>
+        </div>
+      `).join("");
       target.innerHTML = `
+        <div class="diagnostic-card-list">${{cardsHtml}}</div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -6978,15 +11446,7 @@ def _render_shell(status: dict[str, Any]) -> str:
               </tr>
             </thead>
             <tbody>
-              ${{items.map((item) => `
-                <tr>
-                  <td>${{escapeHtml(item.service)}}</td>
-                  <td>${{escapeHtml(item.check)}}</td>
-                  <td>${{statusPill(item.status)}}</td>
-                  <td>${{escapeHtml(item.detail || "-")}}</td>
-                  <td>${{escapeHtml(item.next_step || "-")}}</td>
-                </tr>
-              `).join("")}}
+              ${{rowsHtml}}
             </tbody>
           </table>
         </div>`;
@@ -6996,6 +11456,78 @@ def _render_shell(status: dict[str, Any]) -> str:
       return (item.notification_status || "pending") === "pending";
     }}
 
+    function missingFilterCounts(items) {{
+      return (items || []).reduce((counts, item) => {{
+        counts.all += 1;
+        if (missingFilterMatches(item, "needsMessage")) counts.needsMessage += 1;
+        if (missingFilterMatches(item, "review")) counts.review += 1;
+        if (missingFilterMatches(item, "noPhone")) counts.noPhone += 1;
+        if (missingFilterMatches(item, "done")) counts.done += 1;
+        return counts;
+      }}, {{ all: 0, needsMessage: 0, review: 0, noPhone: 0, done: 0 }});
+    }}
+
+    function missingFilterDefinitions(items) {{
+      const counts = missingFilterCounts(items);
+      return [
+        ["all", "전체", counts.all],
+        ["needsMessage", "연락 필요", counts.needsMessage],
+        ["review", "다시 확인", counts.review],
+        ["noPhone", "연락처 없음", counts.noPhone],
+        ["done", "완료", counts.done],
+      ];
+    }}
+
+    function missingFilterMatches(item, filterKey = missingFilter) {{
+      if (filterKey === "needsMessage") {{
+        return item.action_required === "needs_message" || (item.has_parent_phone && isPendingMissing(item));
+      }}
+      if (filterKey === "review") {{
+        return item.action_required === "needs_retry"
+          || item.notification_status === "failed"
+          || ["review", "blocked"].includes(item.notification_quality_status || "");
+      }}
+      if (filterKey === "noPhone") {{
+        return item.action_required === "needs_phone" || !item.has_parent_phone;
+      }}
+      if (filterKey === "done") {{
+        return item.action_required === "needs_review"
+          || ["dry_run", "sent"].includes(item.notification_status || "");
+      }}
+      return true;
+    }}
+
+    function filteredMissingItems() {{
+      return currentMissing.filter((item) => missingFilterMatches(item));
+    }}
+
+    function missingFilterEmptyText() {{
+      const labels = {{
+        needsMessage: "연락이 필요한 미제출 학생이 없습니다.",
+        review: "다시 확인할 미제출 학생이 없습니다.",
+        noPhone: "연락처가 없는 미제출 학생이 없습니다.",
+        done: "처리 완료된 미제출 학생이 없습니다.",
+      }};
+      return labels[missingFilter] || "선택한 조건의 미제출 학생이 없습니다.";
+    }}
+
+    function renderMissingFilters() {{
+      const definitions = missingFilterDefinitions(currentMissing);
+      document.querySelectorAll(".missing-filter").forEach((target) => {{
+        if (!definitions.some(([, , count]) => count > 0)) {{
+          target.innerHTML = "";
+          return;
+        }}
+        target.innerHTML = definitions.map(([key, label, count]) => `
+          <button
+            type="button"
+            data-missing-filter="${{escapeHtml(key)}}"
+            class="${{missingFilter === key ? "active" : ""}}"
+          >${{escapeHtml(label)}} ${{escapeHtml(count)}}</button>
+        `).join("");
+      }});
+    }}
+
     function defaultMissingSelectionKeys(items) {{
       return new Set(
         items
@@ -7003,6 +11535,171 @@ def _render_shell(status: dict[str, Any]) -> str:
           .map((item) => item.selection_key)
           .filter(Boolean)
       );
+    }}
+
+    function missingCommandState() {{
+      const summary = currentMissingSummary || {{}};
+      const loaded = currentMissing.length > 0 || hasLoadedSummary(summary);
+      const total = dataMetric(summary.total_missing || currentMissing.length);
+      const selected = selectedMissingRows().length;
+      const withPhone = dataMetric(
+        summary.with_parent_phone ||
+        currentMissing.filter((item) => item.has_parent_phone).length
+      );
+      const noPhone = dataMetric(
+        summary.no_parent_phone ||
+        currentMissing.filter((item) => !item.has_parent_phone).length
+      );
+      const pending = dataMetric(
+        summary.pending ||
+        currentMissing.filter((item) => isPendingMissing(item)).length
+      );
+      const failed = dataMetric(summary.failed || currentMissing.filter((item) => item.notification_status === "failed").length);
+      const needsPhone = dataMetric(summary.needs_phone || noPhone);
+      const needsRetry = dataMetric(summary.needs_retry || failed);
+      const qualityReady = dataMetric(summary.quality_ready || currentMissing.filter((item) => item.notification_quality_status === "ready").length);
+      const qualityReview = dataMetric(summary.quality_review || currentMissing.filter((item) => item.notification_quality_status === "review").length);
+      const qualityBlocked = dataMetric(summary.quality_blocked || currentMissing.filter((item) => item.notification_quality_status === "blocked").length);
+      const previewSummary = lastMissingPreview?.data?.summary || null;
+      const previewDispatchable = previewSummary ? dataMetric(previewSummary.dispatchable) : 0;
+      const previewBlocked = previewSummary ? dataMetric(previewSummary.blocked || previewSummary.live_blocked) : 0;
+      let phase = "미제출 조회";
+      let detail = "조회 범위를 고른 뒤 미제출 학생과 발송 게이트를 확인하세요.";
+      let primaryAction = "refreshMissing";
+      let primaryLabel = "미제출 조회";
+      let tone = "";
+      let activeIndex = 0;
+      if (currentMissingBlocked || !status.ok) {{
+        phase = "설정 확인";
+        detail = "Notion 설정을 먼저 확인해야 수업 기록과 미제출 학생을 조회할 수 있습니다.";
+        primaryAction = "refreshStatus";
+        primaryLabel = "상태 새로고침";
+        tone = "danger";
+      }} else if (!loaded) {{
+        activeIndex = 0;
+      }} else if (!total) {{
+        phase = "처리 항목 없음";
+        detail = "현재 조회 범위에는 숙제 미제출 학생이 없습니다.";
+        tone = "ok";
+        activeIndex = 3;
+      }} else if (selected && previewSummary && (previewBlocked || previewDispatchable !== selected)) {{
+        phase = "발송 게이트 확인";
+        detail = "선택 대상 중 실제 발송 조건을 통과하지 못한 항목이 있습니다. 통과 문구와 연락처를 보강하세요.";
+        primaryAction = "previewMissingHomeworkSms";
+        primaryLabel = "다시 미리보기";
+        tone = "warn";
+        activeIndex = 2;
+      }} else if (selected && previewSummary) {{
+        phase = notifyMode() === "live" ? "실제 발송 준비" : "발송 전 검토 준비";
+        detail = "선택 대상의 문구와 연락처 게이트가 통과했습니다. 현재 모드에 맞게 처리할 수 있습니다.";
+        primaryAction = "sendMissingHomeworkSms";
+        primaryLabel = notifyMode() === "live" ? "선택 문자 발송" : "검토 기록 생성";
+        tone = "ok";
+        activeIndex = 3;
+      }} else if (needsRetry || qualityBlocked) {{
+        phase = needsRetry ? "재시도 확인" : "문구 품질 차단";
+        detail = needsRetry
+          ? "지난 알림 실패가 있습니다. 번호와 로그를 확인한 뒤 다시 발송하세요."
+          : "발송 제외 문구는 실제 발송에서 빠집니다. 문구 미리보기로 사유를 확인하세요.";
+        primaryAction = needsRetry ? "selectAllMissing" : "previewMissingHomeworkSms";
+        primaryLabel = needsRetry ? "발송 가능 선택" : "문구 미리보기";
+        tone = "danger";
+        activeIndex = needsRetry ? 0 : 2;
+      }} else if (needsPhone) {{
+        phase = "연락처 보완";
+        detail = "보호자 연락처가 없어 자동 알림을 보낼 수 없는 학생이 있습니다.";
+        primaryAction = "exportMissingCsv";
+        primaryLabel = "CSV 내보내기";
+        tone = "warn";
+        activeIndex = 1;
+      }} else if (!selected) {{
+        phase = "대상 선택";
+        detail = "발송 가능한 학생을 선택한 뒤 문구 품질을 먼저 확인하세요.";
+        primaryAction = "selectAllMissing";
+        primaryLabel = "전체 선택";
+        tone = pending ? "warn" : "";
+        activeIndex = 1;
+      }} else if (!previewSummary) {{
+        phase = "문구 검토";
+        detail = "선택 대상의 AI 문구, 품질 상태, 연락처 게이트를 먼저 확인하세요.";
+        primaryAction = "previewMissingHomeworkSms";
+        primaryLabel = "문구 미리보기";
+        tone = "warn";
+        activeIndex = 2;
+      }} else if (previewBlocked || previewDispatchable !== selected) {{
+        phase = "발송 게이트 확인";
+        detail = "선택 대상 중 실제 발송 조건을 통과하지 못한 항목이 있습니다. 통과 문구와 연락처를 보강하세요.";
+        primaryAction = "previewMissingHomeworkSms";
+        primaryLabel = "다시 미리보기";
+        tone = "warn";
+        activeIndex = 2;
+      }} else {{
+        phase = notifyMode() === "live" ? "실제 발송 준비" : "발송 전 검토 준비";
+        detail = "선택 대상의 문구와 연락처 게이트가 통과했습니다. 현재 모드에 맞게 처리할 수 있습니다.";
+        primaryAction = "sendMissingHomeworkSms";
+        primaryLabel = notifyMode() === "live" ? "선택 문자 발송" : "검토 기록 생성";
+        tone = "ok";
+        activeIndex = 3;
+      }}
+      return {{
+        phase,
+        detail,
+        primaryAction,
+        primaryLabel,
+        tone,
+        activeIndex,
+        meta: [
+          ["조회", `${{total}}명`],
+          ["선택", `${{selected}}명`],
+          ["연락 가능", `${{withPhone}}명`],
+          ["연락처 없음", `${{noPhone}}명`],
+          ["문구 품질", qualitySummaryText(qualityReady, qualityReview, qualityBlocked)],
+          ["발송 방식", notifyModeLabel()],
+        ],
+      }};
+    }}
+
+    function renderMissingCommand() {{
+      const target = document.querySelector("#missingCommand");
+      if (!target) return;
+      const state = missingCommandState();
+      target.className = `action-command missing-command ${{escapeHtml(state.tone)}}`;
+      const steps = [
+        ["조회", "미제출 학생과 알림 이력 확인"],
+        ["대상", "연락처·중복·실패 상태 점검"],
+        ["문구", "AI 문구 품질 게이트 검토"],
+        ["처리", "검토 기록 또는 승인된 실제 발송"],
+      ];
+      target.innerHTML = `
+        <div class="action-command-main">
+          <span class="command-label">미제출 운영 상태</span>
+          <strong>${{escapeHtml(state.phase)}}</strong>
+          <p>${{escapeHtml(state.detail)}}</p>
+          <div class="command-meta">
+            ${{state.meta.map(([label, value]) => `<span class="badge">${{escapeHtml(label)}} ${{escapeHtml(value)}}</span>`).join("")}}
+          </div>
+          <div class="action-command-actions">
+            <button data-primary-action="${{escapeHtml(state.primaryAction)}}">${{escapeHtml(state.primaryLabel)}}</button>
+            <button data-primary-action="selectAllMissing" class="secondary">발송 가능 선택</button>
+            <button data-primary-action="previewMissingHomeworkSms" class="secondary">문구 미리보기</button>
+            <button data-primary-action="focusMissingCore" class="secondary">문자 발송</button>
+            <button data-primary-action="exportMissingCsv" class="secondary">CSV</button>
+          </div>
+          <div class="command-gate"><span>발송 원칙</span><p>실제 발송은 보호자 연락처가 있고 품질 검토를 통과한 문구만 허용합니다. 제외 문구와 연락처 없는 학생은 기본 발송에서 빼세요.</p></div>
+        </div>
+        <div class="action-command-side">
+          <span class="command-label">미제출 흐름</span>
+          <div class="workflow-steps">
+            ${{steps.map((step, index) => `
+              <div class="workflow-step ${{index === state.activeIndex ? "active" : ""}}">
+                <span>${{escapeHtml(index + 1)}}</span>
+                <strong>${{escapeHtml(step[0])}}</strong>
+                <p>${{escapeHtml(step[1])}}</p>
+              </div>
+            `).join("")}}
+          </div>
+        </div>
+      `;
     }}
 
     function preservedMissingSelectionKeys(items, previous) {{
@@ -7017,6 +11714,8 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     function renderMissing(data, options) {{
       const summary = data.summary || {{}};
+      currentMissingSummary = summary;
+      currentMissingBlocked = false;
       document.querySelector("#missingCount").textContent = summary.total_missing || 0;
       document.querySelector("#noPhoneCount").textContent = summary.no_parent_phone || 0;
       document.querySelector("#dryRunCount").textContent = summary.dry_run || 0;
@@ -7033,23 +11732,55 @@ def _render_shell(status: dict[str, Any]) -> str:
       const withPhone = items.filter((item) => item.has_parent_phone).length;
       const pendingWithPhone = items.filter((item) => item.has_parent_phone && isPendingMissing(item)).length;
       document.querySelector("#actionPreview").innerHTML =
-        `<strong>숙제 미제출 문자 발송</strong>조회: ${{items.length}}명\\n대기: ${{pendingWithPhone}}명\\n발송 가능: ${{withPhone}}명\\n현재 발송 모드: ${{escapeHtml(notifyMode())}}`;
-      renderMissingSelectionList();
+        `<strong>숙제 미제출 문자 발송</strong>조회: ${{items.length}}명\\n연락 전: ${{pendingWithPhone}}명\\n발송 가능: ${{withPhone}}명\\n발송 방식: ${{escapeHtml(notifyModeLabel())}}`;
       missingPage = 1;
+      renderMissingFilters();
+      renderMissingSelectionList();
       renderMissingTable();
     }}
 
     function renderMissingTable() {{
       const target = document.querySelector("#missingTable");
-      if (!currentMissing.length) {{
-        target.innerHTML = `<div class="empty">조회 범위 안의 숙제 미제출 학생이 없습니다.</div>`;
+      const items = filteredMissingItems();
+      if (!items.length) {{
+        target.innerHTML = `<div class="empty">${{escapeHtml(missingFilterEmptyText())}}</div>`;
+        updateMissingSelectionSummary();
         return;
       }}
-      const page = paged(currentMissing, missingPage, PAGE_SIZE.missing);
+      const page = paged(items, missingPage, PAGE_SIZE.missing);
       missingPage = page.page;
       target.innerHTML = `
-        <div class="table-wrap">
-          <table>
+        <div class="mobile-card-list missing-card-list">
+          ${{page.items.map((item) => `
+            <label class="missing-card ${{item.has_parent_phone ? "" : "is-disabled"}}">
+              <div class="missing-card-head">
+                <input
+                  type="checkbox"
+                  class="select-missing"
+                  data-key="${{escapeHtml(item.selection_key || "")}}"
+                  ${{item.has_parent_phone ? "" : "disabled"}}
+                  ${{selectedMissingKeys.has(item.selection_key) ? "checked" : ""}}
+                  aria-label="${{escapeHtml(item.student_name)}} 문자 대상 선택"
+                >
+                <span class="missing-card-title">
+                  <strong>${{escapeHtml(item.student_name)}} · ${{escapeHtml(item.class_name || "-")}}</strong>
+                  <span>${{escapeHtml(item.lesson_classin_id || "-")}} · ${{escapeHtml(formatDate(item.date))}}</span>
+                </span>
+                ${{statusPill(item.notification_status)}}
+                <span class="missing-card-meta">
+                  <span class="badge">${{escapeHtml(item.attendance || "출석 미확인")}}</span>
+                  ${{item.has_parent_phone ? `<span class="badge">${{escapeHtml(item.parent_phone)}}</span>` : '<span class="status-pill failed">연락처 없음</span>'}}
+                </span>
+              </div>
+              <div class="missing-card-row">
+                <span class="missing-card-field"><span>알림 이력</span>${{escapeHtml(formatDate(item.notification_at))}}</span>
+                <span class="missing-card-field"><span>문구 품질</span>${{renderNotificationQuality(item)}}</span>
+              </div>
+            </label>
+          `).join("")}}
+        </div>
+        <div class="table-wrap missing-table-wrap">
+          <table class="missing-table">
             <thead>
               <tr>
                 <th>선택</th>
@@ -7095,7 +11826,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       const status = item.notification_quality_status || "";
       if (!status) return `<span class="badge">-</span>`;
       const warnings = item.notification_quality_warnings || [];
-      return `${{statusPill(status)}}<br><span class="badge">${{escapeHtml(item.notification_quality_score || 0)}}/100</span>` +
+      return `${{qualityPill(status)}}<br><span class="badge">${{escapeHtml(item.notification_quality_score || 0)}}/100</span>` +
         (warnings.length
           ? `<br>${{warnings.slice(0, 2).map((warning) => `<span class="badge">${{escapeHtml(warning)}}</span>`).join(" ")}}`
           : "");
@@ -7125,7 +11856,7 @@ def _render_shell(status: dict[str, Any]) -> str:
           <details class="message-preview-card" ${{index === 0 ? "open" : ""}}>
             <summary>
               <span><strong>${{escapeHtml(index + 1)}}. ${{escapeHtml(item.student_name || "미등록")}}</strong> · ${{escapeHtml(item.parent_phone_masked || "연락처 없음")}}</span>
-              <span class="message-preview-meta">${{statusPill(item.quality_status)}} <span class="badge">${{escapeHtml(item.quality_score || 0)}}/100</span></span>
+              <span class="message-preview-meta">${{qualityPill(item.quality_status)}} <span class="badge">${{escapeHtml(item.quality_score || 0)}}/100</span></span>
             </summary>
             <div class="message-preview-body">
               <p>${{escapeHtml(item.message || "생성된 문구가 없습니다.")}}</p>
@@ -7138,8 +11869,12 @@ def _render_shell(status: dict[str, Any]) -> str:
       const hidden = items.length > 5 ? `<p>${{escapeHtml(items.length - 5)}}명은 생략했습니다. 화면이 길어지지 않도록 상위 5건만 번호로 표시합니다.</p>` : "";
       setActionMode(
         "문구 미리보기",
-        `<strong>숙제 알림 문구 미리보기</strong>선택: ${{escapeHtml(summary.total || 0)}}명\\n발송 가능: ${{escapeHtml(summary.dispatchable || 0)}}명\\nready/review/blocked: ${{escapeHtml(summary.ready || 0)}}/${{escapeHtml(summary.review || 0)}}/${{escapeHtml(summary.blocked || 0)}}\\n연락처 없음: ${{escapeHtml(summary.no_parent_phone || 0)}}명\\n모드: ${{escapeHtml(data.notify_mode || notifyMode())}}<ol class="message-preview-list">${{previewRows}}</ol>${{hidden}}`
+        `<strong>숙제 알림 문구 미리보기</strong>선택: ${{escapeHtml(summary.total || 0)}}명\\n발송 가능: ${{escapeHtml(summary.dispatchable || 0)}}명\\n문구 품질: ${{qualitySummaryText(summary.ready, summary.review, summary.blocked)}}\\n연락처 없음: ${{escapeHtml(summary.no_parent_phone || 0)}}명\\n발송 방식: ${{escapeHtml(notifyModeLabel(data.notify_mode || notifyMode()))}}<ol class="message-preview-list">${{previewRows}}</ol>${{hidden}}`
       );
+      renderMissingCommand();
+      if (currentActionFlow === "missing") {{
+        renderActionCommand("missing");
+      }}
       writeLog("숙제 알림 문구 미리보기를 만들었습니다.", summary);
       return data;
     }}
@@ -7166,22 +11901,29 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     function updateMissingSelectionSummary() {{
       const selected = selectedMissingRows();
+      const visible = filteredMissingItems();
       const withPhone = currentMissing.filter((item) => item.has_parent_phone).length;
+      const visibleWithPhone = visible.filter((item) => item.has_parent_phone).length;
       document.querySelector("#missingSelectionSummary").innerHTML =
-        `<strong>${{selected.length}}명 선택</strong><span>조회 ${{currentMissing.length}}명 · 발송 가능 ${{withPhone}}명</span>`;
+        `<strong>${{selected.length}}명 선택</strong><span>필터 ${{visible.length}}명 · 전체 ${{currentMissing.length}}명 · 표시 발송 가능 ${{visibleWithPhone}}명 · 전체 발송 가능 ${{withPhone}}명</span>`;
       document.querySelectorAll(".select-missing").forEach((checkbox) => {{
         checkbox.checked = selectedMissingKeys.has(checkbox.dataset.key);
       }});
+      renderMissingCommand();
+      if (currentActionFlow === "missing") {{
+        renderActionCommand("missing");
+      }}
     }}
 
     function renderMissingSelectionList() {{
       const target = document.querySelector("#missingSelectionList");
-      if (!currentMissing.length) {{
-        target.innerHTML = `<div class="empty">미제출 조회를 누르면 선택 목록이 표시됩니다.</div>`;
+      const items = filteredMissingItems();
+      if (!items.length) {{
+        target.innerHTML = `<div class="empty">${{escapeHtml(missingFilterEmptyText())}}</div>`;
         updateMissingSelectionSummary();
         return;
       }}
-      const page = paged(currentMissing, missingPage, PAGE_SIZE.missing);
+      const page = paged(items, missingPage, PAGE_SIZE.missing);
       missingPage = page.page;
       target.innerHTML = page.items.map((item) => `
         <label class="selectable-row ${{item.has_parent_phone ? "" : "is-disabled"}}">
@@ -7205,6 +11947,7 @@ def _render_shell(status: dict[str, Any]) -> str:
     function renderNotifications(data) {{
       currentNotifications = data.items || [];
       notificationPage = 1;
+      renderMissingCommand();
       renderNotificationTable();
     }}
 
@@ -7217,8 +11960,34 @@ def _render_shell(status: dict[str, Any]) -> str:
       const page = paged(currentNotifications, notificationPage, PAGE_SIZE.notifications);
       notificationPage = page.page;
       target.innerHTML = `
-        <div class="table-wrap">
-          <table>
+        <div class="mobile-card-list notification-card-list">
+          ${{page.items.map((item) => `
+            <article class="missing-card notification-card">
+              <div class="missing-card-head">
+                <span></span>
+                <span class="missing-card-title">
+                  <strong>${{escapeHtml(item.student_name || "미등록")}}</strong>
+                  <span>${{escapeHtml(formatDate(item.created_at))}} · ${{escapeHtml(item.student_classin_id || "-")}}</span>
+                </span>
+                ${{statusPill(item.status)}}
+                <span class="missing-card-meta">
+                  <span class="badge">${{escapeHtml(item.provider || "-")}}</span>
+                  <span class="badge">${{escapeHtml(item.parent_phone || "수신자 없음")}}</span>
+                </span>
+              </div>
+              <div class="missing-card-row">
+                <span class="missing-card-field"><span>품질</span>${{renderNotificationQuality({{
+                  notification_quality_status: item.quality_status,
+                  notification_quality_score: item.quality_score,
+                  notification_quality_warnings: item.quality_warnings || [],
+                }})}}</span>
+                <span class="missing-card-field"><span>문구</span>${{escapeHtml(shorten(item.message || "", 92))}}</span>
+              </div>
+            </article>
+          `).join("")}}
+        </div>
+        <div class="table-wrap notification-table-wrap">
+          <table class="notification-table">
             <thead>
               <tr>
                 <th>시간</th>
@@ -7321,6 +12090,22 @@ def _render_shell(status: dict[str, Any]) -> str:
       }});
       document.querySelector("#viewTitle").textContent = viewTitles[tab] || "대시보드";
       document.querySelector("#viewMeta").textContent = localIsoDate(new Date());
+      if (tab === "actions") {{
+        renderActionCommand(currentActionFlow);
+      }} else if (tab === "data") {{
+        renderDataCommand();
+      }} else if (tab === "missing") {{
+        renderMissingCommand();
+      }} else if (tab === "schedule") {{
+        renderScheduleCommand();
+      }} else if (tab === "reports") {{
+        renderReportCommand();
+        renderExamCommand();
+      }} else if (tab === "memo") {{
+        renderAgentCommand();
+      }} else if (tab === "settings") {{
+        renderReadinessCommand();
+      }}
     }}
 
     function setActionMode(mode, html) {{
@@ -7332,19 +12117,157 @@ def _render_shell(status: dict[str, Any]) -> str:
       return ((status.output || {{}}).notify_mode || "-");
     }}
 
+    function notifyModeLabel(mode = notifyMode()) {{
+      const labels = {{
+        dry_run: "외부 발송 없음",
+        live: "실제 발송",
+        "-": "미설정",
+      }};
+      return labels[mode] || mode || "미설정";
+    }}
+
+    const actionFlows = {{
+      missing: {{
+        title: "숙제 미제출 문자 발송",
+        detail: "미제출 학생을 조회하고, 문구 품질을 확인한 뒤 선택 대상에게만 발송합니다.",
+        primaryAction: "refreshMissing",
+        primaryLabel: "미제출 조회",
+        gate: "실제 발송 전에는 연락처, 문구 품질, 발송 방식이 모두 통과되어야 합니다.",
+        steps: [
+          ["조회", "오늘 범위와 수업 ID를 확인"],
+          ["문구 검토", "AI 문구와 품질 경고 확인"],
+          ["발송", "선택 대상만 검토 기록 또는 실제 발송"],
+        ],
+        meta() {{
+          const selected = selectedMissingRows().length;
+          const withPhone = currentMissing.filter((item) => item.has_parent_phone).length;
+          return [
+            ["조회", `${{currentMissing.length}}명`],
+            ["선택", `${{selected}}명`],
+            ["발송 가능", `${{withPhone}}명`],
+            ["발송 방식", notifyModeLabel()],
+          ];
+        }},
+      }},
+      schedule: {{
+        title: "스케줄표로 수업·숙제 생성",
+        detail: "CSV나 표를 먼저 검토해서 파싱 오류를 잡고, 확인된 데이터만 ClassIn에 생성합니다.",
+        primaryAction: "runScheduleImportDryRun",
+        primaryLabel: "먼저 검토",
+        gate: "ClassIn 대시보드와 API 동시 조작을 피하고, 실제 생성 전 검토 결과를 확인하세요.",
+        steps: [
+          ["입력", "CSV 파일 또는 표 붙여넣기"],
+          ["검토", "파싱 결과와 오류 확인"],
+          ["생성", "확인 후 수업·숙제 생성"],
+        ],
+        meta() {{
+          const text = document.querySelector("#importText")?.value || "";
+          const lineCount = text.trim() ? text.trim().split(/\\n+/).length : 0;
+          return [
+            ["입력", lineCount ? `${{lineCount}}줄` : "대기"],
+            ["파일", document.querySelector("#importFile")?.files?.[0]?.name || "-"],
+            ["다음", lineCount ? "검토" : "입력"],
+          ];
+        }},
+      }},
+      report: {{
+        title: "반별 리포트 생성",
+        detail: "반과 주차를 고른 뒤 학생 대상을 확인하고, 필요한 학생만 주간 리포트 초안으로 생성합니다.",
+        primaryAction: "loadReportTargets",
+        primaryLabel: "대상 조회",
+        gate: "품질 차단 리포트는 기본 승인에서 제외하고, 근거·다음 액션·표현 안전을 먼저 보강하세요.",
+        steps: [
+          ["반·주차", "반 선택과 주 시작일 확인"],
+          ["대상", "생성할 학생 선택"],
+          ["생성", "선택 리포트 생성 후 품질 검토"],
+        ],
+        meta() {{
+          const selected = selectedReportTargets().length;
+          const classes = new Set(currentReportTargets.map((item) => item.class_name).filter(Boolean));
+          return [
+            ["조회", `${{currentReportTargets.length}}명`],
+            ["선택", `${{selected}}명`],
+            ["반", `${{classes.size || 0}}개`],
+            ["주차", document.querySelector("#weekDate")?.value || "-"],
+          ];
+        }},
+      }},
+    }};
+    let currentActionFlow = "missing";
+
+    function activeActionStep(flowKey, index) {{
+      if (flowKey === "missing") {{
+        if (!currentMissing.length) return index === 0;
+        if (!lastMissingPreview) return index === 1;
+        return index === 2;
+      }}
+      if (flowKey === "schedule") {{
+        const text = document.querySelector("#importText")?.value.trim() || "";
+        const preview = document.querySelector("#importPreview")?.textContent || "";
+        if (!text) return index === 0;
+        if (preview.includes("스케줄 검토") || preview.includes("수업·숙제 생성")) return index === 2;
+        return index === 1;
+      }}
+      if (flowKey === "report") {{
+        if (!currentReportTargets.length) return index === 0;
+        return index === 2;
+      }}
+      return index === 0;
+    }}
+
+    function renderActionCommand(flowKey) {{
+      const target = document.querySelector("#actionCommand");
+      if (!target) return;
+      currentActionFlow = actionFlows[flowKey] ? flowKey : currentActionFlow;
+      const flow = actionFlows[currentActionFlow];
+      document.querySelectorAll(".core-button[data-flow]").forEach((button) => {{
+        button.classList.toggle("active", button.dataset.flow === currentActionFlow);
+      }});
+      const meta = flow.meta();
+      target.innerHTML = `
+        <div class="action-command-main">
+          <span class="command-label">현재 업무</span>
+          <strong>${{escapeHtml(flow.title)}}</strong>
+          <p>${{escapeHtml(flow.detail)}}</p>
+          <div class="command-meta">
+            ${{meta.map(([label, value]) => `<span class="badge">${{escapeHtml(label)}} ${{escapeHtml(value)}}</span>`).join("")}}
+          </div>
+          <div class="action-command-actions">
+            <button data-primary-action="${{escapeHtml(flow.primaryAction)}}">${{escapeHtml(flow.primaryLabel)}}</button>
+            <button data-action="refreshDiagnostics" class="secondary">설정 점검</button>
+          </div>
+          <div class="command-gate"><span>안전 게이트</span><p>${{escapeHtml(flow.gate)}}</p></div>
+        </div>
+        <div class="action-command-side">
+          <span class="command-label">실행 순서</span>
+          <div class="workflow-steps">
+            ${{flow.steps.map((step, index) => `
+              <div class="workflow-step ${{activeActionStep(currentActionFlow, index) ? "active" : ""}}">
+                <span>${{escapeHtml(index + 1)}}</span>
+                <strong>${{escapeHtml(step[0])}}</strong>
+                <p>${{escapeHtml(step[1])}}</p>
+              </div>
+            `).join("")}}
+          </div>
+        </div>
+      `;
+    }}
+
     function focusMissingCore() {{
       activateTab("actions");
+      renderActionCommand("missing");
       document.querySelector("[data-window-hours].active").focus();
       const withPhone = currentMissing.filter((item) => item.has_parent_phone).length;
       const selected = selectedMissingRows();
       setActionMode(
         "미제출 문자",
-        `<strong>숙제 미제출 문자 발송</strong>조회: ${{currentMissing.length}}명\\n선택: ${{selected.length}}명\\n발송 가능: ${{withPhone}}명\\n현재 발송 모드: ${{escapeHtml(notifyMode())}}`
+        `<strong>숙제 미제출 문자 발송</strong>조회: ${{currentMissing.length}}명\\n선택: ${{selected.length}}명\\n발송 가능: ${{withPhone}}명\\n발송 방식: ${{escapeHtml(notifyModeLabel())}}`
       );
     }}
 
     function focusScheduleCore() {{
       activateTab("actions");
+      renderActionCommand("schedule");
       document.querySelector("#importText").focus();
       document.querySelector("#importPreview").innerHTML =
         `<strong>스케줄표로 수업·숙제 생성</strong>스케줄표를 붙여넣고 먼저 검토한 뒤 생성하세요.`;
@@ -7352,6 +12275,7 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     function focusReportCore() {{
       activateTab("actions");
+      renderActionCommand("report");
       document.querySelector("#reportClassName").focus();
       document.querySelector("#reportPreview").innerHTML =
         `<strong>반별 리포트 생성</strong>반을 선택하고 주 시작일을 확인한 뒤 대상 조회를 누르세요.`;
@@ -7370,6 +12294,9 @@ def _render_shell(status: dict[str, Any]) -> str:
       document.querySelectorAll(".select-report").forEach((checkbox) => {{
         checkbox.checked = selectedReportIds.has(checkbox.dataset.studentId);
       }});
+      if (currentActionFlow === "report") {{
+        renderActionCommand("report");
+      }}
     }}
 
     function renderReportTargets(data) {{
@@ -7478,15 +12405,282 @@ def _render_shell(status: dict[str, Any]) -> str:
       writeLog("리포트 대상 선택을 해제했습니다.");
     }}
 
+    function countByStatus(items, field) {{
+      return (items || []).reduce((acc, item) => {{
+        const key = item[field] || "pending";
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }}, {{}});
+    }}
+
+    function reportCommandState() {{
+      const composition = countByStatus(currentReportCompositions, "readiness_status");
+      const drafts = countByStatus(currentWeeklyDrafts, "quality_status");
+      const approved = currentWeeklyDrafts.filter((item) => item.approved).length;
+      const pendingDrafts = Math.max(0, currentWeeklyDrafts.length - approved);
+      const needsReview = (composition.review || 0)
+        + (composition.blocked || 0)
+        + (drafts.review || 0)
+        + (drafts.blocked || 0);
+      let phase = "구성 점검";
+      let detail = "학생별 출결·숙제·시험·메모 구성을 먼저 점검하세요.";
+      let primaryAction = "refreshReportCompositions";
+      let primaryLabel = "구성 새로고침";
+      let tone = "";
+      if (currentWeeklyDrafts.length) {{
+        phase = pendingDrafts ? "품질 검토" : "승인 완료";
+        detail = pendingDrafts
+          ? "HTML 드래프트 품질 상태를 확인하고 통과 항목부터 승인하세요."
+          : "현재 로드된 드래프트는 모두 승인 상태입니다.";
+        primaryAction = pendingDrafts ? "refreshWeeklyDrafts" : "generateWeekly";
+        primaryLabel = pendingDrafts ? "드래프트 새로고침" : "새 드래프트 생성";
+        tone = needsReview ? "warn" : "ok";
+      }} else if (currentReportCompositions.length) {{
+        phase = needsReview ? "구성 보강" : "초안 생성";
+        detail = needsReview
+          ? "확인 필요·차단 학생은 근거와 다음 액션을 보강한 뒤 초안을 만드세요."
+          : "구성이 준비된 학생은 주간 리포트 초안 생성으로 넘어갈 수 있습니다.";
+        primaryAction = needsReview ? "refreshReportCompositions" : "generateWeekly";
+        primaryLabel = needsReview ? "구성 다시 보기" : "전체 주간 드래프트";
+        tone = needsReview ? "warn" : "ok";
+      }}
+      if ((drafts.blocked || 0) || (composition.blocked || 0)) {{
+        tone = "danger";
+      }}
+      return {{
+        phase,
+        detail,
+        primaryAction,
+        primaryLabel,
+        tone,
+        meta: [
+          ["구성", `${{currentReportCompositions.length}}명`],
+          ["통과", `${{(composition.ready || 0) + (drafts.ready || 0)}}`],
+          ["확인 필요", `${{(composition.review || 0) + (drafts.review || 0)}}`],
+          ["차단", `${{(composition.blocked || 0) + (drafts.blocked || 0)}}`],
+          ["승인 대기", `${{pendingDrafts}}`],
+        ],
+      }};
+    }}
+
+    function renderReportCommand() {{
+      const target = document.querySelector("#reportCommand");
+      if (!target) return;
+      const state = reportCommandState();
+      target.className = `action-command report-command ${{escapeHtml(state.tone)}}`;
+      const steps = [
+        ["구성", "학생별 근거와 섹션 준비도 점검"],
+        ["초안", "HTML 드래프트 생성"],
+        ["품질", "통과·확인 필요·차단 확인"],
+        ["승인", "승인된 드래프트만 Notion 아카이브"],
+      ];
+      const activeIndex = state.phase === "구성 점검" || state.phase === "구성 보강"
+        ? 0
+        : state.phase === "초안 생성"
+          ? 1
+          : state.phase === "품질 검토"
+            ? 2
+            : 3;
+      target.innerHTML = `
+        <div class="action-command-main">
+          <span class="command-label">리포트 운영 상태</span>
+          <strong>${{escapeHtml(state.phase)}}</strong>
+          <p>${{escapeHtml(state.detail)}}</p>
+          <div class="command-meta">
+            ${{state.meta.map(([label, value]) => `<span class="badge">${{escapeHtml(label)}} ${{escapeHtml(value)}}</span>`).join("")}}
+          </div>
+          <div class="action-command-actions">
+            <button data-primary-action="${{escapeHtml(state.primaryAction)}}">${{escapeHtml(state.primaryLabel)}}</button>
+            <button data-primary-action="refreshWeeklyDrafts" class="secondary">품질 큐 보기</button>
+            <button data-primary-action="approveWeekly" class="secondary">승인</button>
+          </div>
+          <div class="command-gate"><span>승인 원칙</span><p>HTML 드래프트를 검토한 뒤 승인된 것만 Notion에 아카이브합니다. 품질 차단 항목은 기본 승인에서 제외하세요.</p></div>
+        </div>
+        <div class="action-command-side">
+          <span class="command-label">리포트 흐름</span>
+          <div class="workflow-steps">
+            ${{steps.map((step, index) => `
+              <div class="workflow-step ${{index === activeIndex ? "active" : ""}}">
+                <span>${{escapeHtml(index + 1)}}</span>
+                <strong>${{escapeHtml(step[0])}}</strong>
+                <p>${{escapeHtml(step[1])}}</p>
+              </div>
+            `).join("")}}
+          </div>
+        </div>
+      `;
+    }}
+
+    function examFieldValue(selector) {{
+      return document.querySelector(selector)?.value.trim() || "";
+    }}
+
+    function examCommandState() {{
+      const examName = examFieldValue("#examName");
+      const examDate = examFieldValue("#examDate");
+      const examCsv = examFieldValue("#examCsvText");
+      const examDryRun = document.querySelector("#examDryRun")?.checked ?? true;
+      const courseId = examFieldValue("#answerSheetCourseId");
+      const unitId = examFieldValue("#answerSheetUnitId");
+      const answerName = examFieldValue("#answerSheetName") || "OMR 답안지";
+      const answerDryRun = document.querySelector("#answerSheetDryRun")?.checked ?? true;
+      const release = document.querySelector("#answerSheetRelease")?.checked ?? false;
+      const examSummary = lastExamImportResult?.summary || {{}};
+      const unresolved = Number(examSummary.unresolved || 0) + Number(examSummary.errors || 0);
+
+      let phase = "시험 운영 대기";
+      let detail = "OMR 답안지는 생성 전 검토로 확인하고, 시험 CSV는 먼저 학생 매칭을 검토하세요.";
+      let primaryAction = "focusExamImport";
+      let primaryLabel = "시험 CSV 준비";
+      let tone = "warn";
+      let activeIndex = 0;
+
+      if (currentExamFlow === "answer" && lastAnswerSheetResult) {{
+        phase = lastAnswerSheetResult.dry_run ? "OMR 생성 전 검토 완료" : "OMR 생성 완료";
+        detail = lastAnswerSheetResult.dry_run
+          ? "생성 내용 확인이 끝났습니다. 실제 생성 전 ClassIn 연결 점검을 다시 확인하세요."
+          : "ClassIn 활동 생성 결과를 확인했습니다. OMR 점수 수신을 데이터 탭에서 점검하세요.";
+        primaryAction = "refreshWebhookInbox";
+        primaryLabel = "OMR 수신 확인";
+        tone = "ok";
+        activeIndex = 3;
+      }} else if (currentExamFlow === "answer" && courseId && unitId) {{
+        phase = answerDryRun ? "OMR 생성 전 검토" : "OMR 실제 생성 전 확인";
+        detail = answerDryRun
+          ? "강좌 ID와 단원 ID가 준비되었습니다. 먼저 생성 내용을 검토하세요."
+          : "ClassIn에 실제 OMR 활동을 생성하려는 상태입니다. 연결 점검과 교사 식별번호를 확인하세요.";
+        primaryAction = "createAnswerSheet";
+        primaryLabel = answerDryRun ? "OMR 검토" : "OMR 생성";
+        tone = answerDryRun ? "ok" : "danger";
+        activeIndex = answerDryRun ? 0 : 3;
+      }} else if (lastExamImportResult && lastExamImportResult.dry_run && unresolved) {{
+        phase = "학생 매칭 보강";
+        detail = "매칭 검토에서 확인할 학생이 남았습니다. 학생 정보와 반 이름을 보강한 뒤 다시 확인하세요.";
+        primaryAction = "importExamResults";
+        primaryLabel = "매칭 다시 검토";
+        tone = "danger";
+        activeIndex = 2;
+      }} else if (lastExamImportResult && lastExamImportResult.dry_run) {{
+        phase = "시험 적재 준비";
+        detail = "학생 매칭 검토가 통과했습니다. Notion 시험 DB에 쓰기 전 시험명과 시험일을 확인하세요.";
+        primaryAction = "importExamResults";
+        primaryLabel = "시험 결과 저장";
+        tone = "ok";
+        activeIndex = 2;
+      }} else if (examCsv && examName && examDate) {{
+        phase = examDryRun ? "시험 매칭 검토" : "Notion 적재 전 확인";
+        detail = examDryRun
+          ? "CSV와 시험 정보가 준비되었습니다. 먼저 학생 매칭을 확인하세요."
+          : "검토 모드 없이 저장하려는 상태입니다. 매칭 확인이 끝났는지 확인하세요.";
+        primaryAction = "importExamResults";
+        primaryLabel = examDryRun ? "매칭 검토" : "시험 결과 저장";
+        tone = examDryRun ? "ok" : "warn";
+        activeIndex = examDryRun ? 1 : 2;
+      }} else if (lastAnswerSheetResult) {{
+        phase = lastAnswerSheetResult.dry_run ? "OMR 생성 전 검토 완료" : "OMR 생성 완료";
+        detail = lastAnswerSheetResult.dry_run
+          ? "생성 내용 확인이 끝났습니다. 실제 생성 전 ClassIn 연결 점검을 다시 확인하세요."
+          : "ClassIn 활동 생성 결과를 확인했습니다. OMR 점수 수신을 데이터 탭에서 점검하세요.";
+        primaryAction = "refreshWebhookInbox";
+        primaryLabel = "OMR 수신 확인";
+        tone = "ok";
+        activeIndex = 3;
+      }} else if (courseId && unitId) {{
+        phase = answerDryRun ? "OMR 생성 전 검토" : "OMR 실제 생성 전 확인";
+        detail = answerDryRun
+          ? "강좌 ID와 단원 ID가 준비되었습니다. 먼저 생성 내용을 검토하세요."
+          : "ClassIn에 실제 OMR 활동을 생성하려는 상태입니다. 연결 점검과 교사 식별번호를 확인하세요.";
+        primaryAction = "createAnswerSheet";
+        primaryLabel = answerDryRun ? "OMR 검토" : "OMR 생성";
+        tone = answerDryRun ? "ok" : "danger";
+        activeIndex = answerDryRun ? 0 : 3;
+      }}
+
+      return {{
+        phase,
+        detail,
+        primaryAction,
+        primaryLabel,
+        tone,
+        activeIndex,
+        meta: [
+          ["시험", examName || answerName],
+          ["시험일", examDate || "-"],
+          ["CSV", examCsv ? `${{inspectDelimited(examCsv).rows}}행` : "대기"],
+          ["강좌/단원", courseId && unitId ? "준비" : "대기"],
+          ["검토 모드", examDryRun && answerDryRun ? "켜짐" : "확인"],
+          ["게시", release ? "예" : "아니오"],
+        ],
+      }};
+    }}
+
+    function renderExamCommand() {{
+      const target = document.querySelector("#examCommand");
+      if (!target) return;
+      const state = examCommandState();
+      target.className = `action-command exam-command ${{escapeHtml(state.tone)}}`;
+      const steps = [
+        ["OMR", "생성 전 내용 검토"],
+        ["매칭", "시험 CSV와 학생 정보 확인"],
+        ["적재", "Notion 시험 DB 저장 전 확인"],
+        ["반영", "미응시·리포트 근거로 연결"],
+      ];
+      target.innerHTML = `
+        <div class="action-command-main">
+          <span class="command-label">시험·OMR 운영 상태</span>
+          <strong>${{escapeHtml(state.phase)}}</strong>
+          <p>${{escapeHtml(state.detail)}}</p>
+          <div class="command-meta">
+            ${{state.meta.map(([label, value]) => `<span class="badge">${{escapeHtml(label)}} ${{escapeHtml(value)}}</span>`).join("")}}
+          </div>
+          <div class="action-command-actions">
+            <button data-primary-action="${{escapeHtml(state.primaryAction)}}">${{escapeHtml(state.primaryLabel)}}</button>
+            <button data-primary-action="focusExamImport" class="secondary">시험 CSV</button>
+            <button data-primary-action="focusAnswerSheet" class="secondary">OMR</button>
+            <button data-primary-action="refreshWebhookInbox" class="secondary">OMR 수신함</button>
+          </div>
+          <div class="command-gate"><span>시험 원칙</span><p>시험 결과는 반드시 학생 매칭을 먼저 확인한 뒤 Notion에 저장하세요. OMR 실제 생성은 ClassIn 연결 점검과 대시보드 동시 조작 금지 확인 후 진행합니다.</p></div>
+        </div>
+        <div class="action-command-side">
+          <span class="command-label">시험 흐름</span>
+          <div class="workflow-steps">
+            ${{steps.map((step, index) => `
+              <div class="workflow-step ${{index === state.activeIndex ? "active" : ""}}">
+                <span>${{escapeHtml(index + 1)}}</span>
+                <strong>${{escapeHtml(step[0])}}</strong>
+                <p>${{escapeHtml(step[1])}}</p>
+              </div>
+            `).join("")}}
+          </div>
+        </div>
+      `;
+    }}
+
+    function focusExamImport() {{
+      currentExamFlow = "exam";
+      activateTab("reports");
+      renderExamCommand();
+      document.querySelector("#examImportPanel")?.scrollIntoView({{ block: "start", behavior: "smooth" }});
+      document.querySelector("#examName")?.focus();
+    }}
+
+    function focusAnswerSheet() {{
+      currentExamFlow = "answer";
+      activateTab("reports");
+      renderExamCommand();
+      document.querySelector("#answerSheetPanel")?.scrollIntoView({{ block: "start", behavior: "smooth" }});
+      document.querySelector("#answerSheetCourseId")?.focus();
+    }}
+
     function renderReportCompositions(data) {{
       const summary = data.summary || {{}};
       currentReportCompositions = data.items || [];
       reportCompositionPage = 1;
       const summaryCards = [
         ["전체", summary.total || 0, ""],
-        ["ready", summary.ready || 0, "ok"],
-        ["review", summary.review || 0, "warn"],
-        ["blocked", summary.blocked || 0, "failed"],
+        ["통과", summary.ready || 0, "ok"],
+        ["확인 필요", summary.review || 0, "warn"],
+        ["차단", summary.blocked || 0, "failed"],
         ["시험", summary.with_exam_signal || 0, "info"],
         ["메모", summary.with_memo_context || 0, "info"],
       ];
@@ -7496,6 +12690,7 @@ def _render_shell(status: dict[str, Any]) -> str:
           <strong>${{escapeHtml(value)}}</strong>
         </div>
       `).join("");
+      renderReportCommand();
       renderReportCompositionTable();
     }}
 
@@ -7508,8 +12703,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       const page = paged(currentReportCompositions, reportCompositionPage, PAGE_SIZE.reportCompositions);
       reportCompositionPage = page.page;
       target.innerHTML = `
-        <div class="table-wrap">
-          <table>
+        <div class="table-wrap is-compact">
+          <table class="compact-table">
             <thead>
               <tr>
                 <th>학생</th>
@@ -7518,7 +12713,7 @@ def _render_shell(status: dict[str, Any]) -> str:
                 <th>근거</th>
                 <th>구성 섹션</th>
                 <th>보강</th>
-                <th>초안</th>
+                <th>실행</th>
               </tr>
             </thead>
             <tbody>
@@ -7529,16 +12724,27 @@ def _render_shell(status: dict[str, Any]) -> str:
                 return `
                   <tr>
                     <td>${{escapeHtml(item.student_name || "미등록")}}<br><span class="badge">${{escapeHtml(item.student_classin_id || "-")}}</span></td>
-                    <td>${{statusPill(item.readiness_status)}}<br><span class="badge">${{escapeHtml(item.readiness_score || 0)}}/100</span></td>
+                    <td>${{qualityPill(item.readiness_status)}}<br><span class="badge">${{escapeHtml(item.readiness_score || 0)}}/100</span></td>
                     <td>${{escapeHtml(item.focus || "-")}}<br><span class="badge">${{escapeHtml(item.context_summary || "-")}}</span></td>
                     <td>
                       <span class="badge">ClassIn ${{escapeHtml(counts.classin_lessons || 0)}}</span>
                       <span class="badge">시험 ${{escapeHtml((counts.exam_results || 0) + (counts.offline_scores || 0))}}</span>
                       <span class="badge">메모 ${{escapeHtml(counts.memos || 0)}}</span>
                     </td>
-                    <td>${{sections.map((section) => `<span class="badge">${{escapeHtml(section.title)}} · ${{escapeHtml(statusLabel(section.status))}}</span>`).join(" ")}}</td>
-                    <td>${{warning ? `<span class="badge">${{escapeHtml(warning)}}</span>` : '<span class="badge ok">없음</span>'}}</td>
-                    <td><button data-action="generateStudentReportPack" data-student-id="${{escapeHtml(item.student_classin_id || "")}}" class="secondary">초안</button></td>
+                    <td><div class="badge-strip">${{sections.map((section) => `<span class="badge">${{escapeHtml(section.title)}} · ${{escapeHtml(statusLabel(section.status))}}</span>`).join("")}}</div></td>
+                    <td><div class="badge-strip">${{warning ? `<span class="badge">${{escapeHtml(warning)}}</span>` : '<span class="badge ok">없음</span>'}}</div></td>
+                    <td>
+                      <div class="inline-actions">
+                        <button
+                          data-action="openStudentBrief"
+                          data-student-id="${{escapeHtml(item.student_classin_id || "")}}"
+                          data-student-name="${{escapeHtml(item.student_name || "")}}"
+                          data-class-name="${{escapeHtml(item.class_name || "")}}"
+                          class="secondary"
+                        >학생 보기</button>
+                        <button data-action="generateStudentReportPack" data-student-id="${{escapeHtml(item.student_classin_id || "")}}" class="secondary">초안</button>
+                      </div>
+                    </td>
                   </tr>
                 `;
               }}).join("")}}
@@ -7595,6 +12801,7 @@ def _render_shell(status: dict[str, Any]) -> str:
       lastStudentReportMarkdown = data.markdown || "";
       lastStudentReportId = data.student_classin_id || studentId;
       setPreviewText("#studentReportPreview", lastStudentReportMarkdown || "개별 리포트 초안 내용이 없습니다.");
+      renderReportCommand();
       writeLog("개별 리포트 초안을 만들었습니다.", {{
         student: data.student_name,
         readiness: data.readiness_status,
@@ -7630,9 +12837,9 @@ def _render_shell(status: dict[str, Any]) -> str:
       const summaryCards = [
         ["전체", summary.total || 0, ""],
         ["승인 대기", summary.pending || 0, "warn"],
-        ["ready", summary.ready_unapproved || 0, "ok"],
-        ["review", summary.review_unapproved || 0, "warn"],
-        ["blocked", summary.blocked_unapproved || 0, "failed"],
+        ["통과", summary.ready_unapproved || 0, "ok"],
+        ["확인 필요", summary.review_unapproved || 0, "warn"],
+        ["차단", summary.blocked_unapproved || 0, "failed"],
       ];
       document.querySelector("#weeklyDraftSummary").innerHTML = summaryCards.map(([label, value, tone]) => `
         <div class="diagnostic-count ${{escapeHtml(tone)}}">
@@ -7640,6 +12847,7 @@ def _render_shell(status: dict[str, Any]) -> str:
           <strong>${{escapeHtml(value)}}</strong>
         </div>
       `).join("");
+      renderReportCommand();
       renderWeeklyDraftTable();
     }}
 
@@ -7656,8 +12864,8 @@ def _render_shell(status: dict[str, Any]) -> str:
       const page = paged(currentWeeklyDrafts, weeklyDraftPage, PAGE_SIZE.weeklyDrafts);
       weeklyDraftPage = page.page;
       target.innerHTML = `
-        <div class="table-wrap">
-          <table>
+        <div class="table-wrap is-compact">
+          <table class="compact-table">
             <thead>
               <tr>
                 <th>학생</th>
@@ -7677,9 +12885,9 @@ def _render_shell(status: dict[str, Any]) -> str:
                 return `
                   <tr>
                     <td>${{escapeHtml(item.student_name || "미등록")}}<br><span class="badge">${{escapeHtml(item.student_classin_id || "-")}}</span></td>
-                    <td>${{statusPill(item.quality_status)}}<br><span class="badge">${{escapeHtml(item.quality_score || 0)}}/100</span></td>
+                    <td>${{qualityPill(item.quality_status)}}<br><span class="badge">${{escapeHtml(item.quality_score || 0)}}/100</span></td>
                     <td>${{item.approved ? statusPill("approved") : statusPill("pending")}}</td>
-                    <td>${{warnings.length ? warnings.map((warning) => `<span class="badge">${{escapeHtml(warning)}}</span>`).join(" ") : '<span class="badge ok">없음</span>'}}</td>
+                    <td><div class="badge-strip">${{warnings.length ? warnings.map((warning) => `<span class="badge">${{escapeHtml(warning)}}</span>`).join("") : '<span class="badge ok">없음</span>'}}</div></td>
                     <td>${{escapeHtml(item.report_context_summary || "-")}}</td>
                     <td>${{preview}}</td>
                   </tr>
@@ -7743,7 +12951,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         }}
         const previewSummary = preview.summary || {{}};
         if ((previewSummary.live_blocked || 0) > 0 || (previewSummary.dispatchable || 0) !== selected.length) {{
-          throw new Error("live 발송 전 ready 문구와 보호자 연락처를 먼저 보강하세요.");
+          throw new Error("실제 발송 전 품질 통과 문구와 보호자 연락처를 먼저 보강하세요.");
         }}
         const ok = window.confirm(
           `실제 문자 발송 모드입니다. 미리보기 통과 ${{previewSummary.dispatchable || selected.length}}명에게 발송합니다.`
@@ -7767,14 +12975,14 @@ def _render_shell(status: dict[str, Any]) -> str:
 
     function selectAllMissing() {{
       selectedMissingKeys = new Set(
-        currentMissing
+        filteredMissingItems()
           .filter((item) => item.has_parent_phone)
           .map((item) => item.selection_key)
           .filter(Boolean)
       );
       lastMissingPreview = null;
       updateMissingSelectionSummary();
-      writeLog(`문자 발송 대상 ${{selectedMissingKeys.size}}명을 선택했습니다.`);
+      writeLog(`현재 필터에서 문자 발송 대상 ${{selectedMissingKeys.size}}명을 선택했습니다.`);
     }}
 
     function clearMissingSelection() {{
@@ -7808,6 +13016,9 @@ def _render_shell(status: dict[str, Any]) -> str:
         `형식: ${{escapeHtml(parsed.delimiter)}}\\n` +
         `행: ${{parsed.rows}}\\n` +
         `헤더: ${{escapeHtml(parsed.headers.join(", ") || "-")}}`;
+      if (currentActionFlow === "schedule") {{
+        renderActionCommand("schedule");
+      }}
     }}
 
     async function readSelectedFile() {{
@@ -7832,6 +13043,8 @@ def _render_shell(status: dict[str, Any]) -> str:
         `형식: ${{escapeHtml(parsed.delimiter)}}\\n` +
         `행: ${{parsed.rows}}\\n` +
         `헤더: ${{escapeHtml(parsed.headers.join(", ") || "-")}}`;
+      lastExamImportResult = null;
+      renderExamCommand();
       writeLog("시험 파일을 읽었습니다.", {{ name: file.name, size: file.size }});
     }}
 
@@ -7971,11 +13184,14 @@ def _render_shell(status: dict[str, Any]) -> str:
         (errors.length
           ? `\\n\\n오류\\n${{escapeHtml(errors.slice(0, 8).join("\\n"))}}`
           : "");
+      if (currentActionFlow === "schedule") {{
+        renderActionCommand("schedule");
+      }}
     }}
 
     async function runScheduleImportDryRun() {{
       const text = document.querySelector("#importText").value.trim();
-      if (!text) throw new Error("스케줄 dry-run에 사용할 CSV / 표 데이터가 필요합니다.");
+      if (!text) throw new Error("스케줄 사전 검토에 사용할 CSV / 표 데이터가 필요합니다.");
       const data = await callApi("/api/parse-schedule-dry-run", {{
         schedule_text: text,
       }});
@@ -8017,24 +13233,28 @@ def _render_shell(status: dict[str, Any]) -> str:
     }}
 
     function renderExamImportResult(data) {{
+      lastExamImportResult = data;
       const summary = data.summary || {{}};
       const errors = data.errors || [];
       document.querySelector("#examPreview").innerHTML =
-        `<strong>${{escapeHtml(data.dry_run ? "시험 결과 dry-run" : "시험 결과 가져오기")}}</strong>` +
+        `<strong>${{escapeHtml(data.dry_run ? "시험 결과 매칭 검토" : "시험 결과 가져오기")}}</strong>` +
         Object.entries(summary)
           .map(([key, value]) => `${{escapeHtml(key)}}: ${{escapeHtml(value)}}`)
           .join("\\n") +
         (errors.length
           ? `\\n\\n오류\\n${{escapeHtml(errors.slice(0, 8).join("\\n"))}}`
           : "");
+      renderExamCommand();
     }}
 
     function renderAnswerSheetResult(data) {{
+      lastAnswerSheetResult = data;
       document.querySelector("#answerSheetPreview").innerHTML =
-        `<strong>${{escapeHtml(data.dry_run ? "OMR 답안지 dry-run" : "OMR 답안지 생성")}}</strong>` +
+        `<strong>${{escapeHtml(data.dry_run ? "OMR 생성 전 검토" : "OMR 답안지 생성")}}</strong>` +
         `활동명: ${{escapeHtml(data.name || "-")}}\\n` +
-        `Activity ID: ${{escapeHtml(data.activity_id || "dry-run")}}\\n` +
+        `활동 ID: ${{escapeHtml(data.activity_id || "생성 전 검토")}}\\n` +
         `게시: ${{data.released ? "예" : "아니오"}}`;
+      renderExamCommand();
     }}
 
     async function createAnswerSheet() {{
@@ -8068,7 +13288,7 @@ def _render_shell(status: dict[str, Any]) -> str:
         ? `\\n\\n<a href="${{escapeHtml(lastSsoLink)}}" target="_blank" rel="noopener">접속 링크 열기</a>`
         : "";
       document.querySelector("#ssoPreview").innerHTML =
-        `<strong>${{escapeHtml(data.demo ? "Demo 접속 링크" : "ClassIn 접속 링크")}}</strong>` +
+        `<strong>${{escapeHtml(data.demo ? "데모 접속 링크" : "ClassIn 앱 접속 링크")}}</strong>` +
         `기기: ${{escapeHtml(data.device_label || "-")}}\\n` +
         `표시: ${{escapeHtml(lastMaskedSsoLink || "생성됨")}}\\n` +
         `유효 시간: ${{escapeHtml(lifeLabel)}}` +
@@ -8135,10 +13355,177 @@ def _render_shell(status: dict[str, Any]) -> str:
       settings: "설정",
     }};
 
+    const quickCommands = [
+      {{
+        id: "ops-hub",
+        group: "운영",
+        title: "오늘 운영 브리핑",
+        detail: "대시보드와 처리 큐",
+        tab: "dashboard",
+        action: "refreshOpsHub",
+        keywords: "대시보드 운영 브리핑 큐 리포트",
+      }},
+      {{
+        id: "missing-homework",
+        group: "학생",
+        title: "숙제 미제출 처리",
+        detail: "조회·선택·문구 미리보기",
+        action: "focusMissingCore",
+        keywords: "숙제 미제출 문자 보호자 카톡",
+      }},
+      {{
+        id: "schedule-import",
+        group: "수업",
+        title: "스케줄표 입력",
+        detail: "표 붙여넣기와 사전 검토",
+        action: "focusScheduleCore",
+        keywords: "스케줄 시간표 수업 숙제 생성",
+      }},
+      {{
+        id: "class-report",
+        group: "리포트",
+        title: "반별 리포트 생성",
+        detail: "대상 조회와 주간 초안",
+        action: "focusReportCore",
+        keywords: "리포트 주간 초안 학부모",
+      }},
+      {{
+        id: "exam-import",
+        group: "시험",
+        title: "시험 결과 가져오기",
+        detail: "CSV 학생 매칭 검토",
+        action: "focusExamImport",
+        keywords: "시험 성적 csv import 검토 매칭",
+      }},
+      {{
+        id: "answer-sheet",
+        group: "시험",
+        title: "OMR 답안지 생성",
+        detail: "OMR 생성 전 검토",
+        action: "focusAnswerSheet",
+        keywords: "omr answer sheet 답안지 activity",
+      }},
+      {{
+        id: "data-inbox",
+        group: "데이터",
+        title: "수신 데이터 확인",
+        detail: "출결·숙제·시험 기록 확인",
+        tab: "data",
+        action: "refreshWebhookInbox",
+        keywords: "data subscription datasub 수신 기록 원본",
+      }},
+      {{
+        id: "academy-context",
+        group: "데이터",
+        title: "학원 데이터 융합",
+        detail: "출결·성적·메모 매칭",
+        tab: "data",
+        action: "refreshAcademyContexts",
+        keywords: "오프라인 성적 출결 메모 매칭",
+      }},
+      {{
+        id: "agent-question",
+        group: "AI",
+        title: "AI 질문",
+        detail: "원장 수동 오더",
+        action: "focusAgentQuestion",
+        keywords: "agent ai 질문 원장",
+      }},
+      {{
+        id: "student-memo",
+        group: "메모",
+        title: "학생 메모",
+        detail: "상담 기록 저장 준비",
+        action: "focusMemoTarget",
+        keywords: "상담 학생 메모 notion",
+      }},
+      {{
+        id: "readiness",
+        group: "설정",
+        title: "운영 전환 점검",
+        detail: "데모·ClassIn 실연동·카톡 실발송",
+        tab: "settings",
+        action: "refreshReadiness",
+        keywords: "check-ready diagnose api live 설정",
+      }},
+    ];
+
+    function quickRunOverlay() {{
+      return document.querySelector("#quickRunOverlay");
+    }}
+
+    function quickRunMatches(command, query) {{
+      const needle = (query || "").trim().toLowerCase();
+      if (!needle) return true;
+      return [
+        command.group,
+        command.title,
+        command.detail,
+        command.keywords,
+      ].join(" ").toLowerCase().includes(needle);
+    }}
+
+    function renderQuickRunList(query) {{
+      const target = document.querySelector("#quickRunList");
+      if (!target) return;
+      const items = quickCommands.filter((command) => quickRunMatches(command, query));
+      target.innerHTML = items.length
+        ? items.map((command) => `
+          <button type="button" class="quick-command-row" data-quick-command="${{escapeHtml(command.id)}}">
+            <span>
+              <strong>${{escapeHtml(command.title)}}</strong>
+              <span>${{escapeHtml(command.detail)}}</span>
+            </span>
+            <span class="badge">${{escapeHtml(command.group)}}</span>
+          </button>
+        `).join("")
+        : `<div class="empty compact">검색 결과가 없습니다.</div>`;
+    }}
+
+    function openQuickRun() {{
+      const overlay = quickRunOverlay();
+      if (!overlay) return;
+      overlay.hidden = false;
+      document.querySelector("#quickRunSearch").value = "";
+      renderQuickRunList("");
+      requestAnimationFrame(() => document.querySelector("#quickRunSearch")?.focus());
+    }}
+
+    function closeQuickRun() {{
+      const overlay = quickRunOverlay();
+      if (!overlay) return;
+      overlay.hidden = true;
+    }}
+
+    async function executeQuickCommand(commandId) {{
+      const command = quickCommands.find((item) => item.id === commandId);
+      if (!command) return;
+      closeQuickRun();
+      if (command.tab) {{
+        activateTab(command.tab);
+      }}
+      if (command.action) {{
+        const action = actions[command.action];
+        if (action) {{
+          await action();
+        }}
+      }}
+      writeLog(`빠른 실행: ${{command.title}}`);
+    }}
+
     const actions = {{
       async refreshOpsHub() {{
         const data = await loadOpsHub();
         writeLog("운영 허브를 갱신했습니다.", data.summary);
+      }},
+      async toggleTheme() {{
+        toggleColorTheme();
+      }},
+      async openQuickRun() {{
+        openQuickRun();
+      }},
+      async closeQuickRun() {{
+        closeQuickRun();
       }},
       async generateOpsReport() {{
         await generateOpsReport();
@@ -8185,6 +13572,30 @@ def _render_shell(status: dict[str, Any]) -> str:
       }},
       async focusReportCore() {{
         focusReportCore();
+      }},
+      async focusExamImport() {{
+        focusExamImport();
+      }},
+      async focusAnswerSheet() {{
+        focusAnswerSheet();
+      }},
+      async openStudentBrief(button) {{
+        openStudentBrief(button);
+      }},
+      async closeStudentBrief() {{
+        closeStudentBrief();
+      }},
+      async studentBriefAskAgent() {{
+        studentBriefAskAgent();
+      }},
+      async studentBriefMemo() {{
+        studentBriefMemo();
+      }},
+      async studentBriefReport() {{
+        await studentBriefReport();
+      }},
+      async studentBriefData() {{
+        studentBriefData();
       }},
       async sendMissingHomeworkSms() {{
         await sendMissingHomeworkSms();
@@ -8307,19 +13718,50 @@ def _render_shell(status: dict[str, Any]) -> str:
         document.querySelector("#scheduleDays").value = "1";
         await loadSchedule();
       }},
+      async focusAgentQuestion() {{
+        focusAgentQuestionField();
+      }},
+      async focusMemoTarget() {{
+        focusMemoTargetField();
+      }},
+      async focusMemoText() {{
+        focusMemoTextField();
+      }},
       async writeMemo() {{
+        const classinId = document.querySelector("#memoClassinId").value.trim();
+        const tag = document.querySelector("#memoTag").value.trim();
+        const text = document.querySelector("#memoText").value.trim();
+        if (!classinId) {{
+          focusMemoTargetField();
+          throw new Error("ClassIn ID를 입력하세요.");
+        }}
+        if (!text) {{
+          focusMemoTextField();
+          throw new Error("메모 내용을 입력하세요.");
+        }}
         const data = await callApi("/api/write-memo", {{
-          classin_id: document.querySelector("#memoClassinId").value,
-          tag: document.querySelector("#memoTag").value,
-          text: document.querySelector("#memoText").value,
+          classin_id: classinId,
+          tag,
+          text,
         }});
         writeLog(data.message, data);
+        setPreviewText("#memoPreview", `${{data.message}}\\nClassIn ID: ${{classinId}}\\n태그: ${{tag || "기본"}}`);
+        renderAgentCommand();
+        toast(data.message, "ok");
       }},
       async askAgent() {{
+        const question = document.querySelector("#agentQuestion").value.trim();
+        if (!question) {{
+          focusAgentQuestionField();
+          throw new Error("질문을 입력하세요.");
+        }}
         const data = await callApi("/api/agent", {{
-          question: document.querySelector("#agentQuestion").value,
+          question,
         }});
         writeLog(data.answer || data.message, {{ message: data.message }});
+        setPreviewText("#agentAnswerPreview", data.answer || data.message || "응답이 없습니다.");
+        renderAgentCommand();
+        toast("AI 응답을 받았습니다.", "ok");
       }},
       async refreshStatus() {{
         await refreshStatus();
@@ -8371,9 +13813,10 @@ def _render_shell(status: dict[str, Any]) -> str:
         setPagedList(pageButton.dataset.pageKind, pageButton.dataset.pageValue);
         return;
       }}
-      const button = event.target.closest("button[data-action]");
+      const button = event.target.closest("button[data-action], button[data-primary-action]");
       if (!button) return;
-      const action = actions[button.dataset.action];
+      const actionKey = button.dataset.action || button.dataset.primaryAction;
+      const action = actions[actionKey];
       if (!action) return;
       button.disabled = true;
       button.classList.add("is-busy");
@@ -8388,12 +13831,49 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
     }});
 
+    document.addEventListener("click", async (event) => {{
+      if (event.target.id === "quickRunOverlay") {{
+        closeQuickRun();
+        return;
+      }}
+      const commandButton = event.target.closest("[data-quick-command]");
+      if (!commandButton) return;
+      commandButton.disabled = true;
+      commandButton.classList.add("is-busy");
+      try {{
+        await executeQuickCommand(commandButton.dataset.quickCommand);
+      }} catch (error) {{
+        writeLog(error.message);
+        toast(error.message, "err");
+      }} finally {{
+        commandButton.disabled = false;
+        commandButton.classList.remove("is-busy");
+      }}
+    }});
+
     document.addEventListener("click", (event) => {{
+      if (event.target.id === "studentBriefOverlay") {{
+        closeStudentBrief();
+        return;
+      }}
       const hubTarget = event.target.closest("[data-hub-tab]");
+      if (hubTarget && event.target.closest("button, a, input, select, textarea, label, summary")) {{
+        return;
+      }}
       if (hubTarget) {{
         activateTab(hubTarget.dataset.hubTab || "dashboard");
         return;
       }}
+    }});
+
+    document.addEventListener("click", (event) => {{
+      const promptButton = event.target.closest("button[data-agent-prompt]");
+      if (!promptButton) return;
+      const target = document.querySelector("#agentQuestion");
+      target.value = promptButton.dataset.agentPrompt || "";
+      target.focus();
+      setPreviewText("#agentAnswerPreview", "질문이 준비되었습니다. AI에게 묻기를 실행하세요.");
+      renderAgentCommand();
     }});
 
     document.addEventListener("click", (event) => {{
@@ -8413,6 +13893,26 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
     }});
 
+    document.addEventListener("click", (event) => {{
+      const filterButton = event.target.closest("button[data-queue-filter]");
+      if (!filterButton) return;
+      opsQueueFilter = filterButton.dataset.queueFilter || "all";
+      opsQueuePage = 1;
+      renderOpsQueue((opsHub || {{}}).work_queue || []);
+    }});
+
+    document.addEventListener("click", (event) => {{
+      const filterButton = event.target.closest("button[data-missing-filter]");
+      if (!filterButton) return;
+      missingFilter = filterButton.dataset.missingFilter || "all";
+      missingPage = 1;
+      lastMissingPreview = null;
+      renderMissingFilters();
+      renderMissingSelectionList();
+      renderMissingTable();
+      updateMissingSelectionSummary();
+    }});
+
     document.addEventListener("change", (event) => {{
       if (event.target.id === "reportClassName") {{
         currentReportTargets = [];
@@ -8422,6 +13922,28 @@ def _render_shell(status: dict[str, Any]) -> str:
         updateReportSelectionSummary();
         document.querySelector("#reportPreview").innerHTML =
           `<strong>반 선택</strong>${{escapeHtml(event.target.value || "전체 반")}} 기준으로 대상 조회를 누르세요.`;
+        if (currentActionFlow === "report") {{
+          renderActionCommand("report");
+        }}
+        return;
+      }}
+      if (event.target.id === "weekDate" && currentActionFlow === "report") {{
+        renderActionCommand("report");
+        return;
+      }}
+      if (event.target.id === "scheduleStart" || event.target.id === "scheduleDays") {{
+        renderScheduleCommand();
+        return;
+      }}
+      if (["examDryRun", "answerSheetDryRun", "answerSheetRelease"].includes(event.target.id)) {{
+        if (event.target.id === "examDryRun") {{
+          currentExamFlow = "exam";
+          lastExamImportResult = null;
+        }} else {{
+          currentExamFlow = "answer";
+          lastAnswerSheetResult = null;
+        }}
+        renderExamCommand();
         return;
       }}
       if (event.target.id === "contextClassName") {{
@@ -8453,8 +13975,71 @@ def _render_shell(status: dict[str, Any]) -> str:
       }}
     }});
 
+    document.addEventListener("input", (event) => {{
+      if (event.target.id === "importText" && currentActionFlow === "schedule") {{
+        renderActionCommand("schedule");
+      }}
+      if (event.target.id === "quickRunSearch") {{
+        renderQuickRunList(event.target.value);
+      }}
+      if (["agentQuestion", "memoClassinId", "memoTag", "memoText"].includes(event.target.id)) {{
+        renderAgentCommand();
+      }}
+      if (["examName", "examDate", "examClassName", "examCsvText"].includes(event.target.id)) {{
+        currentExamFlow = "exam";
+        lastExamImportResult = null;
+        renderExamCommand();
+      }}
+      if ([
+        "answerSheetCourseId",
+        "answerSheetUnitId",
+        "answerSheetName",
+        "answerSheetTeacherUid",
+        "answerSheetStart",
+        "answerSheetEnd",
+      ].includes(event.target.id)) {{
+        currentExamFlow = "answer";
+        lastAnswerSheetResult = null;
+        renderExamCommand();
+      }}
+    }});
+
+    document.addEventListener("keydown", (event) => {{
+      const editable = ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName);
+      if (event.key === "Escape" && !quickRunOverlay()?.hidden) {{
+        closeQuickRun();
+        return;
+      }}
+      if (event.key === "Escape" && !studentBriefOverlay()?.hidden) {{
+        closeStudentBrief();
+        return;
+      }}
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {{
+        event.preventDefault();
+        openQuickRun();
+        return;
+      }}
+      if (!editable && event.key === "/") {{
+        event.preventDefault();
+        openQuickRun();
+      }}
+    }});
+
+    try {{
+      setTheme(localStorage.getItem("classin-ui-theme") || "light");
+    }} catch (error) {{
+      setTheme("light");
+    }}
     setMissingWindowPreset("today");
     renderStatus(status);
+    renderActionCommand("missing");
+    renderDataCommand();
+    renderMissingCommand();
+    renderScheduleCommand();
+    renderReportCommand();
+    renderExamCommand();
+    renderAgentCommand();
+    renderReadinessCommand();
     loadOpsHub().catch((error) => writeLog(error.message));
     loadReadiness(false).catch((error) => writeLog(error.message));
     loadNotionSchema(false).catch((error) => writeLog(error.message));

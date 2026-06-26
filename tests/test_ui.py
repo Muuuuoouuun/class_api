@@ -59,10 +59,22 @@ def test_ui_home_renders_with_config(tmp_path):
 
     assert res.status_code == 200
     assert "ClassIn 운영 콘솔" in res.text
-    assert "Academy Ops Hub" in res.text
+    assert "--sidebar-w: 202px" in res.text
+    assert "grid-template-columns: 20px minmax(0, 1fr)" in res.text
+    assert "justify-content: stretch" in res.text
+    assert ".sidebar .tab-button .ic" in res.text
+    assert ".sidebar .tab-button .label" in res.text
+    assert ".server-pill" in res.text
+    assert "오늘의 운영 허브" in res.text
+    assert 'id="opsCommand"' in res.text
+    assert "renderOpsCommand" in res.text
     assert "오늘의 운영 브리핑" in res.text
     assert "오늘 처리할 학생" in res.text
+    assert 'id="opsQueueFilters"' in res.text
+    assert "queueFilterItems" in res.text
+    assert "data-queue-filter" in res.text
     assert "허브 새로고침" in res.text
+    assert 'data-action="toggleTheme"' in res.text
     assert "오늘의 운영 리포트" in res.text
     assert "generateOpsReport" in res.text
     assert "/api/ops-report" in res.text
@@ -75,21 +87,70 @@ def test_ui_home_renders_with_config(tmp_path):
     assert "오늘의 자동화 실행계획" in res.text
     assert "generateOpsPlaybook" in res.text
     assert "/api/ops-playbook" in res.text
+    assert '["준비", summary.ready' in res.text
+    assert '["검토", summary.dry_run' in res.text
     assert 'data-toggle-preview="#opsPlaybookPreview"' in res.text
     assert 'data-toggle-preview="#opsReportPreview"' in res.text
     assert "setPreviewCollapsed" in res.text
     assert "pagerHtml" in res.text
     assert "data-page-kind" in res.text
     assert "개별 리포트 초안" in res.text
+    assert 'id="reportCommand"' in res.text
+    assert "renderReportCommand" in res.text
+    assert "HTML 드래프트를 검토한 뒤 승인된 것만 Notion에 아카이브" in res.text
     assert "generateStudentReportPack" in res.text
     assert "/api/student-report-pack" in res.text
     assert 'data-toggle-preview="#studentReportPreview"' in res.text
     assert "renderReportCompositionTable" in res.text
     assert "renderWeeklyDraftTable" in res.text
+    assert "#tab-reports.active" in res.text
+    assert "#tab-reports > .panel" in res.text
+    assert "panel report-overview-panel" in res.text
+    assert "panel student-report-panel" in res.text
+    assert "report-review-panel report-composition-panel" in res.text
+    assert "report-review-panel weekly-draft-panel" in res.text
+    assert "report-review-strip" in res.text
+    assert "#tab-reports .report-review-strip" in res.text
+    assert "table-wrap is-compact" in res.text
+    assert "compact-table" in res.text
+    assert "badge-strip" in res.text
     assert "테스트학원" in res.text
+    assert 'data-action="openQuickRun"' in res.text
+    assert 'id="quickRunOverlay"' in res.text
+    assert "quickCommands" in res.text
+    assert "executeQuickCommand" in res.text
+    assert 'id="studentBriefOverlay"' in res.text
+    assert "학생 360" in res.text
+    assert "openStudentBrief" in res.text
+    assert "studentBriefAskAgent" in res.text
+    assert "studentBriefReport" in res.text
+    assert "숙제 미제출 처리" in res.text
+    assert "운영 전환 점검" in res.text
     assert "API 연결 점검" in res.text
+    assert "panel diagnostics-panel" in res.text
+    assert "diagnostic-card-list" in res.text
+    assert "diagnostic-card-head" in res.text
+    assert "diagnostics-panel .diagnostic-summary" in res.text
     assert "운영 전환 체크리스트" in res.text
+    assert 'id="readinessCommand"' in res.text
+    assert "renderReadinessCommand" in res.text
+    assert "readinessStageLabel" in res.text
+    assert "준비 완료" in res.text
+    assert "전환 흐름" in res.text
+    assert "실연동 전에는 준비 점검과 비파괴 API 진단을 통과" in res.text
     assert "setReadinessMode" in res.text
+    assert "#tab-settings.active" in res.text
+    assert "#tab-settings > .settings-panel" in res.text
+    assert "settings-panel-strip" in res.text
+    assert "#tab-settings .settings-panel-strip > .settings-panel" in res.text
+    assert "#tab-settings #readinessSummary" in res.text
+    assert "#tab-settings #notionSchemaSummary" in res.text
+    assert "#tab-settings #notionSchemaList" in res.text
+    assert "max-height: 204px" in res.text
+    assert "#tab-settings > .action-command .workflow-step p" in res.text
+    assert "#tab-settings #notionSchemaSummary .diagnostic-count" in res.text
+    assert "#tab-settings .settings-panel .inline-actions label" in res.text
+    assert "#tab-settings .schema-command.is-collapsed" in res.text
     assert "renderReadinessList" in res.text
     assert "/api/readiness" in res.text
     assert "Notion DB 설계 미리보기" in res.text
@@ -99,19 +160,90 @@ def test_ui_home_renders_with_config(tmp_path):
     assert "notionSchemaCommand" in res.text
     assert "schema-details" in res.text
     assert "속성 목록" in res.text
+    assert "settings-panel .schema-list" in res.text
+    assert "settings-panel .schema-command.is-collapsed" in res.text
+    assert "settings-panel .readiness-fix" in res.text
     assert "파일럿 브링업" in res.text
     assert "loadPilotBrief" in res.text
     assert "copyPilotBrief" in res.text
     assert "/api/pilot-brief" in res.text
     assert "pilotBriefPreview" in res.text
+    assert '["보강", summary.review' in res.text
+    assert "ClassIn 실연동" in res.text
+    assert "카톡 실발송" in res.text
+    assert "외부 발송 없는 검토" in res.text
     assert 'data-readiness-mode="local-demo"' in res.text
     assert 'data-readiness-mode="classin-live"' in res.text
     assert 'data-readiness-mode="kakao-live"' in res.text
     assert "data-tab=\"schedule\"" in res.text
+    assert 'id="scheduleCommand"' in res.text
+    assert "renderScheduleCommand" in res.text
+    assert "수업·숙제 생성은 액션 탭에서 생성 전 검토를 마친 뒤 진행" in res.text
+    assert "panel dashboard-hub-panel" in res.text
+    assert "dashboard-hub-panel .ops-command-main p" in res.text
+    assert "dashboard-hub-panel .command-meta::-webkit-scrollbar" in res.text
+    assert "dashboard-hub-panel .ops-command-side" in res.text
+    assert "dashboard-hub-panel .command-gate span" in res.text
+    assert "dashboard-hub-panel .hub-lanes" in res.text
+    assert "dashboard-hub-panel .hub-focus::-webkit-scrollbar" in res.text
+    assert "dashboard-hub-panel .lane-card" in res.text
+    assert "dashboard-hub-panel .lane-card .lane-foot span" in res.text
+    assert "panel dashboard-brief-panel" in res.text
+    assert "dashboard-brief-panel .brief-list" in res.text
+    assert "dashboard-brief-panel .brief-list::-webkit-scrollbar" in res.text
+    assert "dashboard-brief-panel .brief-row" in res.text
+    assert "dashboard-work-strip" in res.text
+    assert "#tab-dashboard .dashboard-work-strip" in res.text
+    assert "panel dashboard-playbook-panel" in res.text
+    assert "panel dashboard-report-panel" in res.text
+    assert "panel dashboard-log-panel" in res.text
+    assert "dashboard-report-panel .inline-actions" in res.text
+    assert "dashboard-log-panel .log" in res.text
+    assert "text-overflow: ellipsis" in res.text
+    assert 'aside class="dashboard-side"' in res.text
+    assert "#tab-dashboard .dashboard-side > .panel" in res.text
+    assert "panel queue-panel dashboard-queue-panel" in res.text
+    assert "queue-card-strip" in res.text
+    assert "dashboard-queue-panel .queue-card-strip" in res.text
+    assert "dashboard-queue-panel .queue-details" in res.text
+    assert "dashboard-queue-panel .queue-row strong" in res.text
+    assert "dashboard-queue-panel .queue-actions button" in res.text
+    assert "dashboard-queue-panel .queue-action" in res.text
+    assert "display: inline-block" in res.text
+    assert "overscroll-behavior-inline: contain" in res.text
+    assert "scroll-snap-stop: always" in res.text
     assert "data-tab=\"actions\"" in res.text
     assert "data-tab=\"data\"" in res.text
     assert "핵심 기능" in res.text
-    assert "ClassIn Data Subscription" in res.text
+    assert 'id="actionCommand"' in res.text
+    assert "actionFlows" in res.text
+    assert 'data-primary-action=' in res.text
+    assert "white-space: normal" in res.text
+    assert ".action-command-main > p" in res.text
+    assert ".action-command .command-meta" in res.text
+    assert ".action-command .command-meta::-webkit-scrollbar" in res.text
+    assert ".action-command .command-meta .badge" in res.text
+    assert ".action-command-actions::-webkit-scrollbar" in res.text
+    assert ".action-command-actions button" in res.text
+    assert ".action-command .command-gate" in res.text
+    assert ".action-command-side .workflow-step" in res.text
+    assert "-webkit-line-clamp: 2" in res.text
+    assert 'data-flow="missing"' in res.text
+    assert 'data-flow="schedule"' in res.text
+    assert 'data-flow="report"' in res.text
+    assert "ClassIn 수신 데이터" in res.text
+    assert 'id="dataCommand"' in res.text
+    assert "renderDataCommand" in res.text
+    assert "#tab-data.active" in res.text
+    assert "data-panel-strip" in res.text
+    assert "#tab-data .data-panel-strip > .panel" in res.text
+    assert "panel data-inbox-panel" in res.text
+    assert "panel data-context-panel" in res.text
+    assert "ClassIn 수신 기록은 읽기 전용" in res.text
+    assert "수신 원본" in res.text
+    assert "이벤트 종류" in res.text
+    assert "Webhook 원본 JSON 유입 확인" not in res.text
+    assert "<th>Cmd</th>" not in res.text
     assert "refreshWebhookInbox" in res.text
     assert "/api/webhook-inbox" in res.text
     assert "학원 데이터 융합" in res.text
@@ -124,28 +256,118 @@ def test_ui_home_renders_with_config(tmp_path):
     assert "반 선택" in res.text
     assert "전체 반" in res.text
     assert "반 목록 새로고침" in res.text
+    assert "NEIS 학교별 시험일정 예시" in res.text
+    assert "세종 5개교 · 2026-06-26 기준" in res.text
+    assert "종촌고등학교" in res.text
+    assert "세종대성고등학교" in res.text
+    assert "새롬고등학교" in res.text
+    assert "panel neis-exam-panel" in res.text
+    assert ".neis-exam-table" in res.text
     assert "스케줄 표" in res.text
+    assert "panel schedule-panel" in res.text
     assert "CSV 내보내기" in res.text
+    assert "panel missing-panel missing-list-panel" in res.text
+    assert "panel missing-panel notification-panel" in res.text
+    assert "mobile-card-list missing-card-list" in res.text
+    assert "mobile-card-list notification-card-list" in res.text
+    assert "#tab-missing > .action-command .workflow-step p" in res.text
+    assert ".missing-panel .mobile-card-list::-webkit-scrollbar" in res.text
+    assert "scroll-snap-type: x proximity" in res.text
+    assert ".notification-card-list .missing-card" in res.text
+    assert "missing-table-wrap" in res.text
+    assert "notification-table-wrap" in res.text
     assert "전체 주간 드래프트" in res.text
     assert "주간 드래프트 검토" in res.text
     assert "forceBlockedQuality" in res.text
+    assert 'id="examCommand"' in res.text
+    assert "renderExamCommand" in res.text
+    assert "#tab-reports > .exam-command" in res.text
+    assert res.text.count("#tab-reports > .exam-command") >= 2
+    assert "#tab-reports > .action-command-main > p" in res.text
+    assert "#tab-reports > .action-command .command-gate p" in res.text
+    assert "#tab-reports > .exam-command .command-meta" in res.text
+    assert "#tab-reports > .report-command .workflow-step p" in res.text
+    assert "#tab-reports > .action-command .action-command-side" in res.text
+    assert "#tab-reports .report-overview-panel .inline-actions" in res.text
+    assert "#tab-reports .report-review-strip > .panel" in res.text
+    assert "#tab-reports > .action-command .workflow-step p" in res.text
+    assert "#tab-reports .exam-form-panel textarea.large" in res.text
+    assert "시험·OMR 운영 상태" in res.text
+    assert "시험 결과는 반드시 학생 매칭을 먼저 확인" in res.text
+    assert "focusExamImport" in res.text
+    assert "focusAnswerSheet" in res.text
     assert "OMR 답안지 생성" in res.text
+    assert res.text.count("panel exam-form-panel") == 2
+    assert "exam-date-grid" in res.text
+    assert "exam-toggle-grid" in res.text
+    assert "exam-csv-input" in res.text
+    assert "exam-form-strip" in res.text
+    assert "#tab-reports .exam-form-strip > .exam-form-panel" in res.text
+    assert ".exam-form-panel .action-preview" in res.text
+    assert ".exam-form-panel .inline-actions" in res.text
+    assert "min-height: 96px" in res.text
     assert "answerSheetCourseId" in res.text
     assert "/api/create-answer-sheet" in res.text
-    assert "ClassIn 접속 링크" in res.text
+    assert "ClassIn 앱 접속 링크" in res.text
+    assert "panel sso-action-panel" in res.text
+    assert ".sso-action-panel .action-preview" in res.text
+    assert "사용자 식별번호" in res.text
+    assert "앱 링크" in res.text
     assert "ssoUid" in res.text
+    assert res.text.count('id="ssoPreview"') == 1
     assert "/api/sso-link" in res.text
+    assert "panel schedule-action-panel" in res.text
+    assert ".schedule-action-panel .inline-actions" in res.text
     assert "시험 결과 가져오기" in res.text
+    assert "CSV 학생 매칭 검토" in res.text
+    assert "OMR 생성 전 검토" in res.text
+    assert "강좌 ID" in res.text
+    assert "단원 ID" in res.text
+    assert "검토 모드" in res.text
+    assert "교사 식별번호" in res.text
     assert "readExamFile" in res.text
     assert "examFile" in res.text
     assert "notifyModePill" in res.text
     assert 'aria-current="page"' in res.text
     assert "defaultMissingSelectionKeys" in res.text
     assert "item.has_parent_phone && isPendingMissing(item)" in res.text
+    assert "missing-filter" in res.text
+    assert "panel missing-action-panel" in res.text
+    assert "grid-column: span 2" in res.text
+    assert "grid-template-columns: minmax(0, 1fr) minmax(250px, .9fr)" in res.text
+    assert "window-range-readonly-field" in res.text
+    assert "#tab-actions .window-range-readonly-field" in res.text
+    assert "#tab-actions #actionCommand .action-command-side .workflow-step p" in res.text
+    assert "#tab-actions .sso-action-panel .sso-fields" in res.text
+    assert "#tab-actions .action-controls > .panel" in res.text
+    assert "#tab-actions .action-controls > .missing-action-panel" in res.text
+    assert "panel report-action-panel" in res.text
+    assert "grid-template-columns: minmax(0, 1fr) minmax(230px, .8fr)" in res.text
+    assert "#tab-actions .report-action-panel #reportTargetList" in res.text
+    assert "selectable-list missing-action-list" in res.text
+    assert ".missing-action-panel .missing-action-list" in res.text
+    assert "max-height: 204px" in res.text
+    assert "filteredMissingItems" in res.text
+    assert "missingFilterMatches" in res.text
+    assert "data-missing-filter" in res.text
+    assert "연락 필요" in res.text
     assert "문구 미리보기" in res.text
     assert "previewMissingHomeworkSms" in res.text
+    assert 'id="missingCommand"' in res.text
+    assert "renderMissingCommand" in res.text
+    assert "실제 발송은 보호자 연락처가 있고 품질 검토를 통과한 문구만 허용" in res.text
+    assert "notifyModeLabel" in res.text
+    assert "qualityPill" in res.text
+    assert "발송 방식" in res.text
     assert "/api/preview-missing-homework" in res.text
     assert "message-preview-card" in res.text
+    assert 'id="agentCommand"' in res.text
+    assert "renderAgentCommand" in res.text
+    assert "#tab-memo .memo-grid > .panel" in res.text
+    assert "data-agent-prompt" in res.text
+    assert "이번 주 숙제 미제출 학생을 우선순위로 정리해줘" in res.text
+    assert "AI 답변은 Notion/ClassIn 데이터를 조회" in res.text
+    assert "focusMemoTarget" in res.text
 
 
 def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
@@ -246,8 +468,8 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
     assert any(item["has_context"] for item in academy_contexts["items"])
     assert hub["ok"] is True
     assert [lane["title"] for lane in hub["lanes"]] == [
-        "ClassIn API Push",
-        "ClassIn Data Sub",
+        "ClassIn 생성 작업",
+        "ClassIn 수신 데이터",
         "학원 데이터 융합",
         "개별 리포트",
     ]
@@ -255,6 +477,8 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
     assert hub["summary"]["report_blocked"] == 1
     assert hub["ops_brief"][0]["id"] in {"needs_retry", "needs_phone", "report_blocked"}
     assert any(item["id"] == "report_blocked" for item in hub["ops_brief"])
+    assert any(item["id"] == "data_needs_review" and item["tab"] == "data" for item in hub["focus"])
+    assert any(item["id"] == "data_needs_review" and item["tab"] == "data" for item in hub["ops_brief"])
     assert hub["work_queue"]
     assert {
         "execution_state",
@@ -270,6 +494,12 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
     assert "## 5. 개별 리포트 품질" in ops_report["markdown"]
     assert "게이트:" in ops_report["markdown"]
     assert "완료 기준:" in ops_report["markdown"]
+    assert "준비 상태:" in ops_report["markdown"]
+    assert "막힘 0건" in ops_report["markdown"]
+    assert "리포트 차단" in ops_report["markdown"]
+    assert "품질: 통과" in ops_report["markdown"]
+    assert "dry_run/sent" not in ops_report["markdown"]
+    assert "pending/failed" not in ops_report["markdown"]
     assert "010-" not in ops_report["markdown"]
     assert "classin://" not in ops_report["markdown"]
     assert ops_handoffs["demo"] is True
@@ -286,6 +516,10 @@ def test_ui_demo_mode_runs_without_config_or_notion(monkeypatch, tmp_path):
     assert "# ClassIn Demo Academy 자동화 실행계획" in ops_playbook["markdown"]
     assert "## 실행 순서" in ops_playbook["markdown"]
     assert "## 안전 게이트" in ops_playbook["markdown"]
+    assert "상태: 확인 필요" in ops_playbook["markdown"]
+    assert "위험도: 외부 발송 없음" in ops_playbook["markdown"]
+    assert "blocked=" not in ops_playbook["markdown"]
+    assert "needs_review=" not in ops_playbook["markdown"]
     assert "010-" not in ops_playbook["markdown"]
     assert "classin://" not in ops_playbook["markdown"]
     assert schedule["summary"]["total_lessons"] > 0
@@ -550,20 +784,25 @@ def test_ui_webhook_inbox_summarizes_dump_files(tmp_path):
     body = res.json()
     assert body["summary"]["total"] == 1
     assert body["summary"]["by_cmd"] == {"HomeworkSubmit": 1}
+    assert body["summary"]["by_event_label"] == {"숙제 제출": 1}
     assert body["items"] == [
         {
             "file_name": "20260618T100001.json",
             "received_at": body["items"][0]["received_at"],
             "status": "parsed",
+            "status_label": "정리 완료",
             "cmd": "HomeworkSubmit",
+            "event_label": "숙제 제출",
             "detail": "",
             "course_id": "132323",
             "class_id": "2362301",
+            "course_label": "수업 132323 · 2362301",
             "class_name": "",
             "activity": "워크북 p.42-48",
             "student_count": 1,
             "students": ["박성실"],
             "action_at": "2026-05-01T04:33:20+00:00",
+            "source_label": "보관됨",
         }
     ]
     assert "SafeKey" not in str(body)
@@ -683,7 +922,7 @@ def test_ui_parse_schedule_dry_run_returns_counts(monkeypatch, tmp_path):
         "dry_run": True,
     }
     body = res.json()
-    assert body["message"] == "스케줄 dry-run을 완료했습니다."
+    assert body["message"] == "스케줄 사전 검토를 완료했습니다."
     assert body["summary"] == {"courses": 1, "lessons": 3, "homework": 2, "errors": 1}
     assert body["errors"] == ["course 고2: teacher UID missing"]
 
@@ -761,7 +1000,7 @@ def test_ui_sso_link_uses_classin_helper(monkeypatch, tmp_path):
         "life_time": 3600,
     }
     body = res.json()
-    assert body["message"] == "ClassIn 접속 링크를 생성했습니다."
+    assert body["message"] == "ClassIn 앱 접속 링크를 생성했습니다."
     assert body["link"] == "classin://open?token=secret"
     assert body["masked_link"] == "classin://..."
     assert body["device_label"] == "iOS"
@@ -1292,7 +1531,7 @@ def test_ui_import_exam_results_accepts_csv_text(monkeypatch, tmp_path):
         "dry_run": True,
     }
     body = res.json()
-    assert body["message"] == "시험 결과 dry-run을 완료했습니다."
+    assert body["message"] == "시험 결과 매칭 검토를 완료했습니다."
     assert body["summary"] == {
         "total": 2,
         "merged": 1,
@@ -1368,7 +1607,7 @@ def test_ui_create_answer_sheet_dry_run(monkeypatch, tmp_path):
         "dry_run": True,
     }
     body = res.json()
-    assert body["message"] == "OMR 답안지 dry-run을 완료했습니다."
+    assert body["message"] == "OMR 답안지 생성 전 검토를 완료했습니다."
     assert body["activity_id"] is None
     assert body["name"] == "6월 OMR 답안지"
 

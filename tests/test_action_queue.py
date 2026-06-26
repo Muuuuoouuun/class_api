@@ -64,12 +64,17 @@ def test_teacher_action_queue_combines_missing_data_and_report_items() -> None:
     assert queue[0]["safety_gate"] == "다음 액션 부족"
     assert "품질 경고" in queue[0]["completion_check"]
     assert queue[1]["reason"] == "숙제 미제출 연락 필요 · 2회째"
+    assert queue[1]["student_classin_id"] == "10001"
     assert queue[1]["can_execute"] is True
     assert queue[1]["execution_state"] == "ready"
     assert "발송 모드" in queue[1]["safety_gate"]
+    assert "외부 발송 없는 검토 기록" in queue[1]["safety_gate"]
     assert "알림 기록" in queue[1]["completion_check"]
+    assert "dry_run/sent" not in queue[1]["completion_check"]
+    assert queue[2]["tab"] == "data"
     assert queue[2]["blocking_reason"] == "자동 매칭 확인 필요"
     assert "리포트 문장에 반영 금지" in queue[2]["safety_gate"]
+    assert queue[3]["student_classin_id"] == "10004"
     assert queue[3]["next_action"] == "근거 보강"
     assert "초안 생성 전 보강" in queue[3]["safety_gate"]
 
@@ -93,5 +98,5 @@ def test_teacher_action_queue_lifts_blocked_notification_copy_first() -> None:
     assert queue[0]["next_action"] == "문구 수정"
     assert queue[0]["can_execute"] is False
     assert queue[0]["execution_state"] == "review_required"
-    assert queue[0]["operator_note"] == "검토 필요: 알림 문구 품질 blocked"
+    assert queue[0]["operator_note"] == "검토 필요: 알림 문구 품질 발송 제외"
     assert "낙인 표현" in queue[0]["badges"]

@@ -4,6 +4,22 @@ from __future__ import annotations
 from typing import Any
 
 
+def _quality_label(status: str) -> str:
+    return {
+        "ready": "통과",
+        "review": "확인 필요",
+        "blocked": "발송 제외",
+    }.get(status, status or "확인")
+
+
+def _readiness_label(status: str) -> str:
+    return {
+        "ready": "준비 완료",
+        "review": "보강 필요",
+        "blocked": "근거 부족",
+    }.get(status, status or "확인 필요")
+
+
 def build_teacher_action_queue(
     *,
     missing_items: list[dict[str, Any]],
@@ -63,12 +79,12 @@ def _missing_action(item: dict[str, Any]) -> dict[str, Any]:
     quality_warnings = item.get("notification_quality_warnings") or []
     if quality_status == "blocked":
         action = "notification_quality_blocked"
-        reason = "알림 문구 품질 blocked"
+        reason = "알림 문구 품질 발송 제외"
 
     report_context = item.get("report_context") or {}
     badges = [
         *(report_context.get("badges") or [])[:3],
-        *([f"문구 {quality_status}"] if quality_status else []),
+        *([f"문구 {_quality_label(quality_status)}"] if quality_status else []),
         *quality_warnings[:1],
     ]
     can_execute = action in {"needs_message", "needs_retry"}
@@ -77,13 +93,14 @@ def _missing_action(item: dict[str, Any]) -> dict[str, Any]:
         "kind": "missing_homework",
         "priority": 5 if action == "notification_quality_blocked" else priority_by_action.get(action, 80),
         "tone": "danger" if action == "notification_quality_blocked" else tone_by_action.get(action, "info"),
+        "student_classin_id": item.get("student_classin_id") or "",
         "student_name": item.get("student_name") or "미등록",
         "class_name": item.get("class_name") or "",
         "reason": reason,
         "next_action": "문구 수정" if action == "notification_quality_blocked" else next_action_by_action.get(action, "상태 확인"),
         "action_label": "미제출 확인",
         "tab": "missing",
-        "lane": "ClassIn Data Sub",
+        "lane": "수신 데이터",
         "can_execute": can_execute,
         "blocking_reason": "" if can_execute else reason,
         "badges": badges,
@@ -98,12 +115,13 @@ def _data_review_action(item: dict[str, Any]) -> dict[str, Any]:
         "kind": "data_review",
         "priority": 40,
         "tone": "warn",
+        "student_classin_id": item.get("student_classin_id") or "",
         "student_name": item.get("student_name") or "미등록",
         "class_name": item.get("class_name") or "",
         "reason": item.get("reason") or "학생 자동 매칭 필요",
         "next_action": "데이터 확인",
         "action_label": "데이터 확인",
-        "tab": "missing",
+        "tab": "data",
         "lane": "학원 데이터 융합",
         "can_execute": False,
         "blocking_reason": "자동 매칭 확인 필요",
@@ -118,6 +136,7 @@ def _weekly_draft_action(item: dict[str, Any]) -> dict[str, Any] | None:
     status = item.get("quality_status") or ""
     if status not in {"blocked", "review", "ready"}:
         return None
+    status_label = _quality_label(status)
     priority = {"blocked": 15, "review": 50, "ready": 85}[status]
     next_action = {
         "blocked": "리포트 수정",
@@ -131,17 +150,18 @@ def _weekly_draft_action(item: dict[str, Any]) -> dict[str, Any] | None:
         "kind": "weekly_report",
         "priority": priority,
         "tone": tone,
+        "student_classin_id": item.get("student_classin_id") or "",
         "student_name": item.get("student_name") or "미등록",
         "class_name": item.get("class_name") or "",
-        "reason": f"리포트 품질 {status}",
+        "reason": f"리포트 품질 {status_label}",
         "next_action": next_action,
         "action_label": "리포트 검토",
         "tab": "reports",
         "lane": "개별 리포트",
         "can_execute": status == "ready",
-        "blocking_reason": "" if status == "ready" else (warnings[0] if warnings else f"품질 {status}"),
+        "blocking_reason": "" if status == "ready" else (warnings[0] if warnings else f"품질 {status_label}"),
         "badges": [
-            f"{status} {item.get('quality_score') or 0}/100",
+            f"{status_label} {item.get('quality_score') or 0}/100",
             *warnings[:2],
             *([item.get("report_context_summary")] if item.get("report_context_summary") else []),
         ],
@@ -153,6 +173,7 @@ def _composition_action(item: dict[str, Any]) -> dict[str, Any] | None:
     status = item.get("readiness_status") or ""
     if status == "ready":
         return None
+    status_label = _readiness_label(status)
     priority = 18 if status == "blocked" else 55
     warnings = item.get("readiness_warnings") or []
     counts = item.get("source_counts") or {}
@@ -161,9 +182,10 @@ def _composition_action(item: dict[str, Any]) -> dict[str, Any] | None:
         "kind": "report_composition",
         "priority": priority,
         "tone": "danger" if status == "blocked" else "warn",
+        "student_classin_id": item.get("student_classin_id") or "",
         "student_name": item.get("student_name") or "미등록",
         "class_name": item.get("class_name") or "",
-        "reason": f"리포트 구성 {status}",
+        "reason": f"리포트 구성 {status_label}",
         "next_action": "근거 보강",
         "action_label": "구성 확인",
         "tab": "reports",
@@ -206,13 +228,13 @@ def _with_operating_guidance(item: dict[str, Any]) -> dict[str, Any]:
 def _safety_gate(kind: str, item: dict[str, Any]) -> str:
     if kind == "missing_homework":
         if item.get("can_execute"):
-            return "연락처·문구 품질·발송 모드 확인 후 dry-run 또는 승인된 발송만 진행"
+            return "연락처·문구 품질·발송 모드 확인 후 외부 발송 없는 검토 기록 또는 승인된 실제 발송만 진행"
         return item.get("blocking_reason") or "문구 품질과 학생 상태를 먼저 확인"
     if kind == "data_review":
         return "동명이인·반·날짜를 확인하기 전에는 리포트 문장에 반영 금지"
     if kind == "weekly_report":
         if item.get("can_execute"):
-            return "품질 ready와 승인 대상 학생을 확인한 뒤 Notion 아카이브"
+            return "품질 통과와 승인 대상 학생을 확인한 뒤 Notion 아카이브"
         return item.get("blocking_reason") or "품질 경고를 보강한 뒤 승인"
     if kind == "report_composition":
         return "출결·숙제·시험·메모 근거가 비어 있으면 초안 생성 전 보강"
@@ -221,13 +243,13 @@ def _safety_gate(kind: str, item: dict[str, Any]) -> str:
 
 def _completion_check(kind: str, item: dict[str, Any]) -> str:
     if kind == "missing_homework":
-        return "알림 기록이 dry_run/sent로 남고 다음 조회에서 pending/failed가 줄어야 함"
+        return "알림 기록이 검토 완료 또는 발송 완료로 남고 다음 조회에서 대기·실패 학생이 줄어야 함"
     if kind == "data_review":
         return "확인 필요 항목이 학생 ID·반·날짜 기준으로 매칭 또는 보류 처리됨"
     if kind == "weekly_report":
-        return "드래프트가 승인됐거나 품질 경고가 ready/review 가능한 수준으로 낮아짐"
+        return "드래프트가 승인됐거나 품질 경고가 통과·확인 가능 수준으로 낮아짐"
     if kind == "report_composition":
-        return "preflight 섹션 경고가 줄고 학생별 초안 생성 근거가 확보됨"
+        return "구성 점검 경고가 줄고 학생별 초안 생성 근거가 확보됨"
     return "운영 리포트에 처리 결과가 남음"
 
 
